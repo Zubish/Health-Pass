@@ -1,0 +1,106 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-glow: var(--primary-glow);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-cream: var(--cream);
+  --color-maroon-deep: var(--maroon-deep);
+  --color-maroon-soft: var(--maroon-soft);
+
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* Maroon palette */
+  --maroon-deep: oklch(0.28 0.09 15);      /* #4a1220-ish */
+  --maroon-soft: oklch(0.42 0.13 18);      /* rich maroon */
+  --maroon-glow: oklch(0.58 0.17 22);      /* brighter */
+  --cream: oklch(0.98 0.012 70);           /* warm off-white */
+  --sand: oklch(0.94 0.02 60);
+  --ink: oklch(0.20 0.03 20);
+
+  --background: var(--cream);
+  --foreground: var(--ink);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--ink);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--ink);
+
+  --primary: var(--maroon-soft);
+  --primary-foreground: var(--cream);
+  --primary-glow: var(--maroon-glow);
+
+  --secondary: var(--sand);
+  --secondary-foreground: var(--maroon-deep);
+
+  --muted: oklch(0.96 0.015 60);
+  --muted-foreground: oklch(0.45 0.03 25);
+
+  --accent: oklch(0.92 0.04 30);
+  --accent-foreground: var(--maroon-deep);
+
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: var(--cream);
+
+  --border: oklch(0.88 0.02 30);
+  --input: oklch(0.88 0.02 30);
+  --ring: var(--maroon-soft);
+
+  --gradient-hero: linear-gradient(135deg, var(--maroon-deep) 0%, var(--maroon-soft) 55%, var(--maroon-glow) 100%);
+  --gradient-warm: linear-gradient(180deg, var(--cream) 0%, var(--sand) 100%);
+  --shadow-elegant: 0 20px 50px -20px color-mix(in oklab, var(--maroon-deep) 35%, transparent);
+  --shadow-soft: 0 10px 30px -15px color-mix(in oklab, var(--maroon-deep) 20%, transparent);
+}
+
+.dark {
+  --background: var(--maroon-deep);
+  --foreground: var(--cream);
+  --card: oklch(0.24 0.06 18);
+  --card-foreground: var(--cream);
+  --border: oklch(1 0 0 / 10%);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+}
