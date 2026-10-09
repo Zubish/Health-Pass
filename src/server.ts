@@ -47,6 +47,38 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      if (new URL(request.url).pathname.startsWith("/api/healthpass/")) {
+        const origin =
+          (env as { HEALTHPASS_API_ORIGIN?: string } | undefined)?.HEALTHPASS_API_ORIGIN ??
+          process.env.HEALTHPASS_API_ORIGIN;
+        if (!origin)
+          return Response.json(
+            { error: "The care workspace is awaiting its API connection." },
+            { status: 503, headers: { "cache-control": "no-store" } },
+          );
+        const target = new URL(request.url);
+        const upstream = new URL(target.pathname + target.search, origin);
+        const headers = new Headers(request.headers);
+        headers.delete("host");
+        try {
+          return await fetch(upstream, {
+            method: request.method,
+            headers,
+            redirect: "manual",
+            signal: AbortSignal.timeout(15000),
+            ...(request.method !== "GET" && request.method !== "HEAD"
+              ? { body: await request.arrayBuffer() }
+              : {}),
+          });
+        } catch {
+          return Response.json(
+            {
+              error: "The care service is unavailable. Your unsaved input remains on this screen.",
+            },
+            { status: 503, headers: { "cache-control": "no-store" } },
+          );
+        }
+      }
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);

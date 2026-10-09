@@ -31,3 +31,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Patient data and local environment
+.data/
+.env
+.env.*
+!.env.example

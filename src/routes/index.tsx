@@ -23,6 +23,10 @@ function Landing() {
       <Header />
       <Hero />
       <TrustStrip />
+      <div className="mx-auto max-w-6xl px-6 pt-8 text-sm text-muted-foreground">
+        Now available in the foundation workspace: identity, clinical records, consent-aware sharing
+        and audit. Prescriptions, consultations and partner exchange are planned next.
+      </div>
       <Features />
       <HowItWorks />
       <ForProviders />
@@ -43,14 +47,25 @@ function Header() {
           <span className="font-display text-lg font-semibold tracking-tight">Health Pass</span>
         </a>
         <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
-          <a href="#features" className="hover:text-foreground">Features</a>
-          <a href="#how" className="hover:text-foreground">How it works</a>
-          <a href="#providers" className="hover:text-foreground">For providers</a>
+          <a href="#features" className="hover:text-foreground">
+            Features
+          </a>
+          <a href="#how" className="hover:text-foreground">
+            How it works
+          </a>
+          <a href="#providers" className="hover:text-foreground">
+            For providers
+          </a>
         </nav>
         <div className="flex items-center gap-3">
-          <a href="#" className="hidden text-sm text-muted-foreground hover:text-foreground sm:block">Sign in</a>
           <a
-            href="#cta"
+            href="/workspace"
+            className="hidden text-sm text-muted-foreground hover:text-foreground sm:block"
+          >
+            Sign in
+          </a>
+          <a
+            href="/workspace"
             className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-[var(--shadow-soft)] transition hover:brightness-110"
           >
             Get your pass <ArrowRight className="h-3.5 w-3.5" />
@@ -84,13 +99,13 @@ function Hero() {
             </span>
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Health Pass is a patient-first health passport. Carry every visit,
-            prescription and lab result with you — across clinics, pharmacies
-            and hospitals, even the ones that don't use Health Pass yet.
+            Health Pass is a patient-first health passport. Carry every visit, prescription and lab
+            result with you — across clinics, pharmacies and hospitals, through participating care
+            teams and patient-approved sharing.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a
-              href="#cta"
+              href="/workspace"
               className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground shadow-[var(--shadow-elegant)] transition hover:brightness-110"
             >
               Create your pass <ArrowRight className="h-4 w-4" />
@@ -175,10 +190,10 @@ function FloatingCard({
 
 function TrustStrip() {
   const items = [
-    "HIPAA-aligned",
-    "End-to-end encrypted",
+    "Scoped record access",
+    "Versioned clinical notes",
     "Patient-controlled sharing",
-    "Works offline",
+    "Audited care workflows",
   ];
   return (
     <section className="border-y border-border bg-secondary/60">
@@ -208,12 +223,12 @@ function Features() {
     {
       icon: <Building2 className="h-5 w-5" />,
       title: "Any facility, any system",
-      body: "Providers who don't use Health Pass can still contribute. Records are added by you or by them in seconds.",
+      body: "Participating care teams create their own records. Signed source notes remain traceable and protected.",
     },
     {
       icon: <Share2 className="h-5 w-5" />,
       title: "Share on your terms",
-      body: "Grant a doctor time-boxed access with a QR code. Revoke it whenever you want.",
+      body: "Give a participating facility time-limited access to your signed history. Revoke future shared access whenever you want.",
     },
     {
       icon: <ShieldCheck className="h-5 w-5" />,
@@ -223,7 +238,7 @@ function Features() {
     {
       icon: <QrCode className="h-5 w-5" />,
       title: "Emergency-ready",
-      body: "A scannable emergency card surfaces allergies, blood type and active meds when it matters most.",
+      body: "Reviewed allergy context and emergency contacts help care teams prepare. Controlled emergency access is planned for a later release.",
     },
   ];
 
@@ -235,15 +250,15 @@ function Features() {
           Built around the patient — not the facility.
         </h2>
         <p className="mt-4 text-muted-foreground">
-          Health Pass flips the EMR model. Instead of records trapped in each
-          clinic, the record travels with you.
+          Health Pass flips the EMR model. Instead of records trapped in each clinic, the record
+          travels with you.
         </p>
       </div>
 
       <div className="mt-14 grid gap-px overflow-hidden rounded-3xl border border-border bg-border md:grid-cols-2 lg:grid-cols-3">
         {features.map((f) => (
           <div key={f.title} className="group bg-card p-8 transition hover:bg-secondary/60">
-            <span className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+            <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#e9f5f1] text-[#227d6e] transition group-hover:bg-[#227d6e] group-hover:text-white">
               {f.icon}
             </span>
             <h3 className="mt-5 font-display text-xl font-semibold">{f.title}</h3>
@@ -260,22 +275,22 @@ function HowItWorks() {
     {
       n: "01",
       title: "Create your pass",
-      body: "Sign up in under a minute. Import past records or start fresh.",
+      body: "Create a patient account with a persistent HealthPass identity. Import workflows are planned.",
     },
     {
       n: "02",
-      title: "Log visits & refills",
-      body: "Add prescriptions, lab results and doctor notes from any facility — or ask staff to add them for you.",
+      title: "Document your care",
+      body: "Participating clinicians record encounters and sign notes. Prescription and result exchange will follow.",
     },
     {
       n: "03",
       title: "Share when it matters",
-      body: "A new doctor scans your QR and sees exactly what you allow, for as long as you allow.",
+      body: "Grant a participating care team time-limited access to your signed history, and revoke it when needed.",
     },
   ];
 
   return (
-    <section id="how" className="bg-[var(--gradient-hero)] text-primary-foreground">
+    <section id="how" className="bg-[var(--gradient-care)] text-primary-foreground">
       <div className="mx-auto max-w-6xl px-6 py-24">
         <div className="max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary-foreground/70">
@@ -316,13 +331,13 @@ function ForProviders() {
             A cleaner intake, without switching your EMR.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Scan a patient's Health Pass to instantly see their history, active
-            meds and allergies. Add a note, a prescription or a lab result back
-            to their record in seconds — no integration required.
+            Scan a patient's Health Pass to instantly see their history, active meds and allergies.
+            Add a note, a prescription or a lab result back to their record in seconds — no
+            integration required.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
-              href="#cta"
+              href="/workspace"
               className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:brightness-110"
             >
               Join as a provider <ArrowRight className="h-4 w-4" />
@@ -361,32 +376,27 @@ function ForProviders() {
 function CTA() {
   return (
     <section id="cta" className="mx-auto max-w-6xl px-6 pb-24">
-      <div className="relative overflow-hidden rounded-3xl bg-[var(--gradient-hero)] p-10 text-primary-foreground shadow-[var(--shadow-elegant)] md:p-16">
+      <div className="relative overflow-hidden rounded-3xl bg-[var(--gradient-care)] p-10 text-primary-foreground shadow-[var(--shadow-elegant)] md:p-16">
         <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary-foreground/10 blur-3xl" />
         <div className="relative max-w-2xl">
           <h2 className="font-display text-4xl font-semibold tracking-tight md:text-5xl">
             Start your Health Pass today.
           </h2>
           <p className="mt-4 text-primary-foreground/80">
-            Free for patients. Always. Bring your full medical history with
-            you — everywhere you get care.
+            Free for patients. Always. Bring your full medical history with you — everywhere you get
+            care.
           </p>
-          <form className="mt-8 flex flex-col gap-3 sm:flex-row" onSubmit={(e) => e.preventDefault()}>
-            <input
-              type="email"
-              required
-              placeholder="you@email.com"
-              className="w-full rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-5 py-3 text-sm text-primary-foreground placeholder:text-primary-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary-foreground/40"
-            />
-            <button
-              type="submit"
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <a
+              href="/workspace"
               className="inline-flex items-center justify-center gap-2 rounded-full bg-primary-foreground px-6 py-3 text-sm font-medium text-primary transition hover:brightness-95"
             >
-              Get early access <ArrowRight className="h-4 w-4" />
-            </button>
-          </form>
+              Open care workspace <ArrowRight className="h-4 w-4" />
+            </a>
+          </div>
           <p className="mt-3 text-xs text-primary-foreground/60">
-            No spam. We'll only email you about your pass.
+            First slice: identity, clinical records, sharing and audit. More care workflows are
+            being built.
           </p>
         </div>
       </div>
@@ -408,9 +418,15 @@ function Footer() {
           © {new Date().getFullYear()} Health Pass. The passport for your health.
         </p>
         <div className="flex gap-6 text-xs text-muted-foreground">
-          <a href="#" className="hover:text-foreground">Privacy</a>
-          <a href="#" className="hover:text-foreground">Terms</a>
-          <a href="#" className="hover:text-foreground">Contact</a>
+          <a href="#" className="hover:text-foreground">
+            Privacy
+          </a>
+          <a href="#" className="hover:text-foreground">
+            Terms
+          </a>
+          <a href="#" className="hover:text-foreground">
+            Contact
+          </a>
         </div>
       </div>
     </footer>

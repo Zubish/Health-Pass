@@ -19,7 +19,7 @@ declare global {
 }
 
 export function reportLovableError(error: unknown, context: Record<string, unknown> = {}) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || window.location.pathname.startsWith("/workspace")) return;
   window.__lovableEvents?.captureException?.(
     error,
     {
