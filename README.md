@@ -2,6 +2,8 @@
 
 Patient identity, continuity of care and consent-aware clinical records. Part of the RxLedger / Rai ecosystem, with burgundy accents and neutral, teal and blue supporting surfaces.
 
+Public app: **https://health-pass-psi.vercel.app/**. Use this stable address for sharing and bookmarks; `/workspace` opens its sign-in/care workspace. New Vercel deployments redirect alternate HealthPass hosts to this address, preserving paths and query strings. Historical deployment URLs contain older immutable builds; remove retired previews through Vercel rather than sharing them.
+
 - [Working product blueprint](docs/healthpass-blueprint-v1.txt) — supplied specification, preserved verbatim.
 - [First-slice implementation, setup and verification](docs/foundation.md).
 - `/` — product introduction.
