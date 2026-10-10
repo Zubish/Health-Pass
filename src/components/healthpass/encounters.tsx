@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Stethoscope } from "lucide-react";
 import { blank, date } from "@/lib/healthpass-types";
 import type { Note, Encounter } from "@/lib/healthpass-types";
@@ -16,9 +16,34 @@ export function NoteEditor({
   onClose: () => void;
   onSave: (note: Note, operation: string, reason?: string) => void;
 }) {
-  const [note, setNote] = useState<Note>(encounter === "new" ? blank : encounter),
-    [reason, setReason] = useState("");
+  const [initial] = useState<Note>(() =>
+      encounter === "new"
+        ? { ...blank }
+        : (Object.fromEntries(
+            Object.keys(blank).map((key) => [key, encounter[key as keyof Note]]),
+          ) as Note),
+    ),
+    [note, setNote] = useState<Note>(initial),
+    [reason, setReason] = useState(""),
+    [discard, setDiscard] = useState(false);
   const signed = encounter !== "new" && encounter.status !== "draft";
+  const dirty =
+    Object.keys(blank).some((key) => note[key as keyof Note] !== initial[key as keyof Note]) ||
+    !!reason;
+  useEffect(() => {
+    if (!dirty && !busy) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty, busy]);
+  function requestClose() {
+    if (busy) return;
+    if (dirty) setDiscard(true);
+    else onClose();
+  }
   return (
     <Modal
       title={
@@ -28,7 +53,7 @@ export function NoteEditor({
             ? "Sign a versioned amendment"
             : "Encounter draft"
       }
-      onClose={onClose}
+      onClose={requestClose}
     >
       {error && (
         <p className="hp-error" role="alert">
@@ -40,9 +65,29 @@ export function NoteEditor({
           ? "Describe the correction and its reason. Earlier signed versions remain available."
           : "Save a draft before signing. Clinical content is never signed automatically."}
       </p>
+      {discard && (
+        <div className="hp-discard-notice" role="alert">
+          <strong>You have unsaved changes.</strong>
+          <p>Keep editing to save your note, or discard the changes made in this editor.</p>
+          <div className="hp-form-actions">
+            <button
+              className="hp-button secondary"
+              type="button"
+              autoFocus
+              onClick={() => setDiscard(false)}
+            >
+              Keep editing
+            </button>
+            <button className="hp-text-button" type="button" onClick={onClose} disabled={busy}>
+              Discard changes
+            </button>
+          </div>
+        </div>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
+          if (busy) return;
           onSave(note, signed ? "amend" : "save", reason);
         }}
       >
@@ -61,6 +106,7 @@ export function NoteEditor({
             }
             <textarea
               value={note[key as keyof Note]}
+              disabled={busy}
               required={key === "complaint" || (signed && ["assessment", "plan"].includes(key))}
               maxLength={6000}
               onChange={(e) => setNote({ ...note, [key]: e.target.value })}
@@ -72,6 +118,7 @@ export function NoteEditor({
             Reason for amendment
             <textarea
               required
+              disabled={busy}
               maxLength={1000}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -79,7 +126,12 @@ export function NoteEditor({
           </label>
         )}
         <div className="hp-form-actions">
-          <button className="hp-button secondary" type="button" onClick={onClose} disabled={busy}>
+          <button
+            className="hp-button secondary"
+            type="button"
+            onClick={requestClose}
+            disabled={busy}
+          >
             Cancel
           </button>
           <button className="hp-button primary" disabled={busy}>

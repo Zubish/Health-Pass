@@ -4,7 +4,6 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export async function openDatabase(config = process.env, dependencies = {}) {
-  const schema = readFileSync(new URL("./migrations/001-foundation.sql", import.meta.url), "utf8");
   let engine, pool;
   if (config.DATABASE_URL) {
     const { Pool } = await import("pg");
@@ -12,7 +11,7 @@ export async function openDatabase(config = process.env, dependencies = {}) {
     engine = "postgres";
   } else {
     if (config.NODE_ENV === "production")
-      throw new Error("Production requires DATABASE_URL and reviewed Nigeria data location.");
+      throw new Error("Production requires DATABASE_URL.");
     const path =
       config.HEALTHPASS_SQLITE_PATH ||
       fileURLToPath(new URL("../.data/healthpass.sqlite", import.meta.url));
@@ -100,6 +99,7 @@ export async function openDatabase(config = process.env, dependencies = {}) {
     });
     return db;
   }
+  const schema = readFileSync(new URL("./migrations/001-foundation.sql", import.meta.url), "utf8");
   await db.transaction(async (tx) => {
     if (engine === "sqlite") pool.exec(schema);
     else await tx.run(schema);

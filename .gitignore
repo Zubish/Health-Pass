@@ -37,3 +37,9 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Neon workspace context and installed agent tooling
+.neon
+.agents/skills/
+.codex/skills/
+skills-lock.json

@@ -12,3 +12,5 @@
 ## HealthPass working reference
 
 Read `docs/healthpass-blueprint-v1.txt` and `docs/foundation.md` before changing product scope. Preserve the evidence labels (confirmed/proposed/recommended/open). HealthPass is the source of the burgundy ecosystem accent borrowed by RxLedger and Rai; use neutral, teal and blue supporting surfaces. Never use real patient data in fixtures, source or screenshots.
+
+The owner's current decisions in `docs/foundation.md` supersede conflicting original blueprint requirements. Nigerian hosting is unavailable; use the existing Neon service for current development without blocking app work. Further infrastructure deployment is deferred while building the app.

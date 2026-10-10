@@ -60,6 +60,12 @@ export default {
         const upstream = new URL(target.pathname + target.search, origin);
         const headers = new Headers(request.headers);
         headers.delete("host");
+        // Always overwrite the client header; the credential belongs to the server hop.
+        headers.delete("x-healthpass-origin-secret");
+        const originSecret =
+          (env as { HEALTHPASS_ORIGIN_SECRET?: string } | undefined)?.HEALTHPASS_ORIGIN_SECRET ??
+          process.env.HEALTHPASS_ORIGIN_SECRET;
+        if (originSecret) headers.set("x-healthpass-origin-secret", originSecret);
         try {
           return await fetch(upstream, {
             method: request.method,

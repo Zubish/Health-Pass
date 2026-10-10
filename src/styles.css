@@ -1096,6 +1096,18 @@ button.hp-patient-row:hover {
   justify-content: flex-end;
   margin-top: 22px;
 }
+.hp-discard-notice {
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  border: 1px solid #e6c990;
+  border-radius: 12px;
+  background: #fff8e9;
+  color: #6b4c17;
+}
+.hp-discard-notice p {
+  margin: 0.4rem 0 0.75rem;
+  font-size: 0.875rem;
+}
 @media (min-width: 1500px) {
   .hp-content {
     padding-top: 45px;

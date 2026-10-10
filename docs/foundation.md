@@ -2,6 +2,14 @@
 
 The product source is [healthpass-blueprint-v1.txt](./healthpass-blueprint-v1.txt), copied verbatim from Musa's 9 October 2026 specification. Its CONFIRMED, RECOVERED PROPOSAL, BUILD RECOMMENDATION and OPEN labels remain authoritative. This document tracks the implementation and decisions; it does not convert recommendations into approved production policy.
 
+## Current owner decisions — 10 October 2026
+
+Musa confirmed there is no Nigerian hosting service available now. Use the existing Neon HealthPass project (`billowing-grass-83528069`, `production` branch) for ongoing development. Its current region is AWS US East (Ohio); do not describe it as Nigerian hosting. This decision supersedes the original blueprint's Nigeria-only hosting constraint for current development. A future infrastructure decision should be recorded here; obtaining a Nigerian provider is not a prerequisite for continuing the app.
+
+Keep the app as the priority. The requested `neon.ts` configuration and `hello.ts` are retained, and the hello function has been deployed. Further Neon provisioning/deployment is deferred while the first app slice is built. The clinical API entry is prepared in `server/function.mjs`, but it has not replaced the deployed hello function. No HealthPass clinical tables or fixture records have been added to the hosted database by this continuation.
+
+Neon Auth and a private `uploads` bucket are provisioned. The current app still uses its own password sessions and professional MFA implemented in `server/api.mjs`; enabling Neon Auth does not automatically connect that service to the login form. No upload flow or AI Gateway is implemented in this slice.
+
 ## Implemented first slice
 
 - Persistent opaque patient identity, optional DOB/contact, separate facility registration links. Shared phone/name never auto-merge records.
@@ -11,6 +19,7 @@ The product source is [healthpass-blueprint-v1.txt](./healthpass-blueprint-v1.tx
 - Patient's own signed-record view, facility-local charts, and patient-issued, time-limited full-signed-history sharing grants for participating organizations. Cross-facility drafts are excluded; grants never allow source-note rewriting.
 - Allergy unknown/reviewed/none-known distinctions, emergency contact context. This is not emergency break-glass access.
 - Draft encounters with explicit server save, optimistic version conflicts, signing, versioned amendments and reason. Signed snapshots are immutable in the database. Hashes provide integrity digests; this is not a PKI signature service.
+- Closing a changed note asks whether to keep editing or discard; closing is blocked while saving. Refresh/tab-close receives the browser's unsaved-work warning. Unsaved clinical content stays in memory, never browser storage; browser unload prompts are best-effort, especially on mobile.
 - Append-only allowed/denied access/action audit. Patient activity is patient-scoped; facility activity is organization-scoped. Clinical text/passwords/secrets are excluded from operational logs.
 - Responsive patient/provider workspace at `/workspace`, burgundy primary accents, slate/white foundations, supporting teal, blue and amber. Public landing-page links open the workspace.
 
@@ -20,7 +29,7 @@ Retain the existing React 19 / TanStack Start / TypeScript / Vite app instead of
 
 A Node 24+ HTTP API is a modular application service under `server/`. PostgreSQL (`DATABASE_URL`) is the hosted database; Node SQLite is a local development/test convenience only and refuses production startup. The same first migration applies to both adapters; immutable triggers are engine-specific. `src/server.ts` forwards `/api/healthpass/*` to the private API origin and returns an explicit unavailable state when it is not configured. No direct browser database access and no frontend credentials.
 
-The build uses the Vercel Nitro preset on Vercel and Node-server output locally; Lovable retains its own forced target. Vercel hosts the web entry and forwards API requests, not the persistent database. Configure the API on a reviewed Nigeria-hosted Node runtime with PostgreSQL, backups and access controls; do not use a Vercel ephemeral filesystem as storage. The existing Vercel deployment is not proof this API or database is provisioned.
+The build uses the Vercel Nitro preset on Vercel and Node-server output locally; Lovable retains its own forced target. Vercel hosts the web entry and forwards API requests, not the persistent database. The prepared Neon Functions adapter runs the API next to PostgreSQL. Do not use a Vercel ephemeral filesystem as storage. The existing Vercel deployment is not proof this API or database is connected.
 
 ## Run with synthetic data
 
@@ -38,29 +47,36 @@ Requires Node 24+ (built-in SQLite). `.env` and `.data/` are ignored. The synthe
 
 Accounts use the password chosen by the operator:
 
-| Email | Scope |
-| --- | --- |
-| doctor@healthpass.test | Lagos clinician |
-| ibadan@healthpass.test | Ibadan clinician, initially denied Lagos charts |
-| reception@healthpass.test | Lagos registration only |
-| admin@healthpass.test | Lagos audit/operations only |
-| patient@healthpass.test | Adé synthetic patient |
+| Email                     | Scope                                           |
+| ------------------------- | ----------------------------------------------- |
+| doctor@healthpass.test    | Lagos clinician                                 |
+| ibadan@healthpass.test    | Ibadan clinician, initially denied Lagos charts |
+| reception@healthpass.test | Lagos registration only                         |
+| admin@healthpass.test     | Lagos audit/operations only                     |
+| patient@healthpass.test   | Adé synthetic patient                           |
 
 On first professional login, add the displayed setup key to a time-based authenticator, then verify its code. Later sessions require a fresh code. Do not put the setup key in screenshots/source. An operator can create a first facility/account with `npm run provision -- --email EMAIL --name NAME --facility FACILITY --role clinician --verified`, supplying HEALTHPASS_PROVISION_PASSWORD through a private server environment. Omit --verified until external professional review is complete; pending accounts cannot log in. This CLI creates a new facility for each initial provision; further memberships require reviewed operator administration. It never reuses an organization based solely on an unverified name. No credential verification service is connected.
 
 ## Configuration
 
-| Variable | Purpose |
-| --- | --- |
-| DATABASE_URL | Private PostgreSQL connection string; required for production API |
-| PUBLIC_APP_ORIGIN | Exact browser origin for CSRF checks; HTTPS required in production |
-| HEALTHPASS_API_ORIGIN | Private API origin for the TanStack server proxy |
-| HEALTHPASS_AUTH_KEY | Server-only 32-byte hex AES-GCM key for authenticator secrets; required in production |
-| HEALTHPASS_API_PORT / HOST | Listener, defaults 4100 / 127.0.0.1; use private network binding when separated |
-| HEALTHPASS_SQLITE_PATH | Development-only database file |
-| HEALTHPASS_DEMO_PASSWORD | Local synthetic seed only |
+| Variable                   | Purpose                                                                                                                                      |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| DATABASE_URL               | Private PostgreSQL connection string; required for production API                                                                            |
+| PUBLIC_APP_ORIGIN          | Exact browser origin for CSRF checks; HTTPS required in production                                                                           |
+| HEALTHPASS_API_ORIGIN      | Private API origin for the TanStack server proxy                                                                                             |
+| HEALTHPASS_AUTH_KEY        | Server-only 32-byte hex AES-GCM key for authenticator secrets; required in production                                                        |
+| HEALTHPASS_ORIGIN_SECRET   | Same private random secret (at least 32 characters) on web server and Neon API; rejects direct native-function requests before database work |
+| HEALTHPASS_API_PORT / HOST | Listener, defaults 4100 / 127.0.0.1; use private network binding when separated                                                              |
+| HEALTHPASS_SQLITE_PATH     | Development-only database file                                                                                                               |
+| HEALTHPASS_DEMO_PASSWORD   | Local synthetic seed only                                                                                                                    |
 
 Development applies migration 001 at startup. Production startup only checks its applied version. Run `npm run migrate` under a controlled migration identity before starting production, then run the API with a restricted role (no schema/trigger mutation). Run only one migrator. Configure encrypted database storage and a managed secrets boundary. Authenticator secrets are AES-256-GCM encrypted when HEALTHPASS_AUTH_KEY is configured, which production startup requires. The API credential must not be exposed to browsers. Session token hashes are stored, not raw session tokens. MFA code reuse is rejected. Keep the encryption key outside the database, use tightly scoped database access, and prepare key rotation/recovery before pilot use.
+
+### Prepared Neon API connection
+
+When resuming hosted API deployment, change the `api` function source in `neon.ts` from `./hello.ts` to `./server/function.mjs`. Supply `PUBLIC_APP_ORIGIN`, `HEALTHPASS_AUTH_KEY` and `HEALTHPASS_ORIGIN_SECRET` through private function environment variables; Neon injects `DATABASE_URL`. Do not commit secrets. Apply the schema separately before deploying. The function forces production mode and disables runtime migrations, pools at most five connections per isolate, and uses Neon's pool lifecycle helper. Cold-start failures return a safe retryable response.
+
+On the web server, set `HEALTHPASS_API_ORIGIN` to the native function origin and the matching `HEALTHPASS_ORIGIN_SECRET`. The proxy overwrites any browser-supplied origin-secret header and keeps user cookies and the exact browser Origin for session and CSRF checks. The native function requires the server secret before parsing a request or opening PostgreSQL. This shared secret authenticates the server hop; user access still requires the existing session, membership, MFA and sharing checks.
 
 ## API
 
@@ -78,7 +94,7 @@ npm run typecheck
 npm run build
 ```
 
-The API integration tests cover draft release, version conflicts, simultaneous signing, immutable note/audit triggers, MFA denial, patient/cross-facility ID tampering, reception/admin denials, consent grant/expiry/revocation, source-facility amendment denial, shared-phone identities, unknown data, origin checks, malformed DOB and logout. The suite runs against SQLite and an embedded PostgreSQL engine (PGlite), checking both query/trigger paths. Hosted PostgreSQL network/TLS, runtime-role restrictions and multi-process concurrency still require a controlled staging database before pilot release. No real clinical content should be used in tests.
+The API integration tests cover draft release, version conflicts, simultaneous signing, immutable note/audit triggers, MFA denial, patient/cross-facility ID tampering, reception/admin denials, consent grant/expiry/revocation, source-facility amendment denial, shared-phone identities, unknown data, origin checks, malformed DOB and logout. The suite runs against SQLite and an embedded PostgreSQL engine (PGlite), checking both query/trigger paths. Function checks cover rejection before database work, concurrent initialization, cookie forwarding and recovery after a failed cold start. Hosted PostgreSQL network/TLS, runtime-role restrictions and multi-process concurrency still require a controlled staging database before pilot release. No real clinical content should be used in tests.
 
 ## Hosted pilot and rollback
 
