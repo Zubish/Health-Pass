@@ -178,7 +178,9 @@ export function createApi(db, config = process.env) {
     if (path === "/health" && method === "GET")
       return {
         status: "ok",
-        mode: config.NODE_ENV === "production" ? "pilot" : "synthetic-development",
+        mode: config.HEALTHPASS_MODE === "synthetic-development"
+          ? "synthetic-development"
+          : config.NODE_ENV === "production" ? "pilot" : "synthetic-development",
         database: db.engine,
       };
     if (path === "/auth/login" && method === "POST") {

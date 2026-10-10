@@ -6,10 +6,14 @@ import { Auth, Mfa } from "@/components/healthpass/auth";
 import { Mark } from "@/components/healthpass/primitives";
 import { CareWorkspace } from "@/components/healthpass/care-workspace";
 export const Route = createFileRoute("/workspace")({
+  validateSearch: (search: Record<string, unknown>): { mode?: "register" } => ({
+    mode: search.mode === "register" ? "register" : undefined,
+  }),
   component: Workspace,
   head: () => ({ meta: [{ title: "HealthPass · Care workspace" }] }),
 });
 function Workspace() {
+  const { mode } = Route.useSearch();
   const [me, setMe] = useState<Me | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
@@ -35,7 +39,10 @@ function Workspace() {
         <p role="status">Opening your care workspace…</p>
       </main>
     );
-  if (!me) return <Auth onSuccess={refresh} serviceError={error} />;
+  if (!me)
+    return (
+      <Auth key={mode ?? "login"} initialMode={mode} onSuccess={refresh} serviceError={error} />
+    );
   if (me.mfaRequired) return <Mfa me={me} onSuccess={refresh} />;
   return (
     <CareWorkspace

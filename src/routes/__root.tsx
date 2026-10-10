@@ -77,18 +77,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Health Pass — The Patient-First Health Passport" },
+      { title: "HealthPass — Your care history, connected" },
       {
         name: "description",
         content:
-          "Health Pass is a patient-owned EMR. Carry your medical records, prescriptions and refills across every facility — through participating facilities and approved sharing.",
+          "View signed clinical notes, keep a clearer care history, and manage time-limited sharing with participating care teams through HealthPass.",
       },
-      { name: "author", content: "Health Pass" },
-      { property: "og:title", content: "Health Pass — The Patient-First Health Passport" },
+      { name: "author", content: "HealthPass" },
+      { property: "og:title", content: "HealthPass — Your care history, connected" },
       {
         property: "og:description",
         content:
-          "One passport for every clinic, pharmacy and hospital visit. Owned by the patient.",
+          "Your signed clinical notes, care history and time-limited sharing with participating care teams, in one workspace.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

@@ -1,4 +1,5 @@
 <!-- LOVABLE:BEGIN -->
+
 > [!IMPORTANT]
 > This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
 > published git history — force pushing, or rebasing/amending/squashing commits
@@ -7,10 +8,11 @@
 >
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
+
 <!-- LOVABLE:END -->
 
 ## HealthPass working reference
 
 Read `docs/healthpass-blueprint-v1.txt` and `docs/foundation.md` before changing product scope. Preserve the evidence labels (confirmed/proposed/recommended/open). HealthPass is the source of the burgundy ecosystem accent borrowed by RxLedger and Rai; use neutral, teal and blue supporting surfaces. Never use real patient data in fixtures, source or screenshots.
 
-The owner's current decisions in `docs/foundation.md` supersede conflicting original blueprint requirements. Nigerian hosting is unavailable; use the existing Neon service for current development without blocking app work. Further infrastructure deployment is deferred while building the app.
+The owner's current decisions in `docs/foundation.md` supersede conflicting original blueprint requirements. Nigerian hosting is unavailable; use the existing Neon service for current development without blocking app work. The owner has now requested fixing live login, authorizing the API/database connection and deployment needed to make the workspace work. Keep unrelated infrastructure additions deferred.

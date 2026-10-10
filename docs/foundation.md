@@ -6,9 +6,11 @@ The product source is [healthpass-blueprint-v1.txt](./healthpass-blueprint-v1.tx
 
 Musa confirmed there is no Nigerian hosting service available now. Use the existing Neon HealthPass project (`billowing-grass-83528069`, `production` branch) for ongoing development. Its current region is AWS US East (Ohio); do not describe it as Nigerian hosting. This decision supersedes the original blueprint's Nigeria-only hosting constraint for current development. A future infrastructure decision should be recorded here; obtaining a Nigerian provider is not a prerequisite for continuing the app.
 
-Keep the app as the priority. The requested `neon.ts` configuration and `hello.ts` are retained, and the hello function has been deployed. Further Neon provisioning/deployment is deferred while the first app slice is built. The clinical API entry is prepared in `server/function.mjs`, but it has not replaced the deployed hello function. No HealthPass clinical tables or fixture records have been added to the hosted database by this continuation.
+The owner subsequently requested fixing live login, which was blocked by the missing API connection, alongside a landing-page revamp. This authorizes the hosted API/database connection and deployment required for the workspace. Unrelated infrastructure additions remain deferred. The original `hello.ts` is retained as a reference; `server/function.mjs` is the application API entry. Hosted connection details and verification are recorded below once confirmed.
 
 Neon Auth and a private `uploads` bucket are provisioned. The current app still uses its own password sessions and professional MFA implemented in `server/api.mjs`; enabling Neon Auth does not automatically connect that service to the login form. No upload flow or AI Gateway is implemented in this slice.
+
+Hosted connection work has applied additive migration `001`, including immutable signed-note and audit triggers, to the existing Neon production branch. The API uses the dedicated `healthpass_app` PostgreSQL role, created directly through SQL without inherited privileged role membership. It has no schema creation, role creation, database creation or row-security bypass permission, and cannot update/delete signed versions or audit records. Its only table-delete privilege is session logout. No seeded fixture identities or clinical histories were added. The app-function deployment has been submitted with private managed environment variables and is awaiting health verification; this is not yet a claim that live login works.
 
 ## Implemented first slice
 
@@ -22,6 +24,7 @@ Neon Auth and a private `uploads` bucket are provisioned. The current app still 
 - Closing a changed note asks whether to keep editing or discard; closing is blocked while saving. Refresh/tab-close receives the browser's unsaved-work warning. Unsaved clinical content stays in memory, never browser storage; browser unload prompts are best-effort, especially on mobile.
 - Append-only allowed/denied access/action audit. Patient activity is patient-scoped; facility activity is organization-scoped. Clinical text/passwords/secrets are excluded from operational logs.
 - Responsive patient/provider workspace at `/workspace`, burgundy primary accents, slate/white foundations, supporting teal, blue and amber. Public landing-page links open the workspace.
+- Public landing page explains the current care-record and sharing workflows, with a clearly labelled synthetic record preview, mobile navigation, provider onboarding guidance and FAQ. Patient CTAs open `/workspace?mode=register`; sign-in opens `/workspace`. Prescription/result/partner integrations are identified as planned. No claimed real facility affiliations, unlimited interoperability or unsupported export/refill workflows.
 
 ## Stack decisions
 
@@ -64,6 +67,7 @@ On first professional login, add the displayed setup key to a time-based authent
 | DATABASE_URL               | Private PostgreSQL connection string; required for production API                                                                            |
 | PUBLIC_APP_ORIGIN          | Exact browser origin for CSRF checks; HTTPS required in production                                                                           |
 | HEALTHPASS_API_ORIGIN      | Private API origin for the TanStack server proxy                                                                                             |
+| HEALTHPASS_MODE            | Set `synthetic-development` for hosted development; this changes the visible workspace label, not production security controls              |
 | HEALTHPASS_AUTH_KEY        | Server-only 32-byte hex AES-GCM key for authenticator secrets; required in production                                                        |
 | HEALTHPASS_ORIGIN_SECRET   | Same private random secret (at least 32 characters) on web server and Neon API; rejects direct native-function requests before database work |
 | HEALTHPASS_API_PORT / HOST | Listener, defaults 4100 / 127.0.0.1; use private network binding when separated                                                              |
@@ -72,9 +76,13 @@ On first professional login, add the displayed setup key to a time-based authent
 
 Development applies migration 001 at startup. Production startup only checks its applied version. Run `npm run migrate` under a controlled migration identity before starting production, then run the API with a restricted role (no schema/trigger mutation). Run only one migrator. Configure encrypted database storage and a managed secrets boundary. Authenticator secrets are AES-256-GCM encrypted when HEALTHPASS_AUTH_KEY is configured, which production startup requires. The API credential must not be exposed to browsers. Session token hashes are stored, not raw session tokens. MFA code reuse is rejected. Keep the encryption key outside the database, use tightly scoped database access, and prepare key rotation/recovery before pilot use.
 
-### Prepared Neon API connection
+### Neon API connection
 
-When resuming hosted API deployment, change the `api` function source in `neon.ts` from `./hello.ts` to `./server/function.mjs`. Supply `PUBLIC_APP_ORIGIN`, `HEALTHPASS_AUTH_KEY` and `HEALTHPASS_ORIGIN_SECRET` through private function environment variables; Neon injects `DATABASE_URL`. Do not commit secrets. Apply the schema separately before deploying. The function forces production mode and disables runtime migrations, pools at most five connections per isolate, and uses Neon's pool lifecycle helper. Cold-start failures return a safe retryable response.
+Deployment checkpoint: migration 001 is applied to the HealthPass production branch and API deployment 2 completed. The dedicated `healthpass_app` runtime role has no superuser membership, role/database creation, schema creation, or signed-note/audit mutation permissions. No clinical fixtures were seeded. Runtime HTTP verification remains separate from deployment status.
+
+The web connection is blocked: Vercel rejected creation of the two production proxy environment variables with HTTP 403 (additional permissions required). Until that permission is available and the server configuration is deployed, the hosted workspace can still report that it is awaiting its API connection. Do not remove the native API secret check to bypass this restriction.
+
+The `api` function source in `neon.ts` is now `./server/function.mjs`; `hello.ts` remains as the original setup reference. Supply `PUBLIC_APP_ORIGIN`, `HEALTHPASS_AUTH_KEY` and `HEALTHPASS_ORIGIN_SECRET` through private function environment variables; Neon injects a default `DATABASE_URL`; override it with the restricted runtime role connection string. Do not commit secrets. Apply the schema separately before deploying. The function forces production mode and disables runtime migrations, pools at most five connections per isolate, and uses Neon's pool lifecycle helper. Cold-start failures return a safe retryable response. Set `HEALTHPASS_MODE=synthetic-development` for this development deployment so the workspace does not imply an approved clinical pilot; production cookie, encryption and database protections remain enabled.
 
 On the web server, set `HEALTHPASS_API_ORIGIN` to the native function origin and the matching `HEALTHPASS_ORIGIN_SECRET`. The proxy overwrites any browser-supplied origin-secret header and keeps user cookies and the exact browser Origin for session and CSRF checks. The native function requires the server secret before parsing a request or opening PostgreSQL. This shared secret authenticates the server hop; user access still requires the existing session, membership, MFA and sharing checks.
 

@@ -1,434 +1,523 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import {
-  ShieldCheck,
-  FileHeart,
-  Pill,
-  Building2,
-  UserRound,
-  Stethoscope,
   ArrowRight,
+  ArrowUpRight,
+  Building2,
   Check,
-  QrCode,
+  ChevronDown,
+  ClipboardList,
+  FileHeart,
+  History,
+  LockKeyhole,
+  Menu,
   Share2,
+  ShieldCheck,
+  X,
 } from "lucide-react";
-import heroImg from "@/assets/hero-patient.jpg";
 
-export const Route = createFileRoute("/")({
-  component: Landing,
-});
+export const Route = createFileRoute("/")({ component: Landing });
+const register = "/workspace?mode=register";
 
 function Landing() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const navigation = [
+    { href: "#benefits", label: "Your record" },
+    { href: "#how", label: "How sharing works" },
+    { href: "#providers", label: "For care teams" },
+    { href: "#faq", label: "Questions" },
+  ];
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Header />
-      <Hero />
-      <TrustStrip />
-      <div className="mx-auto max-w-6xl px-6 pt-8 text-sm text-muted-foreground">
-        Now available in the foundation workspace: identity, clinical records, consent-aware sharing
-        and audit. Prescriptions, consultations and partner exchange are planned next.
-      </div>
-      <Features />
-      <HowItWorks />
-      <ForProviders />
-      <CTA />
-      <Footer />
-    </div>
-  );
-}
-
-function Header() {
-  return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <a href="#" className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--gradient-hero)] text-primary-foreground shadow-[var(--shadow-soft)]">
-            <FileHeart className="h-4 w-4" />
-          </span>
-          <span className="font-display text-lg font-semibold tracking-tight">Health Pass</span>
-        </a>
-        <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
-          <a href="#features" className="hover:text-foreground">
-            Features
-          </a>
-          <a href="#how" className="hover:text-foreground">
-            How it works
-          </a>
-          <a href="#providers" className="hover:text-foreground">
-            For providers
-          </a>
-        </nav>
-        <div className="flex items-center gap-3">
-          <a
-            href="/workspace"
-            className="hidden text-sm text-muted-foreground hover:text-foreground sm:block"
-          >
-            Sign in
-          </a>
-          <a
-            href="/workspace"
-            className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-[var(--shadow-soft)] transition hover:brightness-110"
-          >
-            Get your pass <ArrowRight className="h-3.5 w-3.5" />
-          </a>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function Hero() {
-  return (
-    <section className="relative overflow-hidden">
-      <div
-        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.06]"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 1px 1px, var(--maroon-deep) 1px, transparent 0)",
-          backgroundSize: "22px 22px",
-        }}
-      />
-      <div className="mx-auto grid max-w-6xl gap-12 px-6 pt-16 pb-24 md:grid-cols-2 md:items-center md:pt-24">
-        <div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium uppercase tracking-wider text-primary">
-            <ShieldCheck className="h-3.5 w-3.5" /> Patient-owned EMR
-          </span>
-          <h1 className="mt-5 font-display text-5xl leading-[1.05] font-semibold tracking-tight text-foreground md:text-6xl">
-            Your health,{" "}
-            <span className="bg-[var(--gradient-hero)] bg-clip-text text-transparent">
-              in one passport.
+    <div className="hp-landing" id="top">
+      <a className="hp-landing-skip" href="#main">
+        Skip to content
+      </a>
+      <header className="hp-landing-header">
+        <div className="hp-landing-wrap hp-landing-nav">
+          <a href="#top" className="hp-landing-brand" aria-label="HealthPass home">
+            <span>
+              <FileHeart size={21} aria-hidden="true" />
             </span>
-          </h1>
-          <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Health Pass is a patient-first health passport. Carry every visit, prescription and lab
-            result with you — across clinics, pharmacies and hospitals, through participating care
-            teams and patient-approved sharing.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <a
-              href="/workspace"
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground shadow-[var(--shadow-elegant)] transition hover:brightness-110"
-            >
-              Create your pass <ArrowRight className="h-4 w-4" />
+            HealthPass
+          </a>
+          <nav className="hp-landing-desktop-nav" aria-label="Main navigation">
+            {navigation.map((item) => (
+              <a key={item.href} href={item.href}>
+                {item.label}
+              </a>
+            ))}
+          </nav>
+          <div className="hp-landing-nav-actions">
+            <a href="/workspace" className="hp-landing-signin">
+              Sign in
             </a>
-            <a
-              href="#how"
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-6 py-3 text-sm font-medium text-foreground transition hover:border-primary/40"
-            >
-              See how it works
+            <a className="hp-landing-button hp-landing-button-small" href={register}>
+              Create account <ArrowUpRight size={15} aria-hidden="true" />
             </a>
+            <button
+              className="hp-landing-menu-button"
+              onClick={() => setMenuOpen(!menuOpen)}
+              aria-expanded={menuOpen}
+              aria-controls="mobile-navigation"
+              aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+            >
+              {menuOpen ? <X size={23} /> : <Menu size={23} />}
+            </button>
           </div>
-          <dl className="mt-10 grid max-w-md grid-cols-3 gap-6 border-t border-border pt-6">
-            <Stat k="1" v="passport" />
-            <Stat k="∞" v="facilities" />
-            <Stat k="100%" v="yours" />
-          </dl>
         </div>
-
-        <div className="relative">
-          <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-[var(--gradient-hero)] opacity-20 blur-2xl" />
-          <div className="overflow-hidden rounded-[2rem] border border-border bg-card shadow-[var(--shadow-elegant)]">
-            <img
-              src={heroImg}
-              alt="Patient holding a phone showing their Health Pass record"
-              width={1536}
-              height={1536}
-              className="h-full w-full object-cover"
-            />
-          </div>
-          <FloatingCard
-            className="absolute -left-4 bottom-6 md:-left-10"
-            icon={<Pill className="h-4 w-4" />}
-            title="Refill logged"
-            subtitle="Metformin · Nairobi Chemist"
-          />
-          <FloatingCard
-            className="absolute -right-2 top-8 md:-right-8"
-            icon={<Stethoscope className="h-4 w-4" />}
-            title="Visit synced"
-            subtitle="Aga Khan · Cardiology"
-          />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Stat({ k, v }: { k: string; v: string }) {
-  return (
-    <div>
-      <dt className="font-display text-3xl font-semibold text-primary">{k}</dt>
-      <dd className="mt-1 text-xs uppercase tracking-wider text-muted-foreground">{v}</dd>
-    </div>
-  );
-}
-
-function FloatingCard({
-  className = "",
-  icon,
-  title,
-  subtitle,
-}: {
-  className?: string;
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-}) {
-  return (
-    <div
-      className={`flex items-center gap-3 rounded-2xl border border-border bg-card/95 px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur ${className}`}
-    >
-      <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/10 text-primary">
-        {icon}
-      </span>
-      <div>
-        <div className="text-sm font-medium leading-tight">{title}</div>
-        <div className="text-xs text-muted-foreground">{subtitle}</div>
-      </div>
-    </div>
-  );
-}
-
-function TrustStrip() {
-  const items = [
-    "Scoped record access",
-    "Versioned clinical notes",
-    "Patient-controlled sharing",
-    "Audited care workflows",
-  ];
-  return (
-    <section className="border-y border-border bg-secondary/60">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-3 px-6 py-5 text-xs uppercase tracking-[0.15em] text-muted-foreground">
-        {items.map((i) => (
-          <span key={i} className="flex items-center gap-2">
-            <Check className="h-3.5 w-3.5 text-primary" /> {i}
-          </span>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Features() {
-  const features = [
-    {
-      icon: <FileHeart className="h-5 w-5" />,
-      title: "One lifelong record",
-      body: "Every visit, diagnosis, allergy and vaccination lives in one place — no more paper folders or lost histories.",
-    },
-    {
-      icon: <Pill className="h-5 w-5" />,
-      title: "Log every refill",
-      body: "Bought medicine at a different pharmacy? Snap the receipt or ask staff to add it. Your medication list stays complete.",
-    },
-    {
-      icon: <Building2 className="h-5 w-5" />,
-      title: "Any facility, any system",
-      body: "Participating care teams create their own records. Signed source notes remain traceable and protected.",
-    },
-    {
-      icon: <Share2 className="h-5 w-5" />,
-      title: "Share on your terms",
-      body: "Give a participating facility time-limited access to your signed history. Revoke future shared access whenever you want.",
-    },
-    {
-      icon: <ShieldCheck className="h-5 w-5" />,
-      title: "Owned by you",
-      body: "Your passport belongs to you — not a hospital chain, not an insurer. Export anything, anytime.",
-    },
-    {
-      icon: <QrCode className="h-5 w-5" />,
-      title: "Emergency-ready",
-      body: "Reviewed allergy context and emergency contacts help care teams prepare. Controlled emergency access is planned for a later release.",
-    },
-  ];
-
-  return (
-    <section id="features" className="mx-auto max-w-6xl px-6 py-24">
-      <div className="max-w-2xl">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">Features</p>
-        <h2 className="mt-3 font-display text-4xl font-semibold tracking-tight md:text-5xl">
-          Built around the patient — not the facility.
-        </h2>
-        <p className="mt-4 text-muted-foreground">
-          Health Pass flips the EMR model. Instead of records trapped in each clinic, the record
-          travels with you.
-        </p>
-      </div>
-
-      <div className="mt-14 grid gap-px overflow-hidden rounded-3xl border border-border bg-border md:grid-cols-2 lg:grid-cols-3">
-        {features.map((f) => (
-          <div key={f.title} className="group bg-card p-8 transition hover:bg-secondary/60">
-            <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#e9f5f1] text-[#227d6e] transition group-hover:bg-[#227d6e] group-hover:text-white">
-              {f.icon}
+        {menuOpen && (
+          <nav
+            id="mobile-navigation"
+            className="hp-landing-mobile-nav"
+            aria-label="Mobile navigation"
+          >
+            {navigation.map((item) => (
+              <a key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>
+                {item.label}
+                <ArrowUpRight size={16} aria-hidden="true" />
+              </a>
+            ))}
+          </nav>
+        )}
+      </header>
+      <main id="main">
+        <section className="hp-landing-hero hp-landing-wrap">
+          <div className="hp-landing-hero-copy">
+            <span className="hp-landing-eyebrow">
+              <span /> A clearer picture of your care
             </span>
-            <h3 className="mt-5 font-display text-xl font-semibold">{f.title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function HowItWorks() {
-  const steps = [
-    {
-      n: "01",
-      title: "Create your pass",
-      body: "Create a patient account with a persistent HealthPass identity. Import workflows are planned.",
-    },
-    {
-      n: "02",
-      title: "Document your care",
-      body: "Participating clinicians record encounters and sign notes. Prescription and result exchange will follow.",
-    },
-    {
-      n: "03",
-      title: "Share when it matters",
-      body: "Grant a participating care team time-limited access to your signed history, and revoke it when needed.",
-    },
-  ];
-
-  return (
-    <section id="how" className="bg-[var(--gradient-care)] text-primary-foreground">
-      <div className="mx-auto max-w-6xl px-6 py-24">
-        <div className="max-w-2xl">
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary-foreground/70">
-            How it works
-          </p>
-          <h2 className="mt-3 font-display text-4xl font-semibold tracking-tight md:text-5xl">
-            Three steps to a portable medical history.
-          </h2>
-        </div>
-        <ol className="mt-14 grid gap-6 md:grid-cols-3">
-          {steps.map((s) => (
-            <li
-              key={s.n}
-              className="rounded-2xl border border-primary-foreground/15 bg-primary-foreground/5 p-7 backdrop-blur"
-            >
-              <div className="font-display text-4xl font-semibold text-primary-foreground/70">
-                {s.n}
-              </div>
-              <h3 className="mt-4 font-display text-xl font-semibold">{s.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-primary-foreground/80">{s.body}</p>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </section>
-  );
-}
-
-function ForProviders() {
-  return (
-    <section id="providers" className="mx-auto max-w-6xl px-6 py-24">
-      <div className="grid gap-12 rounded-3xl border border-border bg-card p-8 shadow-[var(--shadow-soft)] md:grid-cols-2 md:p-14">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
-            For providers
-          </p>
-          <h2 className="mt-3 font-display text-4xl font-semibold tracking-tight">
-            A cleaner intake, without switching your EMR.
-          </h2>
-          <p className="mt-4 text-muted-foreground">
-            Scan a patient's Health Pass to instantly see their history, active meds and allergies.
-            Add a note, a prescription or a lab result back to their record in seconds — no
-            integration required.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <a
-              href="/workspace"
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:brightness-110"
-            >
-              Join as a provider <ArrowRight className="h-4 w-4" />
-            </a>
-            <a
-              href="#"
-              className="inline-flex items-center gap-2 rounded-full border border-border px-5 py-2.5 text-sm font-medium transition hover:border-primary/40"
-            >
-              Read the provider guide
-            </a>
-          </div>
-        </div>
-        <ul className="grid gap-4 md:grid-cols-2">
-          {[
-            { icon: <UserRound className="h-4 w-4" />, t: "Full patient context in one scan" },
-            { icon: <Pill className="h-4 w-4" />, t: "Add prescriptions & refills" },
-            { icon: <FileHeart className="h-4 w-4" />, t: "Attach lab results and notes" },
-            { icon: <ShieldCheck className="h-4 w-4" />, t: "Consent-based, audit-logged" },
-          ].map((i) => (
-            <li
-              key={i.t}
-              className="flex items-start gap-3 rounded-2xl border border-border bg-background p-4"
-            >
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-                {i.icon}
+            <h1>
+              Your care history,
+              <br />
+              <em>connected.</em>
+            </h1>
+            <p className="hp-landing-lead">
+              Keep a clearer record of your care, view signed clinical notes, and choose when to
+              share your history with another participating care team.
+            </p>
+            <div className="hp-landing-actions">
+              <a className="hp-landing-button" href={register}>
+                Create patient account <ArrowRight size={18} aria-hidden="true" />
+              </a>
+              <a className="hp-landing-text-link" href="#how">
+                Explore how it works <ArrowUpRight size={17} aria-hidden="true" />
+              </a>
+            </div>
+            <div className="hp-landing-hero-points">
+              <span>
+                <Check size={16} />
+                Signed visit history
               </span>
-              <span className="text-sm leading-snug">{i.t}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
-function CTA() {
-  return (
-    <section id="cta" className="mx-auto max-w-6xl px-6 pb-24">
-      <div className="relative overflow-hidden rounded-3xl bg-[var(--gradient-care)] p-10 text-primary-foreground shadow-[var(--shadow-elegant)] md:p-16">
-        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary-foreground/10 blur-3xl" />
-        <div className="relative max-w-2xl">
-          <h2 className="font-display text-4xl font-semibold tracking-tight md:text-5xl">
-            Start your Health Pass today.
+              <span>
+                <Check size={16} />
+                Time-limited sharing
+              </span>
+              <span>
+                <Check size={16} />
+                Access history
+              </span>
+            </div>
+            <p className="hp-landing-availability">
+              An early HealthPass experience. Availability depends on participating facilities.
+            </p>
+          </div>
+          <RecordPreview />
+        </section>
+        <section className="hp-landing-principles" aria-label="Record principles">
+          <div className="hp-landing-wrap">
+            <span>
+              <FileHeart size={19} />
+              Care with context
+            </span>
+            <span>
+              <Share2 size={19} />
+              Sharing with a choice
+            </span>
+            <span>
+              <History size={19} />
+              Changes with a history
+            </span>
+          </div>
+        </section>
+        <section id="benefits" className="hp-landing-section hp-landing-wrap">
+          <div className="hp-landing-section-heading">
+            <div>
+              <span className="hp-landing-eyebrow">Your record, less fragmented</span>
+              <h2>
+                Less starting over.
+                <br />
+                More context for your care.
+              </h2>
+            </div>
+            <p>
+              Good care starts with knowing what came before. HealthPass brings the record and the
+              people who need it closer together.
+            </p>
+          </div>
+          <div className="hp-landing-benefits">
+            <article className="hp-landing-benefit">
+              <span className="hp-landing-icon hp-landing-blue">
+                <ClipboardList size={24} />
+              </span>
+              <span className="hp-landing-card-number">01 / YOUR HISTORY</span>
+              <h3>A record you can revisit</h3>
+              <p>
+                See your signed clinical notes and retained visit history, with the care team and
+                date alongside each entry.
+              </p>
+              <span className="hp-landing-detail">
+                <Check size={15} />
+                Clear source. Clear timeline.
+              </span>
+            </article>
+            <article className="hp-landing-benefit">
+              <span className="hp-landing-icon hp-landing-teal">
+                <Share2 size={24} />
+              </span>
+              <span className="hp-landing-card-number">02 / YOUR CHOICE</span>
+              <h3>Share with a time limit</h3>
+              <p>
+                Give a participating facility access to your signed history. Choose an expiry and
+                revoke sharing when you need to.
+              </p>
+              <span className="hp-landing-detail">
+                <Check size={15} />
+                Permission you can review.
+              </span>
+            </article>
+            <article className="hp-landing-benefit">
+              <span className="hp-landing-icon hp-landing-burgundy">
+                <History size={24} />
+              </span>
+              <span className="hp-landing-card-number">03 / YOUR CONTEXT</span>
+              <h3>Keep the history of care</h3>
+              <p>
+                Signed notes retain their original version. Amendments add context, and your
+                activity view helps you follow record access.
+              </p>
+              <span className="hp-landing-detail">
+                <Check size={15} />
+                Changes remain traceable.
+              </span>
+            </article>
+          </div>
+        </section>
+        <section id="how" className="hp-landing-how">
+          <div className="hp-landing-wrap hp-landing-how-grid">
+            <div>
+              <span className="hp-landing-eyebrow">Patient-controlled sharing</span>
+              <h2>
+                The right context.
+                <br />
+                For your next care team.
+              </h2>
+              <p className="hp-landing-section-copy">
+                Your HealthPass identity doesn't open your history to every facility. Sharing is a
+                deliberate choice with a defined scope and an expiry.
+              </p>
+              <a className="hp-landing-text-link" href={register}>
+                Start with your account <ArrowRight size={17} />
+              </a>
+              <div className="hp-landing-sharing-note">
+                <LockKeyhole size={20} />
+                <p>
+                  Shared history includes signed notes. Another facility cannot rewrite the source
+                  facility's signed record.
+                </p>
+              </div>
+            </div>
+            <ol className="hp-landing-steps">
+              <li>
+                <span>01</span>
+                <div>
+                  <h3>Create your patient account</h3>
+                  <p>
+                    Sign up to access your own HealthPass workspace. Your account starts with your
+                    identity, not a match based on a shared phone number.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <span>02</span>
+                <div>
+                  <h3>Review your care history</h3>
+                  <p>
+                    View signed notes as participating care teams record visits. See where each
+                    entry came from and when it was signed.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <span>03</span>
+                <div>
+                  <h3>Choose a facility to share with</h3>
+                  <p>
+                    Select a participating facility and set how long sharing lasts. Review active
+                    permissions or revoke a grant from your workspace.
+                  </p>
+                </div>
+              </li>
+            </ol>
+          </div>
+        </section>
+        <section id="providers" className="hp-landing-section hp-landing-wrap">
+          <div className="hp-landing-provider">
+            <div>
+              <span className="hp-landing-eyebrow">For participating care teams</span>
+              <h2>
+                A better handover
+                <br />
+                starts with a better record.
+              </h2>
+              <p>
+                Register patients, document encounters, and sign or amend clinical notes while
+                preserving their history. Work with shared context when the patient grants access.
+              </p>
+              <a className="hp-landing-button hp-landing-button-light" href="/workspace">
+                Professional sign in <ArrowRight size={18} />
+              </a>
+              <p className="hp-landing-provider-note">
+                Professional access requires facility onboarding and verified membership. Patient
+                signup doesn't create a clinician account.
+              </p>
+            </div>
+            <div className="hp-landing-provider-features">
+              {[
+                {
+                  icon: Building2,
+                  title: "Facility-scoped access",
+                  copy: "Roles and active membership define which workflows a team member can use.",
+                },
+                {
+                  icon: ShieldCheck,
+                  title: "An extra sign-in check",
+                  copy: "Professional accounts use authenticator verification before accessing the care workspace.",
+                },
+                {
+                  icon: History,
+                  title: "A visible record of actions",
+                  copy: "Clinical changes and allowed or denied access produce an audit trail.",
+                },
+              ].map(({ icon: Icon, title, copy }) => (
+                <div key={title}>
+                  <span>
+                    <Icon size={22} />
+                  </span>
+                  <div>
+                    <h3>{title}</h3>
+                    <p>{copy}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+        <section className="hp-landing-ecosystem hp-landing-wrap" aria-label="HealthPass ecosystem">
+          <span className="hp-landing-eyebrow">A shared vision for connected care</span>
+          <div>
+            <h2>
+              HealthPass is the care record.
+              <br />
+              <span>The ecosystem grows around it.</span>
+            </h2>
+            <p>
+              RxLedger focuses on pharmacy operations. Rai is part of the wider care vision. Their
+              HealthPass integrations are planned; prescription exchange and AI support aren't
+              connected yet.
+            </p>
+          </div>
+          <div className="hp-landing-ecosystem-names">
+            <span>
+              <FileHeart size={18} />
+              HealthPass <small>Care record</small>
+            </span>
+            <span>
+              RxLedger <small>Pharmacy operations</small>
+            </span>
+            <span>
+              Rai <small>Planned care support</small>
+            </span>
+          </div>
+        </section>
+        <FAQ />
+        <section className="hp-landing-final hp-landing-wrap">
+          <span className="hp-landing-eyebrow">Start with a clearer record</span>
+          <h2>
+            Your next chapter of care,
+            <br />
+            with more context.
           </h2>
-          <p className="mt-4 text-primary-foreground/80">
-            Free for patients. Always. Bring your full medical history with you — everywhere you get
-            care.
-          </p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <a
-              href="/workspace"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-primary-foreground px-6 py-3 text-sm font-medium text-primary transition hover:brightness-95"
-            >
-              Open care workspace <ArrowRight className="h-4 w-4" />
+          <p>Create a patient account or sign in to your existing workspace.</p>
+          <div className="hp-landing-actions">
+            <a className="hp-landing-button" href={register}>
+              Create patient account <ArrowRight size={18} />
+            </a>
+            <a className="hp-landing-text-link" href="/workspace">
+              Already have an account? Sign in <ArrowUpRight size={16} />
             </a>
           </div>
-          <p className="mt-3 text-xs text-primary-foreground/60">
-            First slice: identity, clinical records, sharing and audit. More care workflows are
-            being built.
-          </p>
+        </section>
+      </main>
+      <footer className="hp-landing-footer">
+        <div className="hp-landing-wrap">
+          <div>
+            <a href="#top" className="hp-landing-brand">
+              <span>
+                <FileHeart size={20} />
+              </span>
+              HealthPass
+            </a>
+            <p>Care history. Clearer connections.</p>
+          </div>
+          <nav aria-label="Footer navigation">
+            <a href="#how">Sharing and access</a>
+            <a href="#providers">Professional access</a>
+            <a href="#faq">Questions</a>
+            <a href="/workspace">Sign in</a>
+          </nav>
+          <span className="hp-landing-footer-note">
+            HealthPass · An early care-record experience
+          </span>
         </div>
-      </div>
-    </section>
+      </footer>
+    </div>
   );
 }
 
-function Footer() {
+function RecordPreview() {
   return (
-    <footer className="border-t border-border bg-secondary/40">
-      <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 px-6 py-10 md:flex-row md:items-center">
-        <div className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--gradient-hero)] text-primary-foreground">
-            <FileHeart className="h-4 w-4" />
+    <div className="hp-landing-preview-scene">
+      <div
+        className="hp-landing-preview"
+        aria-label="Illustrative HealthPass record using synthetic example data"
+      >
+        <div className="hp-landing-preview-header">
+          <span>
+            <FileHeart size={18} />
+            HealthPass
           </span>
-          <span className="font-display text-lg font-semibold">Health Pass</span>
+          <span className="hp-landing-example">Sample record</span>
         </div>
-        <p className="text-xs text-muted-foreground">
-          © {new Date().getFullYear()} Health Pass. The passport for your health.
-        </p>
-        <div className="flex gap-6 text-xs text-muted-foreground">
-          <a href="#" className="hover:text-foreground">
-            Privacy
-          </a>
-          <a href="#" className="hover:text-foreground">
-            Terms
-          </a>
-          <a href="#" className="hover:text-foreground">
-            Contact
-          </a>
+        <div className="hp-landing-record-person">
+          <span className="hp-landing-avatar">AO</span>
+          <div>
+            <h2>Alex Okoro</h2>
+            <p>Synthetic example · HP-DEMO-001</p>
+          </div>
+          <ShieldCheck size={22} />
+        </div>
+        <div className="hp-landing-preview-tabs">
+          <span>Care history</span>
+          <span>Sharing</span>
+          <span>Activity</span>
+        </div>
+        <div className="hp-landing-record-summary">
+          <div>
+            <span>CARE HISTORY</span>
+            <strong>Your visits, in view.</strong>
+          </div>
+          <span className="hp-landing-status">
+            <span />
+            Signed records
+          </span>
+        </div>
+        <div className="hp-landing-record-entry">
+          <span className="hp-landing-icon hp-landing-blue">
+            <ClipboardList size={20} />
+          </span>
+          <div>
+            <h3>Primary care review</h3>
+            <p>Example Care Clinic · 8 October 2026</p>
+            <span>
+              Signed clinical note <Check size={12} />
+            </span>
+          </div>
+          <ChevronDown size={17} />
+        </div>
+        <div className="hp-landing-record-context">
+          <span>
+            <ShieldCheck size={16} />
+            Allergy context
+          </span>
+          <p>Reviewed, none known, or not yet recorded. Missing information stays unknown.</p>
+        </div>
+        <div className="hp-landing-record-sharing">
+          <span className="hp-landing-icon hp-landing-teal">
+            <Share2 size={19} />
+          </span>
+          <div>
+            <h3>Sharing on your terms</h3>
+            <p>Example Partner Clinic</p>
+            <span>Access expires 15 October 2026</span>
+          </div>
+          <LockKeyhole size={17} />
+        </div>
+        <div className="hp-landing-preview-footer">
+          <History size={15} />
+          <span>View your record access history</span>
+          <ArrowRight size={15} />
         </div>
       </div>
-    </footer>
+      <p className="hp-landing-preview-caption">
+        Illustrative preview · synthetic data · no real facility affiliation
+      </p>
+      <div className="hp-landing-preview-label">
+        <span />A little more context. A better next visit.
+      </div>
+    </div>
+  );
+}
+
+function FAQ() {
+  const questions = [
+    {
+      question: "Can every hospital see my record?",
+      answer:
+        "No. HealthPass works with participating facilities. Professional access depends on an active, verified facility membership and role. Sharing your signed history with another facility requires a grant from your patient workspace; it expires when you choose and can be revoked. Revoking sharing ends future shared access; it does not remove a facility's own care record.",
+    },
+    {
+      question: "What can I do in HealthPass today?",
+      answer:
+        "The current experience covers patient accounts, signed visit history, patient-controlled sharing and activity history. Professional accounts support patient registration and clinical notes. Prescriptions, lab-result exchange, appointments, consultations and partner integrations are planned, and are not available in this version.",
+    },
+    {
+      question: "How does a care team get access?",
+      answer:
+        "Professional accounts are provisioned through facility onboarding and require reviewed membership before clinical access is enabled. Professionals also complete authenticator verification. If your facility has not been onboarded, creating a patient account will not grant professional access.",
+    },
+    {
+      question: "Can I change a signed clinical note?",
+      answer:
+        "Signed notes preserve their original version. An authorized clinician can add an amendment with a reason, while the previous signed version stays in the record. Patients and other facilities cannot rewrite the source note.",
+    },
+    {
+      question: "Is HealthPass an emergency service?",
+      answer:
+        "No. HealthPass is a care-record workspace and does not provide emergency response. If you need urgent help, contact an appropriate local emergency service or visit a care facility.",
+    },
+  ];
+  return (
+    <section id="faq" className="hp-landing-section hp-landing-wrap hp-landing-faq">
+      <div>
+        <span className="hp-landing-eyebrow">A few useful answers</span>
+        <h2>
+          Before you
+          <br />
+          get started.
+        </h2>
+        <p>Know what you're signing up for, and how access works.</p>
+      </div>
+      <div>
+        {questions.map(({ question, answer }) => (
+          <details key={question}>
+            <summary>
+              {question}
+              <ChevronDown size={19} aria-hidden="true" />
+            </summary>
+            <p>{answer}</p>
+          </details>
+        ))}
+      </div>
+    </section>
   );
 }

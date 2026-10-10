@@ -7,11 +7,13 @@ import { Mark } from "./primitives";
 export function Auth({
   onSuccess,
   serviceError,
+  initialMode,
 }: {
   onSuccess: () => Promise<void>;
   serviceError: string;
+  initialMode?: "register";
 }) {
-  const [register, setRegister] = useState(false),
+  const [register, setRegister] = useState(initialMode === "register"),
     [error, setError] = useState(serviceError),
     [busy, setBusy] = useState(false);
   async function submit(e: FormEvent<HTMLFormElement>) {
