@@ -43,12 +43,23 @@ function Header() {
           <span className="font-display text-lg font-semibold tracking-tight">Health Pass</span>
         </a>
         <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
-          <a href="#features" className="hover:text-foreground">Features</a>
-          <a href="#how" className="hover:text-foreground">How it works</a>
-          <a href="#providers" className="hover:text-foreground">For providers</a>
+          <a href="#features" className="hover:text-foreground">
+            Features
+          </a>
+          <a href="#how" className="hover:text-foreground">
+            How it works
+          </a>
+          <a href="#providers" className="hover:text-foreground">
+            For providers
+          </a>
         </nav>
         <div className="flex items-center gap-3">
-          <a href="#" className="hidden text-sm text-muted-foreground hover:text-foreground sm:block">Sign in</a>
+          <a
+            href="/care"
+            className="hidden text-sm text-muted-foreground hover:text-foreground sm:block"
+          >
+            Sign in
+          </a>
           <a
             href="#cta"
             className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-[var(--shadow-soft)] transition hover:brightness-110"
@@ -84,9 +95,9 @@ function Hero() {
             </span>
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Health Pass is a patient-first health passport. Carry every visit,
-            prescription and lab result with you — across clinics, pharmacies
-            and hospitals, even the ones that don't use Health Pass yet.
+            Health Pass is a patient-first health passport. Carry every visit, prescription and lab
+            result with you — across clinics, pharmacies and hospitals, even the ones that don't use
+            Health Pass yet.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a
@@ -235,8 +246,8 @@ function Features() {
           Built around the patient — not the facility.
         </h2>
         <p className="mt-4 text-muted-foreground">
-          Health Pass flips the EMR model. Instead of records trapped in each
-          clinic, the record travels with you.
+          Health Pass flips the EMR model. Instead of records trapped in each clinic, the record
+          travels with you.
         </p>
       </div>
 
@@ -316,9 +327,9 @@ function ForProviders() {
             A cleaner intake, without switching your EMR.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Scan a patient's Health Pass to instantly see their history, active
-            meds and allergies. Add a note, a prescription or a lab result back
-            to their record in seconds — no integration required.
+            Scan a patient's Health Pass to instantly see their history, active meds and allergies.
+            Add a note, a prescription or a lab result back to their record in seconds — no
+            integration required.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
@@ -368,10 +379,13 @@ function CTA() {
             Start your Health Pass today.
           </h2>
           <p className="mt-4 text-primary-foreground/80">
-            Free for patients. Always. Bring your full medical history with
-            you — everywhere you get care.
+            Free for patients. Always. Bring your full medical history with you — everywhere you get
+            care.
           </p>
-          <form className="mt-8 flex flex-col gap-3 sm:flex-row" onSubmit={(e) => e.preventDefault()}>
+          <form
+            className="mt-8 flex flex-col gap-3 sm:flex-row"
+            onSubmit={(e) => e.preventDefault()}
+          >
             <input
               type="email"
               required
@@ -408,9 +422,15 @@ function Footer() {
           © {new Date().getFullYear()} Health Pass. The passport for your health.
         </p>
         <div className="flex gap-6 text-xs text-muted-foreground">
-          <a href="#" className="hover:text-foreground">Privacy</a>
-          <a href="#" className="hover:text-foreground">Terms</a>
-          <a href="#" className="hover:text-foreground">Contact</a>
+          <a href="#" className="hover:text-foreground">
+            Privacy
+          </a>
+          <a href="#" className="hover:text-foreground">
+            Terms
+          </a>
+          <a href="#" className="hover:text-foreground">
+            Contact
+          </a>
         </div>
       </div>
     </footer>
