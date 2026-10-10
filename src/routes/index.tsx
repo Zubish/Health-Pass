@@ -35,10 +35,7 @@ function Landing() {
       <header className="hp-landing-header">
         <div className="hp-landing-wrap hp-landing-nav">
           <a href="#top" className="hp-landing-brand" aria-label="HealthPass home">
-            <span>
-              <FileHeart size={21} aria-hidden="true" />
-            </span>
-            HealthPass
+            <img className="hp-wordmark" src="/healthpass-wordmark.png" alt="HealthPass" width={260} height={48} />
           </a>
           <nav className="hp-landing-desktop-nav" aria-label="Main navigation">
             {navigation.map((item) => (
@@ -328,8 +325,7 @@ function Landing() {
           </div>
           <div className="hp-landing-ecosystem-names">
             <span>
-              <FileHeart size={18} />
-              HealthPass <small>Care record</small>
+              <img className="hp-wordmark hp-wordmark-small" src="/healthpass-wordmark.png" alt="HealthPass" width={130} height={24} /> <small>Care record</small>
             </span>
             <span>
               RxLedger <small>Pharmacy operations</small>
@@ -362,10 +358,7 @@ function Landing() {
         <div className="hp-landing-wrap">
           <div>
             <a href="#top" className="hp-landing-brand">
-              <span>
-                <FileHeart size={20} />
-              </span>
-              HealthPass
+              <img className="hp-wordmark" src="/healthpass-wordmark.png" alt="HealthPass" width={260} height={48} />
             </a>
             <p>Care history. Clearer connections.</p>
           </div>
@@ -393,8 +386,7 @@ function RecordPreview() {
       >
         <div className="hp-landing-preview-header">
           <span>
-            <FileHeart size={18} />
-            HealthPass
+            <img className="hp-wordmark hp-wordmark-small" src="/healthpass-wordmark.png" alt="HealthPass" width={130} height={24} />
           </span>
           <span className="hp-landing-example">Sample record</span>
         </div>
