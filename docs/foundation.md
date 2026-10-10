@@ -78,7 +78,7 @@ Development applies migration 001 at startup. Production startup only checks its
 
 ### Neon API connection
 
-Deployment checkpoint: migration 001 is applied to the HealthPass production branch and API deployment 2 completed. The dedicated `healthpass_app` runtime role has no superuser membership, role/database creation, schema creation, or signed-note/audit mutation permissions. No clinical fixtures were seeded. Runtime HTTP verification remains separate from deployment status.
+Deployment checkpoint: migration 001 is applied to the HealthPass production branch and API deployment 2 completed. The dedicated `healthpass_app` runtime role has no superuser membership, role/database creation, schema creation, or signed-note/audit mutation permissions. No clinical fixtures were seeded. Trusted runtime health verification returned HTTP 200 (`synthetic-development`, PostgreSQL); direct requests without the server secret and session reads without login returned HTTP 401. The hosted landing returned HTTP 200, while its proxy health endpoint returned HTTP 503 because its connection settings remain absent. Desktop and 390px mobile browser checks confirmed no horizontal overflow or page errors, and patient signup opens the registration form.
 
 The web connection is blocked: Vercel rejected creation of the two production proxy environment variables with HTTP 403 (additional permissions required). Until that permission is available and the server configuration is deployed, the hosted workspace can still report that it is awaiting its API connection. Do not remove the native API secret check to bypass this restriction.
 

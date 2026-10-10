@@ -1352,6 +1352,7 @@ button.hp-patient-row:hover {
 .hp-landing {
   color: #243342;
   background: #fcfaf6;
+  overflow-x: clip;
   --lp-teal: #18766d;
   --lp-blue: #42699a;
 }
