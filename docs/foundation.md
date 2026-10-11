@@ -2,6 +2,8 @@
 
 The product source is [healthpass-blueprint-v1.txt](./healthpass-blueprint-v1.txt), copied verbatim from Musa's 9 October 2026 specification. Its CONFIRMED, RECOVERED PROPOSAL, BUILD RECOMMENDATION and OPEN labels remain authoritative. This document tracks the implementation and decisions; it does not convert recommendations into approved production policy.
 
+For the current product definition, user relationships, module inventory and proposed build order, read [product-definition.md](product-definition.md). The owner's reusable workflow and design approach is saved in [design-principles.md](design-principles.md), recovered from the inspected RxLedger skill library. Earlier implementation/deployment sections below are historical checkpoints: current account creation has three paths, authenticator protection is optional with remembered dismissal, custom workspace roles are implemented, and migrations run through 006. Later dated decisions supersede earlier mandatory-MFA and two-card descriptions.
+
 ## Current owner decisions — 10 October 2026
 
 Musa confirmed there is no Nigerian hosting service available now. Use the existing Neon HealthPass project (`billowing-grass-83528069`, `production` branch) for ongoing development. Its current region is AWS US East (Ohio); do not describe it as Nigerian hosting. This decision supersedes the original blueprint's Nigeria-only hosting constraint for current development. A future infrastructure decision should be recorded here; obtaining a Nigerian provider is not a prerequisite for continuing the app.

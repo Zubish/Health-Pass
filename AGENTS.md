@@ -15,4 +15,6 @@
 
 Read `docs/healthpass-blueprint-v1.txt` and `docs/foundation.md` before changing product scope. Preserve the evidence labels (confirmed/proposed/recommended/open). HealthPass is the source of the burgundy ecosystem accent borrowed by RxLedger and Rai; use neutral, teal and blue supporting surfaces. Never use real patient data in fixtures, source or screenshots.
 
+For product planning and major app work, also read `docs/product-definition.md` and `docs/design-principles.md`. They recover the owner's workflow-first approach from RxLedger and distinguish the target product from implemented features. Recommended milestones and unresolved access policies are not new owner approvals. Extend complete care workflows while preserving identities, source-attributed signed records and audit history.
+
 The owner's current decisions in `docs/foundation.md` supersede conflicting original blueprint requirements. Nigerian hosting is unavailable; use the existing Neon service for current development without blocking app work. The owner has now requested fixing live login, authorizing the API/database connection and deployment needed to make the workspace work. Keep unrelated infrastructure additions deferred.
