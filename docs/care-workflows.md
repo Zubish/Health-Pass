@@ -38,7 +38,11 @@ Visit routing and clinical history use the existing API transaction. Runtime nee
 
 Fifty automated checks run across function security, compressed HTTP proxy behaviour, SQLite and embedded PostgreSQL. Seven care-workflow scenarios on each database cover invitation disclosure and code secrecy, tenant/branch checks, expiry/revocation, duplicate review, concurrent one-use redemption, no merging, bounded operational queues, reviewed assignment, current permissions and patient relationship, own-note confidentiality, signed completion, stale writes, retry conflicts and immutable history.
 
-Browser verification checks the real flow through the patient and care-team screens, plus mobile alignment, branch context and URL navigation. Hosted checks use explicitly labelled synthetic workspace/account/registration metadata; clinical documentation remains a local synthetic verification scenario. No real patient fixture or clinical content is used.
+Local Chromium verification passed the complete patient-code → reception identity review/link → check-in → assigned consultation → observations → linked draft/sign → follow-up → completion journey. The patient, reception and clinician screens fit a 390px phone viewport; refresh retains visit context and there were no browser errors.
+
+Hosted verification passed against https://health-pass-psi.vercel.app with explicitly labelled synthetic owner/reception/GP/patient accounts: invitation issuance/review/redemption, branch queue, reviewed assignment, reception clinical denial, clinician access, mobile rendering and refresh. The synthetic visit was cancelled afterward; no clinical observations or notes were written to production.
+
+Deployment: frontend commit 296a010, Vercel dpl_7wXAsZrS7eYcRXBV1UNVB8CHvbqU READY and assigned to the canonical domain; Neon API deployment 9 completed; migrations 007–008 applied with restricted runtime grants and append-only event/observation triggers. No real patient fixture or clinical content is used.
 
 ## Subsequent work
 
