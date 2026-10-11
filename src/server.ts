@@ -1,3 +1,4 @@
+import { fetchHealthpassOrigin } from "./lib/healthpass-proxy";
 import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
@@ -67,15 +68,7 @@ export default {
           process.env.HEALTHPASS_ORIGIN_SECRET;
         if (originSecret) headers.set("x-healthpass-origin-secret", originSecret);
         try {
-          return await fetch(upstream, {
-            method: request.method,
-            headers,
-            redirect: "manual",
-            signal: AbortSignal.timeout(15000),
-            ...(request.method !== "GET" && request.method !== "HEAD"
-              ? { body: await request.arrayBuffer() }
-              : {}),
-          });
+          return await fetchHealthpassOrigin(request, upstream, headers);
         } catch {
           return Response.json(
             {
