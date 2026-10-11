@@ -2515,6 +2515,8 @@ button.hp-patient-row:hover {
   outline-offset: 3px;
 }
 .hp-account-switch {
+  min-inline-size: 0;
+  flex-wrap: wrap;
   border: 0;
   padding: 0;
   display: flex;
@@ -2531,6 +2533,26 @@ button.hp-patient-row:hover {
 .hp-checkbox input {
   width: auto;
   margin: 0;
+}
+.hp-login .hp-account-switch label {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  min-height: 44px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hp-login .hp-account-switch input[type="radio"] {
+  display: inline-block;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  accent-color: #7a2038;
+  cursor: pointer;
 }
 .hp-account-switch legend {
   font-size: 12px;
