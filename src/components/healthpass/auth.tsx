@@ -404,6 +404,7 @@ export function Auth({
 }
 export function Mfa({ me, onSuccess }: { me: Me; onSuccess: () => Promise<void> }) {
   const [secret, setSecret] = useState(""),
+    [dontShowAgain, setDontShowAgain] = useState(false),
     [code, setCode] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
@@ -423,7 +424,7 @@ export function Mfa({ me, onSuccess }: { me: Me; onSuccess: () => Promise<void> 
     setBusy(true);
     setError("");
     try {
-      await careApi("/auth/mfa/skip", "POST", {});
+      await careApi("/auth/mfa/skip", "POST", { dont_show_again: dontShowAgain });
       await onSuccess();
     } catch (e) {
       setError((e as Error).message);
@@ -461,11 +462,11 @@ export function Mfa({ me, onSuccess }: { me: Me; onSuccess: () => Promise<void> 
         )}
         <p>
           {me.mfaEnrolled
-            ? "Enter the six-digit code from your authenticator, or skip it for this session."
-            : "Add an authenticator for extra protection, or skip for now and continue to your workspace."}
+            ? "Enter the six-digit code from your authenticator, or continue without it."
+            : "Add an authenticator for extra protection, or continue to your workspace without setting it up."}
         </p>
         {!me.mfaEnrolled && !secret && (
-          <button className="hp-button primary" disabled={busy} onClick={setup}>
+          <button className="hp-button secondary" disabled={busy} onClick={setup}>
             Set up authenticator
           </button>
         )}
@@ -498,23 +499,24 @@ export function Mfa({ me, onSuccess }: { me: Me; onSuccess: () => Promise<void> 
             </button>
           </form>
         )}
-        <button className="hp-button secondary" disabled={busy} onClick={() => void skip()}>
-          Skip for now
+        <label className="hp-permission-option">
+          <input
+            type="checkbox"
+            checked={dontShowAgain}
+            disabled={busy}
+            onChange={(e) => setDontShowAgain(e.target.checked)}
+          />
+          <span>Don't show this again</span>
+        </label>
+        <p className="hp-fine">Remember this choice for your account in this facility.</p>
+        <button className="hp-button primary" disabled={busy} onClick={() => void skip()}>
+          {busy ? "Please wait…" : "Continue"}
         </button>
         {error && (
           <p className="hp-error" role="alert">
             {error}
           </p>
         )}
-        <button
-          className="hp-text-button"
-          onClick={async () => {
-            await careApi("/auth/logout", "POST", {});
-            await onSuccess();
-          }}
-        >
-          Sign out
-        </button>
       </div>
     </main>
   );

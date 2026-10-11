@@ -401,6 +401,26 @@ test("optional authenticator choice preserves enrollment and pending membership 
     assert.equal((await owner.c("/auth/mfa/skip", "POST", {})).status, 200);
     assert.equal((await owner.c("/auth/me")).data.mfaEnrolled, true);
     assert.equal((await owner.c("/workspace/settings")).status, 200);
+    const login = {
+      email: "owner@synthetic.invalid",
+      password,
+      account_type: "professional",
+      workspace_code: owner.code,
+    };
+    await owner.c("/auth/logout", "POST", {});
+    await owner.c("/auth/login", "POST", login);
+    assert.equal((await owner.c("/auth/me")).data.mfaRequired, true);
+    assert.equal((await owner.c("/auth/mfa/skip", "POST", { dont_show_again: true })).status, 200);
+    await owner.c("/auth/logout", "POST", {});
+    const freshDevice = client();
+    assert.equal((await freshDevice("/auth/login", "POST", login)).status, 200);
+    assert.equal((await freshDevice("/auth/me")).data.mfaRequired, false);
+    assert.equal((await freshDevice("/auth/me")).data.mfaEnrolled, true);
+    assert.equal((await freshDevice("/workspace/settings")).status, 200);
+    const otherFacility = await facility("Synthetic Separate Facility", "owner@synthetic.invalid");
+    await otherFacility.c("/auth/logout", "POST", {});
+    await otherFacility.c("/auth/login", "POST", { ...login, workspace_code: otherFacility.code });
+    assert.equal((await otherFacility.c("/auth/me")).data.mfaRequired, true);
     const staff = client();
     assert.equal(
       (
@@ -415,6 +435,7 @@ test("optional authenticator choice preserves enrollment and pending membership 
       200,
     );
     assert.equal((await staff("/auth/mfa/skip", "POST", {})).status, 403);
+    assert.equal((await staff("/auth/mfa/skip", "POST", { dont_show_again: true })).status, 403);
     assert.equal((await staff("/patients")).status, 403);
     assert.equal((await client()("/auth/mfa/skip", "POST", {})).status, 401);
   } finally {

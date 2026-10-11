@@ -126,6 +126,7 @@ export function createApi(db, config = process.env) {
       if (!membership) fail(403, "Your facility membership is unavailable.");
       await resolveMembership(tx, membership, user);
       user.pendingMembership = !membership.active || !user.verified;
+      user.authenticatorPromptDismissed = !!membership.authenticator_prompt_dismissed;
       user.branch_id = membership.branch_id;
       user.role = membership.role;
     } else user.role = "patient";
@@ -140,8 +141,13 @@ export function createApi(db, config = process.env) {
       fail(403, "Your workspace access has expired. Contact its administrator.");
     if (actor.pendingMembership)
       fail(403, "Your facility access is awaiting administrator approval.");
-    if (actor.organization_id && !actor.mfa_verified && !actor.mfa_skipped)
-      fail(403, "Verify with your authenticator or choose Skip for now.");
+    if (
+      actor.organization_id &&
+      !actor.mfa_verified &&
+      !actor.mfa_skipped &&
+      !actor.authenticatorPromptDismissed
+    )
+      fail(403, "Verify with your authenticator or choose Continue.");
   };
   const permit = (actor, key) => {
     strong(actor);
@@ -331,7 +337,8 @@ export function createApi(db, config = process.env) {
             ])
           : null,
         organization: org,
-        mfaRequired: !!org && !actor.mfa_verified && !actor.mfa_skipped,
+        mfaRequired:
+          !!org && !actor.mfa_verified && !actor.mfa_skipped && !actor.authenticatorPromptDismissed,
         mfaEnrolled: !!actor.totp_secret,
       };
     }
@@ -344,8 +351,26 @@ export function createApi(db, config = process.env) {
       if (!actor.organization_id) fail(400, "Authenticator choice is for professional workspaces.");
       if (actor.pendingMembership)
         fail(403, "Your facility access is awaiting administrator approval.");
+      if (actor.accessExpired)
+        fail(403, "Your workspace access has expired. Contact its administrator.");
+      if (body.dont_show_again === true) {
+        await tx.run(
+          "UPDATE memberships SET authenticator_prompt_dismissed=1 WHERE user_id=? AND organization_id=?",
+          [actor.id, actor.organization_id],
+        );
+      }
       await tx.run("UPDATE sessions SET mfa_skipped=1 WHERE id=?", [actor.session_id]);
-      await audit(tx, actor, "auth.mfa_skipped", "allow", null, null, correlation);
+      await audit(
+        tx,
+        actor,
+        "auth.mfa_skipped",
+        "allow",
+        null,
+        null,
+        correlation,
+        null,
+        JSON.stringify({ dont_show_again: body.dont_show_again === true }),
+      );
       return { skipped: true };
     }
     if (path === "/auth/mfa/setup" && method === "POST") {
