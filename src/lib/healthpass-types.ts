@@ -20,9 +20,17 @@ export type Patient = {
   name: string;
   dob: string | null;
   phone?: string;
-  allergy_status: string;
-  allergies: string;
-  emergency_contact: string;
+  allergy_status?: string;
+  allergies?: string;
+  emergency_contact?: string;
+};
+export type AccessScope = {
+  restricted: boolean;
+  scopes: string[];
+  includeProfile: boolean;
+  canContribute: boolean;
+  canEditProfile?: boolean;
+  contributionScopes: string[];
 };
 export type Note = {
   complaint: string;

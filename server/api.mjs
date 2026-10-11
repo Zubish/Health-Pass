@@ -2,6 +2,11 @@ import { hasPermission, resolveMembership } from "./roles.mjs";
 import { workspaceRoutes } from "./workspaces.mjs";
 import { handlePatientLinking } from "./patient-linking.mjs";
 import { handleVisits, validateEncounterVisit } from "./visits.mjs";
+import {
+  handleProfessionalAccess,
+  resolveProfessionalAccess,
+  listProfessionalPatients,
+} from "./professional-access.mjs";
 import { randomUUID, randomBytes } from "node:crypto";
 import {
   hash,
@@ -159,8 +164,29 @@ export function createApi(db, config = process.env) {
     strong(actor);
     const patient = await tx.get("SELECT * FROM patients WHERE id=?", [patientId]);
     if (!patient) fail(404, "Patient unavailable.");
-    if (actor.patient_id === patientId && !write) return { patient, consent: null };
+    const legacyPolicy = {
+      restricted: false,
+      scopes: ["general", "nursing", "medication"],
+      includeProfile: true,
+      canContribute: true,
+      canEditProfile: true,
+      contributionScopes: actor.clinicalScopes ?? [],
+      grantId: null,
+    };
+    if (actor.patient_id === patientId && !write)
+      return { patient, consent: null, accessPolicy: legacyPolicy };
     if (!hasPermission(actor, "records.view")) fail(403, "Clinical access is not permitted.");
+    const policy = await resolveProfessionalAccess(tx, actor, patientId);
+    if (policy.restricted) {
+      if (!policy.grants.length)
+        fail(
+          403,
+          "This patient permits only selected professionals. Ask them to grant you access.",
+        );
+      if (write && (!policy.canContribute || !policy.contributionScopes.length))
+        fail(403, "Your patient sharing grant permits reading only.");
+      return { patient, consent: null, accessPolicy: policy };
+    }
     const local = await tx.get(
       "SELECT patient_id FROM patient_links WHERE patient_id=? AND organization_id=?",
       [patientId, actor.organization_id],
@@ -177,8 +203,16 @@ export function createApi(db, config = process.env) {
       ));
     if ((!local || !branchLocal) && !grant)
       fail(403, "No active care relationship or sharing grant.");
-    return { patient, consent: grant?.id ?? null };
+    return { patient, consent: grant?.id ?? null, accessPolicy: legacyPolicy };
   }
+  const requireContributionScope = (policy, scope) => {
+    if (!policy.contributionScopes.includes(scope))
+      fail(403, "The patient has not permitted you to contribute this record category.");
+  };
+  const accessAudit = (policy) =>
+    policy.restricted
+      ? JSON.stringify({ active_professional_grant_ids: policy.grants.map((grant) => grant.id) })
+      : null;
   async function makeSession(tx, user) {
     const membership = await tx.get(
       "SELECT organization_id FROM memberships WHERE user_id=? ORDER BY organization_id LIMIT 1",
@@ -334,6 +368,8 @@ export function createApi(db, config = process.env) {
     };
     const linkingResult = await handlePatientLinking(tx, context);
     if (linkingResult !== undefined) return linkingResult;
+    const sharingResult = await handleProfessionalAccess(tx, context);
+    if (sharingResult !== undefined) return sharingResult;
     const visitResult = await handleVisits(tx, context);
     if (visitResult !== undefined) return visitResult;
     if (path === "/auth/me" && method === "GET") {
@@ -444,7 +480,7 @@ export function createApi(db, config = process.env) {
         };
       permit(actor, "registry.view");
       const rows = await tx.all(
-        `SELECT DISTINCT p.id,p.healthpass_id,p.name,p.dob,p.created_at FROM patients p LEFT JOIN patient_links l ON l.patient_id=p.id LEFT JOIN consents c ON c.patient_id=p.id WHERE (l.organization_id=? AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM branch_patient_links bp WHERE bp.patient_id=p.id AND bp.branch_id=?))) ${hasPermission(actor, "records.view") ? "OR (c.recipient_id=? AND c.revoked_at IS NULL AND c.expires_at>?)" : ""} ORDER BY p.name`,
+        `SELECT DISTINCT p.id,p.healthpass_id,p.name,p.dob,p.created_at FROM patients p LEFT JOIN patient_links l ON l.patient_id=p.id LEFT JOIN consents c ON c.patient_id=p.id LEFT JOIN patient_access_settings pas ON pas.patient_id=p.id WHERE (l.organization_id=? AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM branch_patient_links bp WHERE bp.patient_id=p.id AND bp.branch_id=?))) ${hasPermission(actor, "records.view") ? "OR (c.recipient_id=? AND c.revoked_at IS NULL AND c.expires_at>? AND COALESCE(pas.restricted,0)=0)" : ""} ORDER BY p.name`,
         hasPermission(actor, "records.view")
           ? [
               actor.organization_id,
@@ -455,6 +491,12 @@ export function createApi(db, config = process.env) {
             ]
           : [actor.organization_id, actor.branch_id ?? null, actor.branch_id ?? null],
       );
+      if (hasPermission(actor, "records.view")) {
+        const named = await listProfessionalPatients(tx, actor);
+        const ids = new Set(rows.map((p) => p.id));
+        for (const patient of named) if (!ids.has(patient.id)) rows.push(patient);
+        rows.sort((a, b) => a.name.localeCompare(b.name));
+      }
       await audit(tx, actor, "registry.list", "allow", null, null, correlation);
       return { patients: rows };
     }
@@ -496,7 +538,7 @@ export function createApi(db, config = process.env) {
     }
     let match = path.match(/^\/patients\/([^/]+)$/);
     if (match && method === "GET") {
-      const { patient, consent } = await access(tx, actor, match[1]);
+      const { patient, consent, accessPolicy } = await access(tx, actor, match[1]);
       const encounters = await tx.all(
         "SELECT e.*,u.name AS author_name,o.name AS organization_name FROM encounters e JOIN users u ON u.id=e.author_id JOIN organizations o ON o.id=e.organization_id WHERE e.patient_id=? ORDER BY e.created_at DESC",
         [patient.id],
@@ -504,7 +546,9 @@ export function createApi(db, config = process.env) {
       const visible = encounters
         .filter(
           (e) =>
-            (e.organization_id === actor.organization_id &&
+            (accessPolicy.restricted && accessPolicy.scopes.includes(e.note_kind ?? "general")) ||
+            (!accessPolicy.restricted &&
+              e.organization_id === actor.organization_id &&
               (!actor.branch_id || e.branch_id === actor.branch_id)) ||
             actor.patient_id === patient.id ||
             consent,
@@ -516,7 +560,15 @@ export function createApi(db, config = process.env) {
                 e.organization_id === actor.organization_id &&
                 (!actor.branch_id || e.branch_id === actor.branch_id) &&
                 hasPermission(actor, "records.view"))) &&
-            (!e.visit_id || e.author_id === actor.id || actor.patient_id === patient.id),
+            (!e.visit_id ||
+              e.author_id === actor.id ||
+              actor.patient_id === patient.id ||
+              (accessPolicy.restricted &&
+                accessPolicy.scopes.includes(e.note_kind ?? "general"))) &&
+            (!accessPolicy.restricted || accessPolicy.scopes.includes(e.note_kind ?? "general")) &&
+            (e.status !== "draft" ||
+              !accessPolicy.restricted ||
+              accessPolicy.contributionScopes.includes(e.note_kind ?? "general")),
         );
       // Patient and partner readers receive signed snapshots, never newer unsaved draft content.
       const records = [];
@@ -550,6 +602,8 @@ export function createApi(db, config = process.env) {
           ...released,
           versions: versions.map((v) => ({ ...v, payload: JSON.parse(v.payload) })),
           editable:
+            accessPolicy.canContribute &&
+            accessPolicy.contributionScopes.includes(encounter.note_kind ?? "general") &&
             visitEditable &&
             encounter.author_id === actor.id &&
             actor.clinicalScopes?.includes(encounter.note_kind) &&
@@ -561,13 +615,52 @@ export function createApi(db, config = process.env) {
             hasPermission(actor, "records.view"),
         });
       }
-      await audit(tx, actor, "chart.read", "allow", patient.id, patient.id, correlation, consent);
-      return { patient, encounters: records };
+      const releasedPatient = !accessPolicy.restricted
+        ? patient
+        : {
+            id: patient.id,
+            healthpass_id: patient.healthpass_id,
+            name: patient.name,
+            dob: patient.dob,
+            created_at: patient.created_at,
+            ...(accessPolicy.includeProfile
+              ? {
+                  allergy_status: patient.allergy_status,
+                  allergies: patient.allergies,
+                  emergency_contact: patient.emergency_contact,
+                }
+              : {}),
+          };
+      await audit(
+        tx,
+        actor,
+        "chart.read",
+        "allow",
+        patient.id,
+        patient.id,
+        correlation,
+        consent,
+        accessAudit(accessPolicy),
+      );
+      return {
+        patient: releasedPatient,
+        encounters: records,
+        accessScope: {
+          restricted: accessPolicy.restricted,
+          scopes: accessPolicy.scopes,
+          includeProfile: accessPolicy.includeProfile,
+          canContribute: accessPolicy.canContribute,
+          canEditProfile: accessPolicy.canEditProfile,
+          contributionScopes: accessPolicy.contributionScopes,
+        },
+      };
     }
     match = path.match(/^\/patients\/([^/]+)\/profile$/);
     if (match && method === "PATCH") {
-      const { patient, consent } = await access(tx, actor, match[1], true);
+      const { patient, consent, accessPolicy } = await access(tx, actor, match[1], true);
       permit(actor, "profile.edit");
+      if (!accessPolicy.canEditProfile)
+        fail(403, "The patient has not shared their clinical profile.");
       if (!["unknown", "reviewed", "none-known"].includes(body.allergy_status))
         fail(400, "Choose an allergy verification status.");
       const allergies = text(body.allergies ?? "", "allergies");
@@ -591,6 +684,7 @@ export function createApi(db, config = process.env) {
         patient.id,
         correlation,
         consent,
+        accessAudit(accessPolicy),
       );
       return { updated: true };
     }
@@ -599,12 +693,13 @@ export function createApi(db, config = process.env) {
       const kind = body.note_kind ?? actor.clinicalScopes[0];
       if (!actor.clinicalScopes.includes(kind))
         fail(403, "Your reviewed clinical scope does not cover this note type.");
-      const { patient, consent } = await access(
+      const { patient, consent, accessPolicy } = await access(
         tx,
         actor,
         text(body.patient_id, "patient ID", 100, true),
         true,
       );
+      requireContributionScope(accessPolicy, kind);
       const note = noteInput(body),
         id = randomUUID(),
         date = now();
@@ -663,7 +758,17 @@ export function createApi(db, config = process.env) {
           ),
         );
       }
-      await audit(tx, actor, "encounter.create", "allow", patient.id, id, correlation, consent);
+      await audit(
+        tx,
+        actor,
+        "encounter.create",
+        "allow",
+        patient.id,
+        id,
+        correlation,
+        consent,
+        accessAudit(accessPolicy),
+      );
       return { id, version: 1 };
     }
     match = path.match(/^\/encounters\/([^/]+)(?:\/(sign|amend))?$/);
@@ -680,7 +785,8 @@ export function createApi(db, config = process.env) {
         await validateEncounterVisit(tx, context, encounter.visit_id, encounter.patient_id, {
           allowCompleted: match[2] === "amend",
         });
-      const { consent } = await access(tx, actor, encounter.patient_id, true);
+      const { consent, accessPolicy } = await access(tx, actor, encounter.patient_id, true);
+      requireContributionScope(accessPolicy, encounter.note_kind ?? "general");
       if (
         encounter.organization_id !== actor.organization_id ||
         (actor.branch_id && encounter.branch_id !== actor.branch_id)
@@ -707,6 +813,7 @@ export function createApi(db, config = process.env) {
           encounter.id,
           correlation,
           consent,
+          accessAudit(accessPolicy),
         );
         return { version: body.version + 1 };
       }
@@ -784,12 +891,17 @@ export function createApi(db, config = process.env) {
         noteId,
         correlation,
         consent,
+        accessAudit(accessPolicy),
       );
       return { version };
     }
     if (path === "/consents" && method === "GET") {
       if (!actor.patient_id) fail(403, "Use a patient account to manage sharing.");
       return {
+        restricted: !!(await tx.get(
+          "SELECT patient_id FROM patient_access_settings WHERE patient_id=? AND restricted=1",
+          [actor.patient_id],
+        )),
         consents: await tx.all(
           "SELECT c.*,o.name AS recipient_name FROM consents c JOIN organizations o ON o.id=c.recipient_id WHERE patient_id=? ORDER BY created_at DESC",
           [actor.patient_id],
@@ -798,6 +910,16 @@ export function createApi(db, config = process.env) {
     }
     if (path === "/consents" && method === "POST") {
       if (!actor.patient_id) fail(403, "Only the patient can grant this sharing scope.");
+      if (
+        await tx.get(
+          "SELECT patient_id FROM patient_access_settings WHERE patient_id=? AND restricted=1",
+          [actor.patient_id],
+        )
+      )
+        fail(
+          403,
+          "You use only selected professionals. Create a named-professional grant instead.",
+        );
       const recipient = text(body.recipient_id, "recipient", 100, true),
         purpose = text(body.purpose, "purpose", 500, true);
       if (!(await tx.get("SELECT id FROM organizations WHERE id=?", [recipient])))

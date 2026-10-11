@@ -22,6 +22,7 @@ export type VisitObservation = {
 };
 export type VisitFollowUp = {
   id: string;
+  discipline?: string;
   title: string;
   due_at: string;
   status: string;
@@ -31,6 +32,7 @@ export type VisitFollowUp = {
 export type VisitDetail = {
   visit: CareVisit;
   clinicalAllowed: boolean;
+  accessScope?: import("./healthpass-types").AccessScope;
   observations: VisitObservation[];
   followUps: VisitFollowUp[];
 };

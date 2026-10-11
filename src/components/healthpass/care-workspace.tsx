@@ -21,11 +21,12 @@ import {
 } from "lucide-react";
 import { careApi } from "@/lib/healthpass-client";
 import { date } from "@/lib/healthpass-types";
-import type { Me, Patient, Encounter } from "@/lib/healthpass-types";
+import type { Me, Patient, Encounter, AccessScope } from "@/lib/healthpass-types";
 import { Mark, Stat, PatientRow, Empty, Modal } from "./primitives";
 import { NoteEditor, EncounterCard } from "./encounters";
 import { PatientLinking, FacilityLinking } from "./patient-linking";
 import { Visits } from "./visits";
+import { PatientProfessionalAccess, ProfessionalAccess } from "./professional-access";
 export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promise<void> }) {
   const search = useSearch({ from: "/workspace" });
   const navigate = useNavigate({ from: "/workspace" });
@@ -40,7 +41,11 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     void navigate({ search: { tab: "patients", patient: id ?? undefined } });
   };
   const [patients, setPatients] = useState<Patient[]>([]),
-    [chart, setChart] = useState<{ patient: Patient; encounters: Encounter[] } | null>(null),
+    [chart, setChart] = useState<{
+      patient: Patient;
+      encounters: Encounter[];
+      accessScope: AccessScope;
+    } | null>(null),
     [query, setQuery] = useState(""),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
@@ -53,6 +58,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     [profile, setProfile] = useState(false),
     [audit, setAudit] = useState<any[]>([]),
     [consents, setConsents] = useState<any[]>([]),
+    [accessRestricted, setAccessRestricted] = useState<boolean | null>(null),
     [organizations, setOrganizations] = useState<any[]>([]),
     [health, setHealth] = useState("");
   const isPatient = me.role === "patient",
@@ -86,6 +92,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
       setChart(await careApi(`/patients/${id}`));
       if (selected !== id) setSelected(id);
     } catch (e) {
+      setChart(null);
       setError((e as Error).message);
     } finally {
       setBusy(false);
@@ -97,8 +104,13 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     try {
       if (next === "audit") setAudit((await careApi("/audit")).audits);
       if (next === "sharing") {
-        setConsents((await careApi("/consents")).consents);
-        setOrganizations((await careApi("/organizations")).organizations);
+        const [sharing, facilities] = await Promise.all([
+          careApi("/consents"),
+          careApi("/organizations"),
+        ]);
+        setConsents(sharing.consents);
+        setAccessRestricted((current) => current === true || sharing.restricted);
+        setOrganizations(facilities.organizations);
       }
       if (next === "patients" && isPatient && me.user.patient_id)
         await loadChart(me.user.patient_id);
@@ -501,44 +513,67 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                   <h1>{chart.patient.name}</h1>
                   <p>
                     {chart.patient.dob ? `Born ${chart.patient.dob}` : "Date of birth unknown"}{" "}
-                    <span>·</span> {chart.patient.phone || "Contact not recorded"}
+                    {chart.accessScope.includeProfile && (
+                      <>
+                        <span>·</span>{" "}
+                        {"phone" in chart.patient
+                          ? chart.patient.phone || "Contact not recorded"
+                          : "Contact details not shared"}
+                      </>
+                    )}
                   </p>
                 </div>
-                {can("notes.create") && (
-                  <button
-                    className="hp-button primary"
-                    onClick={() => {
-                      setNoteVisit(null);
-                      setEditing("new");
-                    }}
-                  >
-                    <Plus size={17} /> New encounter
-                  </button>
-                )}
+                {can("notes.create") &&
+                  chart.accessScope.canContribute &&
+                  chart.accessScope.contributionScopes.length > 0 && (
+                    <button
+                      className="hp-button primary"
+                      onClick={() => {
+                        setNoteVisit(null);
+                        setEditing("new");
+                      }}
+                    >
+                      <Plus size={17} /> New encounter
+                    </button>
+                  )}
               </div>
-              <div
-                className={`hp-allergy ${chart.patient.allergy_status === "reviewed" ? "warning" : ""}`}
-              >
-                <ShieldCheck size={21} />
-                <div>
-                  <strong>
-                    {chart.patient.allergy_status === "unknown"
-                      ? "Allergy history unknown"
-                      : chart.patient.allergy_status === "none-known"
-                        ? "No known allergies after review"
-                        : "Reviewed allergy information"}
-                  </strong>
-                  <p>
-                    {chart.patient.allergies ||
-                      "Review with the patient before making clinical decisions."}
-                  </p>
+              {!chart.accessScope.includeProfile ? (
+                <p className="hp-notice">
+                  Clinical profile is outside your sharing scope. Ask the patient before accessing
+                  allergy or emergency-contact details.
+                </p>
+              ) : (
+                <div
+                  className={`hp-allergy ${chart.patient.allergy_status === "reviewed" ? "warning" : ""}`}
+                >
+                  <ShieldCheck size={21} />
+                  <div>
+                    <strong>
+                      {chart.patient.allergy_status === "unknown"
+                        ? "Allergy history unknown"
+                        : chart.patient.allergy_status === "none-known"
+                          ? "No known allergies after review"
+                          : "Reviewed allergy information"}
+                    </strong>
+                    <p>
+                      {chart.patient.allergies ||
+                        "Review with the patient before making clinical decisions."}
+                    </p>
+                  </div>
+                  {can("profile.edit") && chart.accessScope.canEditProfile && (
+                    <button className="hp-button ghost" onClick={() => setProfile(true)}>
+                      Review profile
+                    </button>
+                  )}
                 </div>
-                {can("profile.edit") && (
-                  <button className="hp-button ghost" onClick={() => setProfile(true)}>
-                    Review profile
-                  </button>
-                )}
-              </div>
+              )}
+              {!isPatient && chart.accessScope.restricted && (
+                <ProfessionalAccess
+                  patientId={chart.patient.id}
+                  me={me}
+                  onChanged={() => void loadChart(chart.patient.id)}
+                />
+              )}
               <div className="hp-chart-layout">
                 <section className="hp-panel">
                   <div className="hp-panel-heading">
@@ -557,11 +592,13 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                   ))}
                   {!chart.encounters.length && (
                     <Empty
-                      title="The next chapter starts here"
+                      title="No records in this view"
                       text={
                         isPatient
                           ? "Signed notes from your care team will appear here."
-                          : "Create an encounter to document this patient’s care."
+                          : chart.accessScope.canContribute
+                            ? "Create an encounter to document this patient’s care."
+                            : "No released notes are available in your selected sharing categories."
                       }
                     />
                   )}
@@ -573,13 +610,19 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                     <dd>{chart.patient.healthpass_id}</dd>
                     <dt>Identity status</dt>
                     <dd>Registered · external verification not established</dd>
-                    <dt>Emergency contact</dt>
-                    <dd>{chart.patient.emergency_contact || "Not recorded"}</dd>
+                    {chart.accessScope.includeProfile && (
+                      <>
+                        <dt>Emergency contact</dt>
+                        <dd>{chart.patient.emergency_contact || "Not recorded"}</dd>
+                      </>
+                    )}
                     <dt>Record access</dt>
                     <dd>
                       {isPatient
                         ? "Your own released records"
-                        : "Facility scope and active sharing grants"}
+                        : chart.accessScope.restricted
+                          ? `Selected categories: ${chart.accessScope.scopes.join(", ")} · ${chart.accessScope.canContribute ? "Contribution permitted" : "Read only"}`
+                          : "Facility scope and active sharing grants"}
                     </dd>
                   </dl>
                   <div className="hp-notice">
@@ -599,67 +642,83 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                 <div>
                   <span className="hp-eyebrow">YOUR RECORD, YOUR TERMS</span>
                   <h1>Sharing & permissions</h1>
-                  <p>
-                    Give a participating facility time-limited access to your signed care history.
-                  </p>
+                  <p>Choose who can access your records, what they can see and when access ends.</p>
                 </div>
               </div>
               {isPatient && <PatientLinking />}
+              {isPatient && (
+                <PatientProfessionalAccess
+                  onChanged={(restricted) =>
+                    setAccessRestricted((current) => current === true || restricted)
+                  }
+                />
+              )}
               <div className="hp-sharing-grid">
-                <section className="hp-panel hp-padded">
-                  <h2>Share with a care team</h2>
-                  <p className="hp-muted">
-                    A grant permits verified clinicians to read signed records and create their own
-                    encounters. It does not permit rewriting another facility’s notes.
+                {accessRestricted === false && (
+                  <section className="hp-panel hp-padded">
+                    <h2>Share with a care team</h2>
+                    <p className="hp-muted">
+                      A grant permits verified clinicians to read signed records and create their
+                      own encounters. It does not permit rewriting another facility’s notes.
+                    </p>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const data = Object.fromEntries(new FormData(e.currentTarget));
+                        void act(async () => {
+                          await careApi("/consents", "POST", {
+                            ...data,
+                            expires_at: new Date(
+                              Date.now() + Number(data.days) * 86400000,
+                            ).toISOString(),
+                          });
+                          await loadTab("sharing");
+                        }, "Sharing permission saved.");
+                      }}
+                    >
+                      <label>
+                        Recipient facility
+                        <select name="recipient_id" required>
+                          <option value="">Choose a participating facility</option>
+                          {organizations.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Purpose
+                        <input
+                          name="purpose"
+                          required
+                          maxLength={500}
+                          placeholder="For example: follow-up consultation"
+                        />
+                      </label>
+                      <label>
+                        Access duration
+                        <select name="days">
+                          <option value="1">1 day</option>
+                          <option value="7">7 days</option>
+                          <option value="30">30 days</option>
+                        </select>
+                      </label>
+                      <button
+                        className="hp-button primary"
+                        disabled={busy || !organizations.length}
+                      >
+                        <ShieldCheck size={17} /> Grant access
+                      </button>
+                    </form>
+                  </section>
+                )}
+                {accessRestricted === true && (
+                  <p className="hp-notice">
+                    Only selected professionals can access clinical information. Older facility
+                    grants below no longer grant chart access.
                   </p>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const data = Object.fromEntries(new FormData(e.currentTarget));
-                      void act(async () => {
-                        await careApi("/consents", "POST", {
-                          ...data,
-                          expires_at: new Date(
-                            Date.now() + Number(data.days) * 86400000,
-                          ).toISOString(),
-                        });
-                        await loadTab("sharing");
-                      }, "Sharing permission saved.");
-                    }}
-                  >
-                    <label>
-                      Recipient facility
-                      <select name="recipient_id" required>
-                        <option value="">Choose a participating facility</option>
-                        {organizations.map((o) => (
-                          <option key={o.id} value={o.id}>
-                            {o.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Purpose
-                      <input
-                        name="purpose"
-                        required
-                        maxLength={500}
-                        placeholder="For example: follow-up consultation"
-                      />
-                    </label>
-                    <label>
-                      Access duration
-                      <select name="days">
-                        <option value="1">1 day</option>
-                        <option value="7">7 days</option>
-                        <option value="30">30 days</option>
-                      </select>
-                    </label>
-                    <button className="hp-button primary" disabled={busy || !organizations.length}>
-                      <ShieldCheck size={17} /> Grant access
-                    </button>
-                  </form>
-                </section>
+                )}
                 <section className="hp-panel">
                   <div className="hp-panel-heading">
                     <div>
@@ -681,7 +740,9 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                           ? "Revoked"
                           : Date.parse(c.expires_at) < Date.now()
                             ? "Expired"
-                            : "Active"}
+                            : accessRestricted
+                              ? "Inactive · named access"
+                              : "Active"}
                       </span>
                       {!c.revoked_at && Date.parse(c.expires_at) > Date.now() && (
                         <button
@@ -831,7 +892,9 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           {editing && chart && canChart && (
             <NoteEditor
               encounter={editing}
-              scopes={me.clinicalScopes ?? []}
+              scopes={(me.clinicalScopes ?? []).filter((scope) =>
+                chart.accessScope.contributionScopes.includes(scope),
+              )}
               canEdit={editing === "new" ? can("notes.create") : can("notes.edit")}
               canSign={can("notes.sign")}
               canAmend={can("notes.amend")}

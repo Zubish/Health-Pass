@@ -14,3 +14,5 @@ Public app: **https://health-pass-psi.vercel.app/**. Use this stable address for
 - `/workspace` — patient/facility sign-in, registry, charts, encounters, sharing and audit.
 
 Use synthetic data only until the hosting, clinical and privacy pilot requirements in the implementation notes have been reviewed and completed.
+
+Patient-directed sharing: [named-professional access and delegation](docs/named-access.md).

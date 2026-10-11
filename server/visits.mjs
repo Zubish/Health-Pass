@@ -81,21 +81,58 @@ async function recordEvent(tx, actor, visit, action, nextStatus, audit, correlat
   );
 }
 
-async function clinicalAccess(tx, actor, visit, permission, { permit, access, fail }) {
+async function clinicalAccess(
+  tx,
+  actor,
+  visit,
+  permission,
+  { permit, access, fail },
+  { write = true } = {},
+) {
   permit(actor, permission);
   if (visit.assigned_user_id !== actor.id)
     fail(403, "Clinical visit work is limited to the assigned professional.");
   // Operational routing never establishes consent or clinical chart authority.
-  return access(tx, actor, visit.patient_id, true);
+  return access(tx, actor, visit.patient_id, write);
+}
+
+function visitAccessScope(result, actor) {
+  const policy = result?.accessPolicy;
+  return {
+    restricted: policy?.restricted ?? false,
+    scopes: policy?.scopes ?? ["general", "nursing", "medication"],
+    includeProfile: policy?.includeProfile ?? true,
+    canContribute: policy?.canContribute ?? true,
+    contributionScopes: policy?.contributionScopes ?? actor.clinicalScopes ?? [],
+  };
+}
+
+function contributionDiscipline(result, actor, requested, allowed, fail) {
+  const scope = visitAccessScope(result, actor);
+  const eligible = (actor.clinicalScopes ?? []).filter(
+    (discipline) => allowed.includes(discipline) && scope.contributionScopes.includes(discipline),
+  );
+  const discipline = requested ?? eligible[0];
+  if (!scope.canContribute || !eligible.includes(discipline))
+    fail(
+      403,
+      "Your reviewed scope and the patient's sharing choice do not permit this contribution.",
+    );
+  return discipline;
 }
 
 async function replayClinicalRequest(tx, table, visit, actor, requestId, payload, fail) {
   if (!requestId) return null;
   const replay = await tx.get(
-    `SELECT id,request_payload${table === "visit_followups" ? ",version" : ""} FROM ${table} WHERE visit_id=? AND author_id=? AND client_request_id=?`,
+    `SELECT id,request_payload,discipline${table === "visit_followups" ? ",version" : ""} FROM ${table} WHERE visit_id=? AND author_id=? AND client_request_id=?`,
     [visit.id, actor.id, requestId],
   );
-  if (replay && replay.request_payload !== payload)
+  let replayPayload = replay?.request_payload;
+  if (replayPayload) {
+    const original = JSON.parse(replayPayload);
+    if (original.length === 2) replayPayload = JSON.stringify([...original, replay.discipline]);
+  }
+  if (replay && replayPayload !== payload)
     fail(409, "This request was already used for different clinical details.");
   return replay
     ? { id: replay.id, ...(replay.version ? { version: replay.version } : {}), existing: true }
@@ -288,34 +325,64 @@ export async function handleVisits(tx, context) {
   if (!match[2] && method === "GET") {
     permit(actor, "visits.view");
     let clinicalAllowed = false;
+    let accessScope = null;
+    let clinicalPolicy = null;
     if (visit.assigned_user_id === actor.id && hasPermission(actor, "visits.document")) {
       try {
-        await clinicalAccess(tx, actor, visit, "visits.document", context);
+        const result = await clinicalAccess(tx, actor, visit, "visits.document", context, {
+          write: false,
+        });
+        accessScope = visitAccessScope(result, actor);
+        clinicalPolicy = result.accessPolicy ?? null;
         clinicalAllowed = true;
       } catch (error) {
         if (error.status !== 403 && error.statusCode !== 403) throw error;
       }
     }
     const summary = await tx.get(`${operationalSelect} WHERE v.id=?`, [visit.id]);
-    const observations = clinicalAllowed
-      ? await tx.all(
-          "SELECT id,author_id,discipline,values_json,observed_at,created_at FROM visit_observations WHERE visit_id=? ORDER BY observed_at DESC,id DESC LIMIT 100",
-          [visit.id],
-        )
-      : [];
+    const scopedParameters = accessScope?.scopes ?? [];
+    const categoryFilter = scopedParameters.map(() => "?").join(",");
+    const followUpScopes = clinicalPolicy?.restricted
+      ? scopedParameters
+      : [...scopedParameters, "unknown"];
+    const followUpCategoryFilter = followUpScopes.map(() => "?").join(",");
+    if (clinicalAllowed)
+      await audit(
+        tx,
+        actor,
+        "visit.clinical.read",
+        "allow",
+        visit.patient_id,
+        visit.id,
+        correlation,
+        null,
+        JSON.stringify({
+          active_professional_grant_ids: clinicalPolicy?.grants?.map((grant) => grant.id) ?? [],
+          scopes: scopedParameters,
+        }),
+      );
+    const observations =
+      clinicalAllowed && scopedParameters.length
+        ? await tx.all(
+            `SELECT id,author_id,discipline,values_json,observed_at,created_at FROM visit_observations WHERE visit_id=? AND discipline IN (${categoryFilter}) ORDER BY observed_at DESC,id DESC LIMIT 100`,
+            [visit.id, ...scopedParameters],
+          )
+        : [];
     return {
       visit: summary,
       clinicalAllowed,
+      accessScope,
       observations: observations.map(({ values_json, ...row }) => ({
         ...row,
         values: JSON.parse(values_json),
       })),
-      followUps: clinicalAllowed
-        ? await tx.all(
-            "SELECT id,author_id,title,due_at,status,version,created_at,updated_at FROM visit_followups WHERE visit_id=? AND author_id=? ORDER BY due_at,id LIMIT 100",
-            [visit.id, actor.id],
-          )
-        : [],
+      followUps:
+        clinicalAllowed && followUpScopes.length
+          ? await tx.all(
+              `SELECT id,author_id,discipline,title,due_at,status,version,created_at,updated_at FROM visit_followups WHERE visit_id=? AND author_id=? AND discipline IN (${followUpCategoryFilter}) ORDER BY due_at,id LIMIT 100`,
+              [visit.id, actor.id, ...followUpScopes],
+            )
+          : [],
     };
   }
 
@@ -341,12 +408,29 @@ export async function handleVisits(tx, context) {
         permit(actor, "visits.manage");
         if (!activeStatuses.has(visit.status)) fail(409, "Only an active visit can be cancelled.");
       } else if (status === "in-progress" && visit.status === "waiting") {
-        await clinicalAccess(tx, actor, visit, "visits.document", context);
+        const result = await clinicalAccess(tx, actor, visit, "visits.document", context);
+        contributionDiscipline(
+          result,
+          actor,
+          undefined,
+          ["general", "nursing", "medication"],
+          fail,
+        );
       } else if (status === "completed" && visit.status === "in-progress") {
-        await clinicalAccess(tx, actor, visit, "visits.document", context);
+        const result = await clinicalAccess(tx, actor, visit, "visits.document", context);
+        contributionDiscipline(
+          result,
+          actor,
+          undefined,
+          ["general", "nursing", "medication"],
+          fail,
+        );
+        const scopes = visitAccessScope(result, actor).contributionScopes.filter((scope) =>
+          actor.clinicalScopes.includes(scope),
+        );
         const signed = await tx.get(
-          "SELECT e.id FROM encounters e JOIN note_versions n ON n.encounter_id=e.id WHERE e.visit_id=? AND e.patient_id=? AND e.organization_id=? AND e.branch_id=? AND e.author_id=? AND e.status IN ('signed','amended') LIMIT 1",
-          [visit.id, visit.patient_id, actor.organization_id, visit.branch_id, actor.id],
+          `SELECT e.id FROM encounters e JOIN note_versions n ON n.encounter_id=e.id WHERE e.visit_id=? AND e.patient_id=? AND e.organization_id=? AND e.branch_id=? AND e.author_id=? AND e.note_kind IN (${scopes.map(() => "?").join(",")}) AND e.status IN ('signed','amended') LIMIT 1`,
+          [visit.id, visit.patient_id, actor.organization_id, visit.branch_id, actor.id, ...scopes],
         );
         if (!signed) fail(409, "Sign a clinical note linked to this visit before completing it.");
       } else fail(409, "This visit status transition is not available.");
@@ -381,13 +465,14 @@ export async function handleVisits(tx, context) {
   }
 
   if (match[2] === "observations" && !match[3] && method === "POST") {
-    await clinicalAccess(tx, actor, visit, "observations.create", context);
-    const discipline = actor.clinicalScopes.includes("nursing")
-      ? "nursing"
-      : actor.clinicalScopes.includes("general")
-        ? "general"
-        : null;
-    if (!discipline) fail(403, "Vitals require reviewed general or nursing clinical scope.");
+    const result = await clinicalAccess(tx, actor, visit, "observations.create", context);
+    const discipline = contributionDiscipline(
+      result,
+      actor,
+      body.discipline,
+      ["general", "nursing"],
+      fail,
+    );
     if (!body.values || typeof body.values !== "object" || Array.isArray(body.values))
       fail(400, "Enter structured observation values.");
     const values = {};
@@ -418,7 +503,11 @@ export async function handleVisits(tx, context) {
       body.client_request_id === undefined
         ? null
         : text(body.client_request_id, "observation request ID", 100, true);
-    const payload = JSON.stringify([values, body.observed_at === undefined ? null : observedAt]);
+    const payload = JSON.stringify([
+      values,
+      body.observed_at === undefined ? null : observedAt,
+      discipline,
+    ]);
     const replay = await replayClinicalRequest(
       tx,
       "visit_observations",
@@ -466,7 +555,14 @@ export async function handleVisits(tx, context) {
   }
 
   if (match[2] === "follow-ups" && method === "POST" && !match[3]) {
-    await clinicalAccess(tx, actor, visit, "followups.manage", context);
+    const result = await clinicalAccess(tx, actor, visit, "followups.manage", context);
+    const discipline = contributionDiscipline(
+      result,
+      actor,
+      body.discipline,
+      ["general", "nursing", "medication"],
+      fail,
+    );
     const title = text(body.title, "follow-up task", 500, true);
     const due = Date.parse(body.due_at);
     if (!Number.isFinite(due)) fail(400, "Choose a valid future follow-up date.");
@@ -474,7 +570,7 @@ export async function handleVisits(tx, context) {
       body.client_request_id === undefined
         ? null
         : text(body.client_request_id, "follow-up request ID", 100, true);
-    const payload = JSON.stringify([title, new Date(due).toISOString()]);
+    const payload = JSON.stringify([title, new Date(due).toISOString(), discipline]);
     const replay = await replayClinicalRequest(
       tx,
       "visit_followups",
@@ -491,8 +587,19 @@ export async function handleVisits(tx, context) {
     const id = randomUUID(),
       date = timestamp();
     const inserted = await tx.run(
-      "INSERT INTO visit_followups(id,visit_id,author_id,client_request_id,request_payload,title,due_at,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'open',?,?) ON CONFLICT DO NOTHING",
-      [id, visit.id, actor.id, requestId, payload, title, new Date(due).toISOString(), date, date],
+      "INSERT INTO visit_followups(id,visit_id,author_id,client_request_id,request_payload,discipline,title,due_at,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,'open',?,?) ON CONFLICT DO NOTHING",
+      [
+        id,
+        visit.id,
+        actor.id,
+        requestId,
+        payload,
+        discipline,
+        title,
+        new Date(due).toISOString(),
+        date,
+        date,
+      ],
     );
     if ((inserted.rowCount ?? inserted.changes) !== 1) {
       const concurrent = await replayClinicalRequest(
@@ -512,12 +619,24 @@ export async function handleVisits(tx, context) {
   }
 
   if (match[2] === "follow-ups" && method === "PATCH" && match[3]) {
-    await clinicalAccess(tx, actor, visit, "followups.manage", context);
+    const accessResult = await clinicalAccess(tx, actor, visit, "followups.manage", context);
     const task = await tx.get(
       "SELECT * FROM visit_followups WHERE id=? AND visit_id=? AND author_id=?",
       [match[3], visit.id, actor.id],
     );
     if (!task) fail(404, "Follow-up task unavailable.");
+    if (task.discipline === "unknown" && accessResult.accessPolicy?.restricted)
+      fail(
+        403,
+        "This historical follow-up has no confirmed category and cannot be changed through a scoped grant.",
+      );
+    contributionDiscipline(
+      accessResult,
+      actor,
+      task.discipline === "unknown" ? undefined : task.discipline,
+      ["general", "nursing", "medication"],
+      fail,
+    );
     if (!Number.isInteger(body.version) || body.version !== task.version || task.status !== "open")
       fail(409, "This follow-up changed. Refresh it before continuing.");
     if (!["completed", "cancelled"].includes(body.status))

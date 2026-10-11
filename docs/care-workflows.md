@@ -10,7 +10,7 @@ Reception or another professional with registry.create opens Patient registry �
 
 This registers an existing patient account identity. It does not claim an older facility-created chart, reassign a chart's identity, or merge two people's histories. Matching name, DOB, email or phone is not proof of identity. A patient may connect the same identity to multiple participating facilities. Each facility contributes its own source-attributed care.
 
-The registration disclosure describes the current facility-role access to that facility's records. Connecting does not share previous facilities' notes: that still requires the existing patient-controlled signed-history sharing flow. Named-professional grants, primary-facility privileges, proxies and verified historical-chart reconciliation remain separate policy/implementation work.
+The registration disclosure describes the current facility-role access to that facility's records. Connecting does not share previous facilities' notes: that still requires the existing patient-controlled signed-history sharing flow. Patients may now opt into [named-professional access](named-access.md), which overrides facility-based clinical access. Primary-facility privileges, proxies and verified historical-chart reconciliation remain separate work.
 
 ## Today's work
 
@@ -22,7 +22,7 @@ The workflow is waiting → in-progress → completed, or cancelled. Assignment 
 
 The assigned professional can start a consultation, record permitted general/nursing observations, create an own-discipline linked encounter using the existing draft editor, save and sign it, arrange a follow-up task and complete the visit. Completion requires a signed linked source note. Back to visit preserves the route context after documentation. Signing releases the existing signed patient view; no new release-policy engine is claimed.
 
-Linked consultation notes are visible to their author and the patient, pending explicit individual/delegation policy. Other clinicians' drafts are no longer returned by the chart API. The existing historical unlinked signed-record/facility-sharing policy remains in effect. The new visit model does not yet support a shared nursing-triage → consultant handoff; a single assigned professional can document their own reviewed discipline.
+Under facility-based access, linked consultation notes are visible to their author and the patient. In selected-professional mode, signed linked notes follow the patient’s named/delegated category scope; even authors require a current grant. Other clinicians' drafts are no longer returned by the chart API. The existing historical unlinked signed-record/facility-sharing policy remains in effect. The new visit model does not yet support a shared nursing-triage → consultant handoff; a single assigned professional can document their own reviewed discipline.
 
 Observations use typed, bounded measurements and carry discipline, author and time. These are input validation rules, not a clinical decision-support protocol. Follow-up items have a due date, open/completed/cancelled state and version; they are per-visit tasks, not appointment booking or delivered reminders. Closed visits and cancelled workflows preserve clinical/source/audit history.
 
@@ -46,4 +46,4 @@ Deployment: frontend commit 296a010, Vercel dpl_7wXAsZrS7eYcRXBV1UNVB8CHvbqU REA
 
 ## Subsequent work
 
-Complete verified historical-chart linking and individual patient grants before broader care-team sharing. Then add patient-directed primary facility/proxy flows, structured prescriptions and RxLedger exchange, scheduling/remote care, results/referrals, contracted HMO workflows and evaluated Rai assistance according to the staged product plan. Do not present these as implemented simply because the queue and registry are available.
+Named-professional grants and one-level delegation are now implemented in a separate slice. Complete verified historical-chart linking and an explicit clinical handoff before transferring visit ownership. Then add patient-directed primary facility/proxy flows, structured prescriptions and RxLedger exchange, scheduling/remote care, results/referrals, contracted HMO workflows and evaluated Rai assistance according to the staged product plan. Do not present these as implemented simply because the queue and registry are available.

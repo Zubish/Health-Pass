@@ -48,6 +48,8 @@ export function Visits({
   const can = (permission: string) => me.permissions?.includes(permission) ?? false;
   const [visits, setVisits] = useState<CareVisit[]>([]);
   const [detail, setDetail] = useState<VisitDetail | null>(null);
+  const canContribute = detail?.accessScope?.canContribute ?? false;
+  const contributionScopes = detail?.accessScope?.contributionScopes ?? [];
   const [team, setTeam] = useState<Team>({ professionals: [], branches: [] });
   const [status, setStatus] = useState("active");
   const [mine, setMine] = useState(!can("visits.manage"));
@@ -314,6 +316,7 @@ export function Visits({
                 )}
                 {own &&
                   detail.clinicalAllowed &&
+                  canContribute &&
                   can("visits.document") &&
                   visit.status === "waiting" && (
                     <button
@@ -334,6 +337,7 @@ export function Visits({
                   )}
                 {own &&
                   detail.clinicalAllowed &&
+                  canContribute &&
                   can("notes.create") &&
                   visit.status === "in-progress" && (
                     <button className="hp-button primary" onClick={() => onDocumentVisit(visit)}>
@@ -342,6 +346,7 @@ export function Visits({
                   )}
                 {own &&
                   detail.clinicalAllowed &&
+                  canContribute &&
                   can("visits.document") &&
                   visit.status === "in-progress" && (
                     <button
@@ -427,17 +432,23 @@ export function Visits({
                 <section className="hp-panel hp-padded">
                   <div className="hp-panel-heading">
                     <h2>Observations</h2>
-                    {can("observations.create") && own && visit.status === "in-progress" && (
-                      <button
-                        className="hp-button secondary"
-                        onClick={() => {
-                          setObservationRequest(crypto.randomUUID());
-                          setObserving(true);
-                        }}
-                      >
-                        Record observations
-                      </button>
-                    )}
+                    {can("observations.create") &&
+                      canContribute &&
+                      contributionScopes.some(
+                        (scope) => scope === "general" || scope === "nursing",
+                      ) &&
+                      own &&
+                      visit.status === "in-progress" && (
+                        <button
+                          className="hp-button secondary"
+                          onClick={() => {
+                            setObservationRequest(crypto.randomUUID());
+                            setObserving(true);
+                          }}
+                        >
+                          Record observations
+                        </button>
+                      )}
                   </div>
                   {detail.observations.length ? (
                     detail.observations.map((o) => (
@@ -464,17 +475,21 @@ export function Visits({
                 <section className="hp-panel hp-padded">
                   <div className="hp-panel-heading">
                     <h2>Follow-up work</h2>
-                    {can("followups.manage") && own && !["cancelled"].includes(visit.status) && (
-                      <button
-                        className="hp-button secondary"
-                        onClick={() => {
-                          setFollowUpRequest(crypto.randomUUID());
-                          setFollowUp(true);
-                        }}
-                      >
-                        Add follow-up
-                      </button>
-                    )}
+                    {can("followups.manage") &&
+                      canContribute &&
+                      contributionScopes.length > 0 &&
+                      own &&
+                      !["cancelled"].includes(visit.status) && (
+                        <button
+                          className="hp-button secondary"
+                          onClick={() => {
+                            setFollowUpRequest(crypto.randomUUID());
+                            setFollowUp(true);
+                          }}
+                        >
+                          Add follow-up
+                        </button>
+                      )}
                   </div>
                   {detail.followUps.length ? (
                     detail.followUps.map((f) => (
@@ -484,40 +499,53 @@ export function Visits({
                           <p>Due {date(f.due_at)}</p>
                           <small>{f.status}</small>
                         </div>
-                        {f.status === "open" && own && can("followups.manage") && (
-                          <div className="hp-form-actions">
-                            <button
-                              className="hp-button secondary"
-                              disabled={busy}
-                              onClick={() =>
-                                void action(async () => {
-                                  await careApi(`/visits/${visit.id}/follow-ups/${f.id}`, "PATCH", {
-                                    version: f.version,
-                                    status: "completed",
-                                  });
-                                  await loadDetail();
-                                }, "Follow-up completed.")
-                              }
-                            >
-                              Mark completed
-                            </button>
-                            <button
-                              className="hp-text-button"
-                              disabled={busy}
-                              onClick={() =>
-                                void action(async () => {
-                                  await careApi(`/visits/${visit.id}/follow-ups/${f.id}`, "PATCH", {
-                                    version: f.version,
-                                    status: "cancelled",
-                                  });
-                                  await loadDetail();
-                                }, "Follow-up cancelled.")
-                              }
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        )}
+                        {f.status === "open" &&
+                          own &&
+                          can("followups.manage") &&
+                          canContribute &&
+                          (contributionScopes.includes(f.discipline ?? "general") ||
+                            (f.discipline === "unknown" && !detail.accessScope?.restricted)) && (
+                            <div className="hp-form-actions">
+                              <button
+                                className="hp-button secondary"
+                                disabled={busy}
+                                onClick={() =>
+                                  void action(async () => {
+                                    await careApi(
+                                      `/visits/${visit.id}/follow-ups/${f.id}`,
+                                      "PATCH",
+                                      {
+                                        version: f.version,
+                                        status: "completed",
+                                      },
+                                    );
+                                    await loadDetail();
+                                  }, "Follow-up completed.")
+                                }
+                              >
+                                Mark completed
+                              </button>
+                              <button
+                                className="hp-text-button"
+                                disabled={busy}
+                                onClick={() =>
+                                  void action(async () => {
+                                    await careApi(
+                                      `/visits/${visit.id}/follow-ups/${f.id}`,
+                                      "PATCH",
+                                      {
+                                        version: f.version,
+                                        status: "cancelled",
+                                      },
+                                    );
+                                    await loadDetail();
+                                  }, "Follow-up cancelled.")
+                                }
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
                       </div>
                     ))
                   ) : (

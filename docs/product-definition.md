@@ -53,7 +53,7 @@ flowchart LR
   G --> X[Other facilities or professionals]
 ```
 
-The diagram is the **RECOMMENDED target relationship model**. Patient-issued facility registration and single-professional visit assignment are implemented. Claiming old facility-created charts and fine-grained delegation remain planned.
+The diagram is the **RECOMMENDED target relationship model**. Patient-issued facility registration and single-professional visit assignment are implemented. Named-professional whole-category sharing and one-level delegation are implemented. Claiming old facility-created charts, primary facilities, proxies and line-level protection remain planned.
 
 **RECOMMENDED authorisation rule:** allow an action only when the account/session is valid, the facility membership and branch context permit it, the action is granted, applicable professional credentials cover the discipline, and the patient/record relationship permits the requested information. Apply these checks on the server before returning data. A hidden button is not an access boundary.
 
@@ -74,7 +74,7 @@ Patient-directed requirements already requested by the owner, with policy detail
 | Identity, workspaces and access         | Work in the correct facility with appropriate authority     | IMPLEMENTED accounts, branches, custom roles, reviewed clinical scopes, optional authenticator, idle timeout              | Recovery, verified linking, care assignments, individual/proxy grants                                               |
 | Patient registry and chart              | Find the correct patient and relevant care history          | IMPLEMENTED registry, facility/branch links, allergy context, signed history                                              | Verified existing-record linking, structured problems/medicines/observations, source-labelled longitudinal timeline |
 | Visits and clinical documentation       | Receive a patient, triage, consult and complete the visit   | IMPLEMENTED branch queue, single-professional assignment, observations, linked draft/sign/amend notes and follow-up tasks | Shared triage/consultation handoff and reminders                                                                    |
-| Patient experience                      | Understand released care and manage information sharing     | IMPLEMENTED own signed records, facility-level sharing and access history                                                 | Professional-specific sharing, primary facility, proxies, appointments and care instructions                        |
+| Patient experience                      | Understand released care and manage information sharing     | IMPLEMENTED own signed records, opt-in named/category sharing, one-level delegation and access history                    | Primary facility, proxies, individual-note protection, appointments and care instructions                           |
 | Prescriptions and medication continuity | Create an authorised order and know what was supplied       | PLANNED                                                                                                                   | Structured signed prescriptions, clarification, cancellation/amendment, partial fulfilment and RxLedger feedback    |
 | Appointments and remote care            | Book, arrive, consult and follow up                         | PLANNED                                                                                                                   | Provider availability, booking, reminders, waiting room, secure chat, voice/video and approved uploads              |
 | Results and referrals                   | Request a test or referral and close the loop               | PLANNED                                                                                                                   | Assigned orders, verified results, review/release, corrections and outstanding-action queues                        |
@@ -135,7 +135,7 @@ These are **RECOMMENDED milestones**, not estimates or assertions of owner-appro
 
 **Implemented first operating slice:** patient-issued registration invitations, reception identity/duplicate review, a scoped branch queue, single-professional assignment, observations, signed consultation notes, follow-up tasks and visit completion. See [care workflow contract](care-workflows.md) for authority, retry guarantees and boundaries.
 
-**Next implementation slice:** patient-directed named-professional access and reviewed delegation. Shared nurse-to-consultant handoff must use that authority model. Claiming existing facility-created charts remains open: verification evidence and duplicate adjudication need a separate flow; this slice never merges or claims them.
+**Next implementation slice:** explicit shared nurse-to-consultant handoff using the implemented patient-directed named-professional access and reviewed delegation model. Primary facility/proxy/emergency authority remain separate scoped workflows. Claiming existing facility-created charts remains open: verification evidence and duplicate adjudication need a separate flow; this slice never merges or claims them.
 
 ## Screen and interaction plan
 
