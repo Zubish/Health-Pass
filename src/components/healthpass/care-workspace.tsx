@@ -1,3 +1,4 @@
+import { WorkspaceSettings } from "./workspace-settings";
 import { useEffect, useState } from "react";
 import {
   Activity,
@@ -23,7 +24,7 @@ import type { Me, Patient, Encounter } from "@/lib/healthpass-types";
 import { Mark, Stat, PatientRow, Empty, Modal } from "./primitives";
 import { NoteEditor, EncounterCard } from "./encounters";
 export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promise<void> }) {
-  const [tab, setTab] = useState("overview"),
+  const [tab, setTab] = useState(me.role === "administrator" ? "workspace" : "overview"),
     [patients, setPatients] = useState<Patient[]>([]),
     [selected, setSelected] = useState<string | null>(null),
     [chart, setChart] = useState<{ patient: Patient; encounters: Encounter[] } | null>(null),
@@ -50,6 +51,9 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
       ] as const)
     : ([
         ["overview", "Overview", LayoutDashboard],
+        ...(me.role === "administrator"
+          ? [["workspace", "Workspace & branches", Users] as const]
+          : []),
         ...(canRegister ? [["patients", "Patient registry", Users] as const] : []),
         ["audit", "Activity & audit", History],
       ] as const);
@@ -119,7 +123,9 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           <span className="hp-avatar">{isPatient ? "HP" : "LC"}</span>
           <div>
             <strong>{isPatient ? "Patient portal" : me.organization?.name.split(" · ")[0]}</strong>
-            <small>{isPatient ? "Your care, connected" : "Facility workspace"}</small>
+            <small>
+              {isPatient ? "Your care, connected" : (me.branch?.name ?? "Facility workspace")}
+            </small>
           </div>
         </div>
         <span className="hp-nav-label">WORKSPACE</span>
@@ -146,7 +152,12 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
             <strong>Connected by care</strong>
             <p>Part of the RxLedger & Rai ecosystem.</p>
           </div>
-          <button className="hp-user" onClick={() => void act(onLogout, "")}>
+          <button
+            className="hp-user"
+            aria-label="Sign out"
+            title="Sign out"
+            onClick={() => void act(onLogout, "")}
+          >
             <span className="hp-avatar">
               {me.user.name
                 .split(" ")
@@ -166,7 +177,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
         <header className="hp-topbar">
           <span>
             <span className="hp-online-dot" />{" "}
-            {me.organization ? "Facility workspace" : "Patient workspace"}
+            {me.organization ? (me.branch?.name ?? "Facility workspace") : "Patient workspace"}
           </span>
           <span className="hp-protected">
             <LockKeyhole size={14} /> Scoped, audited access
@@ -190,6 +201,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
               {notice}
             </div>
           )}
+          {tab === "workspace" && <WorkspaceSettings />}
           {tab === "overview" && (
             <>
               <div className="hp-heading">

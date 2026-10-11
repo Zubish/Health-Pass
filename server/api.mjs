@@ -1,3 +1,4 @@
+import { workspaceRoutes } from "./workspaces.mjs";
 import { randomUUID, randomBytes } from "node:crypto";
 import {
   hash,
@@ -52,7 +53,7 @@ const noteInput = (input) =>
 const safeUser = (user) => ({
   id: user.id,
   name: user.name,
-  email: user.email,
+  email: user.login_email ?? user.email,
   patient_id: user.patient_id,
 });
 export function createApi(db, config = process.env) {
@@ -116,11 +117,12 @@ export function createApi(db, config = process.env) {
     if (!user) return null;
     if (user.organization_id) {
       const membership = await tx.get(
-        "SELECT role FROM memberships WHERE user_id=? AND organization_id=? AND active=1",
+        "SELECT role,active,branch_id FROM memberships WHERE user_id=? AND organization_id=?",
         [user.id, user.organization_id],
       );
-      if (!membership || !user.verified)
-        fail(403, "Your facility membership is inactive or unverified.");
+      if (!membership) fail(403, "Your facility membership is unavailable.");
+      user.pendingMembership = !membership.active || !user.verified;
+      user.branch_id = membership.branch_id;
       user.role = membership.role;
     } else user.role = "patient";
     return user;
@@ -130,6 +132,8 @@ export function createApi(db, config = process.env) {
   };
   const strong = (actor) => {
     authenticated(actor);
+    if (actor.pendingMembership)
+      fail(403, "Your facility access is awaiting administrator approval.");
     if (actor.organization_id && (!actor.totp_secret || !actor.mfa_verified))
       fail(403, "Complete authenticator verification first.");
   };
@@ -152,12 +156,19 @@ export function createApi(db, config = process.env) {
       "SELECT id FROM consents WHERE patient_id=? AND recipient_id=? AND revoked_at IS NULL AND expires_at>? ORDER BY created_at DESC LIMIT 1",
       [patientId, actor.organization_id, now()],
     );
-    if (!local && !grant) fail(403, "No active care relationship or sharing grant.");
+    const branchLocal =
+      !actor.branch_id ||
+      (await tx.get(
+        "SELECT patient_id FROM branch_patient_links WHERE patient_id=? AND branch_id=?",
+        [patientId, actor.branch_id],
+      ));
+    if ((!local || !branchLocal) && !grant)
+      fail(403, "No active care relationship or sharing grant.");
     return { patient, consent: grant?.id ?? null };
   }
   async function makeSession(tx, user) {
     const membership = await tx.get(
-      "SELECT organization_id FROM memberships WHERE user_id=? AND active=1 ORDER BY organization_id LIMIT 1",
+      "SELECT organization_id FROM memberships WHERE user_id=? ORDER BY organization_id LIMIT 1",
       [user.id],
     );
     const token = randomBytes(32).toString("hex");
@@ -174,27 +185,62 @@ export function createApi(db, config = process.env) {
     );
     return token;
   }
+  const workspace = workspaceRoutes({ fail, text, emailValue, audit, makeSession, cookie, strong });
   async function dispatch(tx, request, path, method, body, actor, correlation, outputHeaders) {
+    if (path === "/auth/facility-register" || path === "/auth/workspace-register")
+      limit("workspace-registration", 30);
+    const workspaceResult = await workspace(
+      tx,
+      path,
+      method,
+      body,
+      actor,
+      correlation,
+      outputHeaders,
+    );
+    if (workspaceResult !== undefined) return workspaceResult;
     if (path === "/health" && method === "GET")
       return {
         status: "ok",
-        mode: config.HEALTHPASS_MODE === "synthetic-development"
-          ? "synthetic-development"
-          : config.NODE_ENV === "production" ? "pilot" : "synthetic-development",
+        mode:
+          config.HEALTHPASS_MODE === "synthetic-development"
+            ? "synthetic-development"
+            : config.NODE_ENV === "production"
+              ? "pilot"
+              : "synthetic-development",
         database: db.engine,
       };
     if (path === "/auth/login" && method === "POST") {
       const email = emailValue(body.email);
-      limit(`login:${email}`);
+      limit(`login:${body.workspace_code ?? body.account_type ?? "legacy"}:${email}`);
       const password = text(body.password, "password", 256, true);
-      const user = await tx.get("SELECT * FROM users WHERE email=? AND active=1", [email]);
+      let user;
+      if (body.account_type === "professional" || body.workspace_code) {
+        const code = text(body.workspace_code, "workspace code", 80, true).toUpperCase();
+        user = await tx.get(
+          "SELECT u.* FROM users u JOIN memberships m ON m.user_id=u.id JOIN organizations o ON o.id=m.organization_id WHERE COALESCE(u.login_email,u.email)=? AND o.workspace_code=? AND u.active=1",
+          [email, code],
+        );
+      } else if (body.account_type === "patient") {
+        user = await tx.get(
+          "SELECT * FROM users WHERE COALESCE(login_email,email)=? AND account_scope='patient' AND active=1",
+          [email],
+        );
+      } else {
+        // Compatibility for previously provisioned accounts; new professional accounts require a workspace code.
+        user = await tx.get(
+          "SELECT * FROM users WHERE COALESCE(login_email,email)=? AND workspace_auth=0 AND active=1",
+          [email],
+        );
+      }
       // Always perform password work, including for an unknown email.
       const valid = passwordMatches(
         password,
         user?.password_hash ?? passwordHash("constant-unknown-password"),
       );
       if (!user || !valid) fail(401, "Email or password is incorrect.");
-      if (!user.patient_id && !user.verified) fail(403, "Professional verification is pending.");
+      if (!user.patient_id && !user.verified && !user.workspace_auth)
+        fail(403, "Professional verification is pending.");
       outputHeaders.set("set-cookie", cookie(await makeSession(tx, user)));
       await audit(tx, user, "auth.login", "allow", user.patient_id, null, correlation);
       return { signedIn: true };
@@ -205,7 +251,12 @@ export function createApi(db, config = process.env) {
       const password = text(body.password, "password", 256, true);
       if (password.length < 12) fail(400, "Use a password of at least 12 characters.");
       const data = patientInput(body);
-      if (await tx.get("SELECT id FROM users WHERE email=?", [email]))
+      if (
+        await tx.get(
+          "SELECT id FROM users WHERE COALESCE(login_email,email)=? AND account_scope='patient'",
+          [email],
+        )
+      )
         fail(409, "Unable to create this account. Try signing in or contact support.");
       const patientId = randomUUID(),
         userId = randomUUID();
@@ -248,6 +299,13 @@ export function createApi(db, config = process.env) {
       return {
         user: safeUser(actor),
         role: actor.role,
+        pendingMembership: !!actor.pendingMembership,
+        branch: actor.branch_id
+          ? await tx.get("SELECT id,name FROM branches WHERE id=? AND organization_id=?", [
+              actor.branch_id,
+              actor.organization_id,
+            ])
+          : null,
         organization: org,
         mfaRequired: !!org && (!actor.totp_secret || !actor.mfa_verified),
         mfaEnrolled: !!actor.totp_secret,
@@ -309,10 +367,16 @@ export function createApi(db, config = process.env) {
       if (!["clinician", "reception"].includes(actor.role))
         fail(403, "Patient registry access is not permitted.");
       const rows = await tx.all(
-        `SELECT DISTINCT p.id,p.healthpass_id,p.name,p.dob,p.created_at FROM patients p LEFT JOIN patient_links l ON l.patient_id=p.id LEFT JOIN consents c ON c.patient_id=p.id WHERE l.organization_id=? ${actor.role === "clinician" ? "OR (c.recipient_id=? AND c.revoked_at IS NULL AND c.expires_at>?)" : ""} ORDER BY p.name`,
+        `SELECT DISTINCT p.id,p.healthpass_id,p.name,p.dob,p.created_at FROM patients p LEFT JOIN patient_links l ON l.patient_id=p.id LEFT JOIN consents c ON c.patient_id=p.id WHERE (l.organization_id=? AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM branch_patient_links bp WHERE bp.patient_id=p.id AND bp.branch_id=?))) ${actor.role === "clinician" ? "OR (c.recipient_id=? AND c.revoked_at IS NULL AND c.expires_at>?)" : ""} ORDER BY p.name`,
         actor.role === "clinician"
-          ? [actor.organization_id, actor.organization_id, now()]
-          : [actor.organization_id],
+          ? [
+              actor.organization_id,
+              actor.branch_id ?? null,
+              actor.branch_id ?? null,
+              actor.organization_id,
+              now(),
+            ]
+          : [actor.organization_id, actor.branch_id ?? null, actor.branch_id ?? null],
       );
       await audit(tx, actor, "registry.list", "allow", null, null, correlation);
       return { patients: rows };
@@ -338,6 +402,19 @@ export function createApi(db, config = process.env) {
         "INSERT INTO patient_links(patient_id,organization_id,created_at) VALUES (?,?,?)",
         [id, actor.organization_id, now()],
       );
+      const branchId =
+        actor.branch_id ??
+        (
+          await tx.get(
+            "SELECT id FROM branches WHERE organization_id=? AND active=1 ORDER BY id LIMIT 1",
+            [actor.organization_id],
+          )
+        )?.id;
+      if (branchId)
+        await tx.run("INSERT INTO branch_patient_links(branch_id,patient_id) VALUES (?,?)", [
+          branchId,
+          id,
+        ]);
       await audit(tx, actor, "registry.register", "allow", id, id, correlation);
       return { id };
     }
@@ -351,14 +428,17 @@ export function createApi(db, config = process.env) {
       const visible = encounters
         .filter(
           (e) =>
-            e.organization_id === actor.organization_id ||
+            (e.organization_id === actor.organization_id &&
+              (!actor.branch_id || e.branch_id === actor.branch_id)) ||
             actor.patient_id === patient.id ||
             consent,
         )
         .filter(
           (e) =>
             e.status !== "draft" ||
-            (e.organization_id === actor.organization_id && actor.role === "clinician"),
+            (e.organization_id === actor.organization_id &&
+              (!actor.branch_id || e.branch_id === actor.branch_id) &&
+              actor.role === "clinician"),
         );
       // Patient and partner readers receive signed snapshots, never newer unsaved draft content.
       const records = [];
@@ -370,6 +450,7 @@ export function createApi(db, config = process.env) {
         const full =
           encounter.status === "draft" &&
           encounter.organization_id === actor.organization_id &&
+          (!actor.branch_id || encounter.branch_id === actor.branch_id) &&
           actor.role === "clinician"
             ? encounter
             : { ...encounter, ...JSON.parse(versions[0]?.payload ?? "{}") };
@@ -377,7 +458,9 @@ export function createApi(db, config = process.env) {
           ...full,
           versions: versions.map((v) => ({ ...v, payload: JSON.parse(v.payload) })),
           editable:
-            encounter.organization_id === actor.organization_id && actor.role === "clinician",
+            encounter.organization_id === actor.organization_id &&
+            (!actor.branch_id || encounter.branch_id === actor.branch_id) &&
+            actor.role === "clinician",
         });
       }
       await audit(tx, actor, "chart.read", "allow", patient.id, patient.id, correlation, consent);
@@ -426,7 +509,7 @@ export function createApi(db, config = process.env) {
         date = now();
       // A partner clinician creates their own record; they do not rewrite the source facility's note.
       await tx.run(
-        "INSERT INTO encounters(id,patient_id,organization_id,author_id,status,complaint,history,findings,assessment,plan,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO encounters(id,patient_id,organization_id,author_id,status,complaint,history,findings,assessment,plan,created_at,updated_at,branch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [
           id,
           patient.id,
@@ -436,6 +519,7 @@ export function createApi(db, config = process.env) {
           ...Object.values(note),
           date,
           date,
+          actor.branch_id ?? null,
         ],
       );
       await audit(tx, actor, "encounter.create", "allow", patient.id, id, correlation, consent);
@@ -447,7 +531,10 @@ export function createApi(db, config = process.env) {
       const encounter = await tx.get("SELECT * FROM encounters WHERE id=?", [match[1]]);
       if (!encounter) fail(404, "Encounter unavailable.");
       const { consent } = await access(tx, actor, encounter.patient_id, true);
-      if (encounter.organization_id !== actor.organization_id)
+      if (
+        encounter.organization_id !== actor.organization_id ||
+        (actor.branch_id && encounter.branch_id !== actor.branch_id)
+      )
         fail(403, "You cannot change another facility's record.");
       if (!Number.isInteger(body.version) || body.version !== encounter.version)
         fail(409, "This record changed. Reload the chart before saving.");

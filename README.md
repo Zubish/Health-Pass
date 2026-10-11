@@ -6,6 +6,7 @@ Public app: **https://health-pass-psi.vercel.app/**. Use this stable address for
 
 - [Working product blueprint](docs/healthpass-blueprint-v1.txt) — supplied specification, preserved verbatim.
 - [First-slice implementation, setup and verification](docs/foundation.md).
+- [Account choice, facility workspaces and branches](docs/account-workspaces.md).
 - `/` — product introduction.
 - `/workspace` — patient/facility sign-in, registry, charts, encounters, sharing and audit.
 

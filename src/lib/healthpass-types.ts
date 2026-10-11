@@ -2,6 +2,8 @@ export type Me = {
   user: { id: string; name: string; email: string; patient_id: string | null };
   role: string;
   organization: { id: string; name: string } | null;
+  pendingMembership?: boolean;
+  branch?: { id: string; name: string } | null;
   mfaRequired: boolean;
   mfaEnrolled: boolean;
 };

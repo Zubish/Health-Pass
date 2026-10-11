@@ -35,7 +35,13 @@ function Landing() {
       <header className="hp-landing-header">
         <div className="hp-landing-wrap hp-landing-nav">
           <a href="#top" className="hp-landing-brand" aria-label="HealthPass home">
-            <img className="hp-wordmark" src="/healthpass-wordmark.png" alt="HealthPass" width={260} height={48} />
+            <img
+              className="hp-wordmark"
+              src="/healthpass-wordmark.png"
+              alt="HealthPass"
+              width={260}
+              height={48}
+            />
           </a>
           <nav className="hp-landing-desktop-nav" aria-label="Main navigation">
             {navigation.map((item) => (
@@ -94,7 +100,7 @@ function Landing() {
             </p>
             <div className="hp-landing-actions">
               <a className="hp-landing-button" href={register}>
-                Create patient account <ArrowRight size={18} aria-hidden="true" />
+                Create account <ArrowRight size={18} aria-hidden="true" />
               </a>
               <a className="hp-landing-text-link" href="#how">
                 Explore how it works <ArrowUpRight size={17} aria-hidden="true" />
@@ -227,7 +233,7 @@ function Landing() {
               <li>
                 <span>01</span>
                 <div>
-                  <h3>Create your patient account</h3>
+                  <h3>Create your account</h3>
                   <p>
                     Sign up to access your own HealthPass workspace. Your account starts with your
                     identity, not a match based on a shared phone number.
@@ -270,8 +276,11 @@ function Landing() {
                 Register patients, document encounters, and sign or amend clinical notes while
                 preserving their history. Work with shared context when the patient grants access.
               </p>
-              <a className="hp-landing-button hp-landing-button-light" href="/workspace">
-                Professional sign in <ArrowRight size={18} />
+              <a
+                className="hp-landing-button hp-landing-button-light"
+                href="/workspace?mode=professional"
+              >
+                Create professional account <ArrowRight size={18} />
               </a>
               <p className="hp-landing-provider-note">
                 Professional access requires facility onboarding and verified membership. Patient
@@ -325,7 +334,14 @@ function Landing() {
           </div>
           <div className="hp-landing-ecosystem-names">
             <span>
-              <img className="hp-wordmark hp-wordmark-small" src="/healthpass-wordmark.png" alt="HealthPass" width={130} height={24} /> <small>Care record</small>
+              <img
+                className="hp-wordmark hp-wordmark-small"
+                src="/healthpass-wordmark.png"
+                alt="HealthPass"
+                width={130}
+                height={24}
+              />{" "}
+              <small>Care record</small>
             </span>
             <span>
               RxLedger <small>Pharmacy operations</small>
@@ -346,7 +362,7 @@ function Landing() {
           <p>Create a patient account or sign in to your existing workspace.</p>
           <div className="hp-landing-actions">
             <a className="hp-landing-button" href={register}>
-              Create patient account <ArrowRight size={18} />
+              Create account <ArrowRight size={18} />
             </a>
             <a className="hp-landing-text-link" href="/workspace">
               Already have an account? Sign in <ArrowUpRight size={16} />
@@ -358,7 +374,13 @@ function Landing() {
         <div className="hp-landing-wrap">
           <div>
             <a href="#top" className="hp-landing-brand">
-              <img className="hp-wordmark" src="/healthpass-wordmark.png" alt="HealthPass" width={260} height={48} />
+              <img
+                className="hp-wordmark"
+                src="/healthpass-wordmark.png"
+                alt="HealthPass"
+                width={260}
+                height={48}
+              />
             </a>
             <p>Care history. Clearer connections.</p>
           </div>
@@ -386,7 +408,13 @@ function RecordPreview() {
       >
         <div className="hp-landing-preview-header">
           <span>
-            <img className="hp-wordmark hp-wordmark-small" src="/healthpass-wordmark.png" alt="HealthPass" width={130} height={24} />
+            <img
+              className="hp-wordmark hp-wordmark-small"
+              src="/healthpass-wordmark.png"
+              alt="HealthPass"
+              width={130}
+              height={24}
+            />
           </span>
           <span className="hp-landing-example">Sample record</span>
         </div>

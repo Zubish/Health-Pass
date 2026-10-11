@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import { openDatabase } from "./db.mjs";
 import { passwordHash } from "./security.mjs";
 const { values } = parseArgs({
@@ -30,27 +30,38 @@ const db = await openDatabase();
 try {
   await db.transaction(async (tx) => {
     const email = values.email.trim().toLowerCase();
-    if (await tx.get("SELECT id FROM users WHERE email=?", [email]))
-      throw new Error(
-        "Account already exists; review memberships through an operator-controlled process.",
-      );
     const org = randomUUID(),
       user = randomUUID();
     // Explicit operator review establishes verification; no external credential service is claimed.
-    await tx.run("INSERT INTO organizations(id,name) VALUES (?,?)", [org, values.facility.trim()]);
-    await tx.run("INSERT INTO users(id,email,name,password_hash,verified) VALUES (?,?,?,?,?)", [
-      user,
-      email,
-      values.name.trim(),
-      passwordHash(password),
-      values.verified ? 1 : 0,
-    ]);
-    await tx.run("INSERT INTO memberships(id,user_id,organization_id,role) VALUES (?,?,?,?)", [
-      randomUUID(),
-      user,
+    const code = "HP-" + randomBytes(6).toString("hex").toUpperCase(),
+      branch = randomUUID();
+    await tx.run("INSERT INTO organizations(id,name,workspace_code) VALUES (?,?,?)", [
       org,
-      values.role,
+      values.facility.trim(),
+      code,
     ]);
+    await tx.run("INSERT INTO branches(id,organization_id,name) VALUES (?,?,?)", [
+      branch,
+      org,
+      "Main branch",
+    ]);
+    await tx.run(
+      "INSERT INTO users(id,email,login_email,account_scope,workspace_auth,name,password_hash,verified) VALUES (?,?,?,?,1,?,?,?)",
+      [
+        user,
+        user + "@identity.healthpass.invalid",
+        email,
+        org,
+        values.name.trim(),
+        passwordHash(password),
+        values.verified ? 1 : 0,
+      ],
+    );
+    await tx.run(
+      "INSERT INTO memberships(id,user_id,organization_id,role,branch_id) VALUES (?,?,?,?,?)",
+      [randomUUID(), user, org, values.role, values.role === "administrator" ? null : branch],
+    );
+    console.log("Workspace code:", code);
     await tx.run(
       "INSERT INTO audits(id,actor_id,organization_id,resource_id,action,decision,purpose,created_at,correlation_id) VALUES (?,?,?,?,?,?,?,?,?)",
       [

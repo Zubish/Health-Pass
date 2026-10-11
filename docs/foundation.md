@@ -10,13 +10,13 @@ The owner subsequently requested fixing live login, which was blocked by the mis
 
 Neon Auth and a private `uploads` bucket are provisioned. The current app still uses its own password sessions and professional MFA implemented in `server/api.mjs`; enabling Neon Auth does not automatically connect that service to the login form. No upload flow or AI Gateway is implemented in this slice.
 
-Hosted connection work has applied additive migration `001`, including immutable signed-note and audit triggers, to the existing Neon production branch. The API uses the dedicated `healthpass_app` PostgreSQL role, created directly through SQL without inherited privileged role membership. It has no schema creation, role creation, database creation or row-security bypass permission, and cannot update/delete signed versions or audit records. Its only table-delete privilege is session logout. No seeded fixture identities or clinical histories were added. The app-function deployment has been submitted with private managed environment variables and is awaiting health verification; this is not yet a claim that live login works.
+Hosted connection work has applied additive migration `001`, including immutable signed-note and audit triggers, to the existing Neon production branch. The API uses the dedicated `healthpass_app` PostgreSQL role, created directly through SQL without inherited privileged role membership. It has no schema creation, role creation, database creation or row-security bypass permission, and cannot update/delete signed versions or audit records. Its only table-delete privilege is session logout. No seeded fixture identities or clinical histories were added. API deployment 3 is complete; hosted health and synthetic authentication checks pass. No real clinical records have been used.
 
 ## Implemented first slice
 
 - Persistent opaque patient identity, optional DOB/contact, separate facility registration links. Shared phone/name never auto-merge records.
 - Password accounts, HttpOnly expiring sessions, logout, active verified facility membership, and mandatory authenticator MFA for professional access.
-- Patient self-registration. Professional accounts are provisioned by an operator; public signup never grants clinical roles.
+- Patient self-registration. Facility administrators can create workspaces; staff setup under professional Sign in requires reviewed approval and MFA before care access. Operator provisioning remains available.
 - Clinician and reception patient registry, scoped search results; administrators lack clinical chart access.
 - Patient's own signed-record view, facility-local charts, and patient-issued, time-limited full-signed-history sharing grants for participating organizations. Cross-facility drafts are excluded; grants never allow source-note rewriting.
 - Allergy unknown/reviewed/none-known distinctions, emergency contact context. This is not emergency break-glass access.
@@ -24,7 +24,7 @@ Hosted connection work has applied additive migration `001`, including immutable
 - Closing a changed note asks whether to keep editing or discard; closing is blocked while saving. Refresh/tab-close receives the browser's unsaved-work warning. Unsaved clinical content stays in memory, never browser storage; browser unload prompts are best-effort, especially on mobile.
 - Append-only allowed/denied access/action audit. Patient activity is patient-scoped; facility activity is organization-scoped. Clinical text/passwords/secrets are excluded from operational logs.
 - Responsive patient/provider workspace at `/workspace`, burgundy primary accents, slate/white foundations, supporting teal, blue and amber. Public landing-page links open the workspace.
-- Public landing page explains the current care-record and sharing workflows, with a clearly labelled synthetic record preview, mobile navigation, provider onboarding guidance and FAQ. Patient CTAs open `/workspace?mode=register`; sign-in opens `/workspace`. Prescription/result/partner integrations are identified as planned. No claimed real facility affiliations, unlimited interoperability or unsupported export/refill workflows.
+- Public landing page explains the current care-record and sharing workflows, with a clearly labelled synthetic record preview, mobile navigation, provider onboarding guidance and FAQ. Create account opens `/workspace?mode=register` to choose Patient or Professional; the provider CTA opens the facility form directly. Sign-in opens `/workspace`. Prescription/result/partner integrations are identified as planned. No claimed real facility affiliations, unlimited interoperability or unsupported export/refill workflows.
 
 ## Stack decisions
 
@@ -67,7 +67,7 @@ On first professional login, add the displayed setup key to a time-based authent
 | DATABASE_URL               | Private PostgreSQL connection string; required for production API                                                                            |
 | PUBLIC_APP_ORIGIN          | Exact browser origin for CSRF checks; HTTPS required in production                                                                           |
 | HEALTHPASS_API_ORIGIN      | Private API origin for the TanStack server proxy                                                                                             |
-| HEALTHPASS_MODE            | Set `synthetic-development` for hosted development; this changes the visible workspace label, not production security controls              |
+| HEALTHPASS_MODE            | Set `synthetic-development` for hosted development; this changes the visible workspace label, not production security controls               |
 | HEALTHPASS_AUTH_KEY        | Server-only 32-byte hex AES-GCM key for authenticator secrets; required in production                                                        |
 | HEALTHPASS_ORIGIN_SECRET   | Same private random secret (at least 32 characters) on web server and Neon API; rejects direct native-function requests before database work |
 | HEALTHPASS_API_PORT / HOST | Listener, defaults 4100 / 127.0.0.1; use private network binding when separated                                                              |
@@ -80,7 +80,7 @@ Development applies migration 001 at startup. Production startup only checks its
 
 Deployment checkpoint: migration 001 is applied to the HealthPass production branch and API deployment 2 completed. The dedicated `healthpass_app` runtime role has no superuser membership, role/database creation, schema creation, or signed-note/audit mutation permissions. No clinical fixtures were seeded. Trusted runtime health verification returned HTTP 200 (`synthetic-development`, PostgreSQL); direct requests without the server secret and session reads without login returned HTTP 401. The hosted landing returned HTTP 200, while its proxy health endpoint returned HTTP 503 because its connection settings remain absent. Desktop and 390px mobile browser checks confirmed no horizontal overflow or page errors, and patient signup opens the registration form.
 
-The web connection is blocked: Vercel rejected creation of the two production proxy environment variables with HTTP 403 (additional permissions required). Until that permission is available and the server configuration is deployed, the hosted workspace can still report that it is awaiting its API connection. Do not remove the native API secret check to bypass this restriction.
+The owner corrected the production proxy variables in Vercel. Hosted health and synthetic registration, logout and correct-password login were verified successfully. The connector still lacks environment-variable management permission; API updates inherit existing private values. Preserve the native API secret check.
 
 The `api` function source in `neon.ts` is now `./server/function.mjs`; `hello.ts` remains as the original setup reference. Supply `PUBLIC_APP_ORIGIN`, `HEALTHPASS_AUTH_KEY` and `HEALTHPASS_ORIGIN_SECRET` through private function environment variables; Neon injects a default `DATABASE_URL`; override it with the restricted runtime role connection string. Do not commit secrets. Apply the schema separately before deploying. The function forces production mode and disables runtime migrations, pools at most five connections per isolate, and uses Neon's pool lifecycle helper. Cold-start failures return a safe retryable response. Set `HEALTHPASS_MODE=synthetic-development` for this development deployment so the workspace does not imply an approved clinical pilot; production cookie, encryption and database protections remain enabled.
 
@@ -111,3 +111,26 @@ Before real patient use, review data locations for the API/database/logs/backups
 Deploy the reviewed API/database first, then configure the web proxy and exact origin. Test the complete authorized and denied workflows using synthetic accounts. Back up before migrations and prove restoration. This first migration is additive; rollback the application commit while preserving patient/signed/audit tables. Do not delete clinical history or attempt to roll signed notes back by mutation. Restore only into an isolated reviewed environment before any controlled recovery.
 
 Later slices: RxLedger prescription/fulfilment contracts, scheduling, telemedicine, results/referrals, HMO and Rai. Nothing in this slice signs prescriptions or connects a partner API.
+
+## Account onboarding decision — 2026-10-11
+
+The owner clarified that entering an existing facility workspace belongs to **Sign in**, not a separate “Join an existing workspace” account-creation option. Preserve this decision when designing the patient/professional account choice and facility onboarding. Implementation is authorized and recorded in [account-workspaces.md](./account-workspaces.md).
+
+The owner also clarified that professional identities must not be rigidly global across facilities. A professional working at multiple facilities may use separate facility-scoped identities, with either the same email/password combination or different credentials in each facility. Do not require a single shared professional identity across workspaces. Workspace-aware authentication and identity isolation need design review before implementation. This supersedes the proposed mandatory single-identity model.
+
+## Patient-directed access requirements — 2026-10-11
+
+Owner-requested requirements for future design; not implemented or approved as final access policy:
+
+- A patient can designate a facility as their primary care provider. That facility may have broader access than other facilities, within the information and privileges the patient explicitly chooses to share. Patients can also specify who may access privileged information.
+- During emergencies, a caregiver or facility can contact the primary care facility to request release of privileged records necessary for treatment. The authorization, verification, scope and audit process for such releases remains to be designed; this requirement does not itself enable unrestricted emergency access.
+- Patients can appoint proxies, such as a spouse, child, other relative or another person. A proxy phone number or email can receive an access code as an alternative route to obtaining authorized information through the primary facility. Proxy identity, authority, eligibility, scope, expiry and revocation need design review; receipt of a code must not be assumed to establish all those permissions.
+- Access within a facility can be limited to particular professionals. A patient can select a named professional for partial or full access to their records, within applicable clinical and legal constraints.
+- For a consultation, access should initially be limited to the consultant. The consultant may share access with other professionals inside or outside the facility through a scoped, authorized process. Delegation boundaries and patient controls remain to be defined.
+- Future Rai integration should analyze records and redact sensitive information, particularly HIV status and mental-health information. The intended experience allows otherwise authorized professionals to read the permitted view without repeated permission requests, while protected/redacted lines require additional permission. This is a future product requirement, not an assertion that AI redaction is reliable or an authorization to bypass baseline access checks. Redaction, derived-data leakage, review, enforcement and consent policies require design before implementation.
+
+These requirements refine the earlier external-contribution discussion and the current facility-level access assumptions. Preserve them in the working blueprint and resolve policy details before changing clinical access behavior.
+
+## Implemented account/workspace slice — 2026-10-11
+
+See [account-workspaces.md](./account-workspaces.md) for inspected RxLedger mechanics, account forms, facility-scoped identities, Sign in access setup, reviewed membership approval, branch enforcement, migration 002 and tests. The subsequent patient-directed access and Rai requirements above remain saved for their own implementation.

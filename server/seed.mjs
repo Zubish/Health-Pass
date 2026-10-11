@@ -12,8 +12,18 @@ export async function seed(db, password) {
     for (const [id, name] of [
       ["org-lagos", "Lagos Primary Care · Demo"],
       ["org-ibadan", "Ibadan Family Clinic · Demo"],
-    ])
-      await tx.run("INSERT INTO organizations(id,name) VALUES (?,?)", [id, name]);
+    ]) {
+      await tx.run("INSERT INTO organizations(id,name,workspace_code) VALUES (?,?,?)", [
+        id,
+        name,
+        "HP-" + id.toUpperCase(),
+      ]);
+      await tx.run("INSERT INTO branches(id,organization_id,name) VALUES (?,?,?)", [
+        "main-" + id,
+        id,
+        "Main branch",
+      ]);
+    }
     for (const [id, hp, name, org, allergy, details] of [
       [
         "patient-ade",
@@ -68,6 +78,12 @@ export async function seed(db, password) {
           role,
         ]);
     }
+    await tx.run(
+      "UPDATE users SET login_email=email,account_scope=COALESCE((SELECT organization_id FROM memberships WHERE user_id=users.id LIMIT 1),'patient')",
+    );
+    await tx.run(
+      "INSERT INTO branch_patient_links(branch_id,patient_id) SELECT 'main-' || organization_id,patient_id FROM patient_links",
+    );
   });
 }
 if (process.argv[1]?.endsWith("/seed.mjs")) {

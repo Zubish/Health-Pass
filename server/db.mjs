@@ -10,8 +10,7 @@ export async function openDatabase(config = process.env, dependencies = {}) {
     pool = dependencies.pool ?? new Pool({ connectionString: config.DATABASE_URL });
     engine = "postgres";
   } else {
-    if (config.NODE_ENV === "production")
-      throw new Error("Production requires DATABASE_URL.");
+    if (config.NODE_ENV === "production") throw new Error("Production requires DATABASE_URL.");
     const path =
       config.HEALTHPASS_SQLITE_PATH ||
       fileURLToPath(new URL("../.data/healthpass.sqlite", import.meta.url));
@@ -92,9 +91,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   };
   if (config.NODE_ENV === "production" && config.HEALTHPASS_RUN_MIGRATIONS !== "1") {
     await db.transaction(async (tx) => {
-      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='001'")))
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='002'")))
         throw new Error(
-          "Apply schema migration 001 using the migration identity before starting the API.",
+          "Apply schema migrations 001 and 002 using the migration identity before starting the API.",
         );
     });
     return db;
@@ -115,6 +114,17 @@ export async function openDatabase(config = process.env, dependencies = {}) {
           CREATE TRIGGER audits_immutable BEFORE UPDATE OR DELETE ON audits FOR EACH ROW EXECUTE FUNCTION hp_immutable();`);
       }
       await tx.run("INSERT INTO schema_migrations(version) VALUES ('001')");
+    }
+  });
+  const workspaceSchema = readFileSync(
+    new URL("./migrations/002-workspaces.sql", import.meta.url),
+    "utf8",
+  );
+  await db.transaction(async (tx) => {
+    if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='002'"))) {
+      if (engine === "sqlite") pool.exec(workspaceSchema);
+      else await tx.run(workspaceSchema);
+      await tx.run("INSERT INTO schema_migrations(version) VALUES ('002')");
     }
   });
   return db;
