@@ -27,7 +27,8 @@ import { NoteEditor, EncounterCard } from "./encounters";
 export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promise<void> }) {
   const search = useSearch({ from: "/workspace" });
   const navigate = useNavigate({ from: "/workspace" });
-  const tab = search.tab ?? (me.role === "administrator" ? "workspace" : "overview");
+  const can = (permission: string) => me.permissions?.includes(permission) ?? false;
+  const tab = search.tab ?? (can("workspace.view") ? "workspace" : "overview");
   const selected = search.patient ?? null;
   const setTab = (next: string) => {
     void navigate({ search: { tab: next } });
@@ -49,8 +50,9 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     [organizations, setOrganizations] = useState<any[]>([]),
     [health, setHealth] = useState("");
   const isPatient = me.role === "patient",
-    canRegister = ["clinician", "reception"].includes(me.role),
-    canChart = me.role === "clinician" || isPatient;
+    canRegister = can("registry.create"),
+    canRegistry = can("registry.view") || isPatient,
+    canChart = can("records.view") || isPatient;
   const nav = isPatient
     ? ([
         ["overview", "My health", LayoutDashboard],
@@ -60,14 +62,12 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
       ] as const)
     : ([
         ["overview", "Overview", LayoutDashboard],
-        ...(me.role === "administrator"
-          ? [["workspace", "Workspace & branches", Users] as const]
-          : []),
-        ...(canRegister ? [["patients", "Patient registry", Users] as const] : []),
-        ["audit", "Activity & audit", History],
+        ...(can("workspace.view") ? [["workspace", "Workspace & branches", Users] as const] : []),
+        ...(canRegistry ? [["patients", "Patient registry", Users] as const] : []),
+        ...(can("audit.view") ? [["audit", "Activity & audit", History] as const] : []),
       ] as const);
   async function loadRegistry() {
-    if (canRegister || isPatient) {
+    if (canRegistry) {
       const data = await careApi("/patients");
       setPatients(data.patients);
     }
@@ -111,6 +111,10 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     if (selected && canChart) void loadChart(selected);
     else void loadTab(tab);
   }, [tab, selected]);
+  useEffect(() => {
+    if (!nav.some(([id]) => id === tab) || (selected && !canChart))
+      void navigate({ search: { tab: "overview" }, replace: true });
+  }, [me.permissions?.join(","), tab, selected]);
   async function act(action: () => Promise<void>, message: string) {
     setBusy(true);
     setError("");
@@ -180,7 +184,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
             </span>
             <span>
               <strong>{me.user.name}</strong>
-              <small>{me.role === "clinician" ? "Verified clinician" : me.role}</small>
+              <small>{me.jobRoles?.map((r) => r.name).join(" · ") || me.role}</small>
             </span>
             <LogOut size={17} />
           </button>
@@ -214,7 +218,15 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
               {notice}
             </div>
           )}
-          {tab === "workspace" && <WorkspaceSettings />}
+          {tab === "workspace" && can("workspace.view") && (
+            <WorkspaceSettings permissions={me.permissions ?? []} userId={me.user.id} />
+          )}
+          {!isPatient && !me.permissions?.length && (
+            <div className="hp-notice" role="status">
+              Your job roles currently have no app permissions. Ask your administrator which
+              HealthPass tools are applicable to your work.
+            </div>
+          )}
           {tab === "overview" && (
             <>
               <div className="hp-heading">
@@ -250,7 +262,9 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                   tone="blue"
                   value={isPatient ? "You decide" : "Verified"}
                   label={isPatient ? "Record sharing" : "Professional access"}
-                  detail={isPatient ? "Time-limited facility grants" : "Membership + authenticator"}
+                  detail={
+                    isPatient ? "Time-limited facility grants" : "Reviewed workspace permissions"
+                  }
                 />
                 <Stat
                   icon={<ClipboardList />}
@@ -323,13 +337,15 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                   <div>
                     <History size={17} /> A clear access history
                   </div>
-                  <button
-                    className="hp-button secondary"
-                    onClick={() => void loadTab(isPatient ? "sharing" : "audit")}
-                  >
-                    {isPatient ? "Manage sharing" : "Review activity"}
-                    <ArrowRight size={16} />
-                  </button>
+                  {(isPatient || can("audit.view")) && (
+                    <button
+                      className="hp-button secondary"
+                      onClick={() => void loadTab(isPatient ? "sharing" : "audit")}
+                    >
+                      {isPatient ? "Manage sharing" : "Review activity"}
+                      <ArrowRight size={16} />
+                    </button>
+                  )}
                 </section>
               </div>
               <section className="hp-foundation-note">
@@ -346,7 +362,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
               </section>
             </>
           )}
-          {tab === "patients" && !selected && (
+          {tab === "patients" && canRegistry && !selected && (
             <>
               <div className="hp-heading">
                 <div>
@@ -387,7 +403,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                     text="Try another name or register a new identity. Missing history stays unknown."
                   />
                 )}
-                {me.role === "reception" && (
+                {!canChart && (
                   <p className="hp-fine hp-padded">
                     Reception access covers registration and limited demographics. Clinical charts
                     remain restricted.
@@ -396,7 +412,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
               </section>
             </>
           )}
-          {tab === "patients" && selected && chart && (
+          {tab === "patients" && canChart && selected && chart && (
             <>
               <button
                 className="hp-back"
@@ -416,7 +432,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                     <span>·</span> {chart.patient.phone || "Contact not recorded"}
                   </p>
                 </div>
-                {me.role === "clinician" && (
+                {can("notes.create") && (
                   <button className="hp-button primary" onClick={() => setEditing("new")}>
                     <Plus size={17} /> New encounter
                   </button>
@@ -439,7 +455,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                       "Review with the patient before making clinical decisions."}
                   </p>
                 </div>
-                {me.role === "clinician" && (
+                {can("profile.edit") && (
                   <button className="hp-button ghost" onClick={() => setProfile(true)}>
                     Review profile
                   </button>
@@ -618,7 +634,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
               </div>
             </>
           )}
-          {tab === "audit" && (
+          {tab === "audit" && (isPatient || can("audit.view")) && (
             <>
               <div className="hp-heading">
                 <div>
@@ -722,18 +738,23 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
               </form>
             </Modal>
           )}
-          {editing && chart && (
+          {editing && chart && canChart && (
             <NoteEditor
               encounter={editing}
+              scopes={me.clinicalScopes ?? []}
+              canEdit={editing === "new" ? can("notes.create") : can("notes.edit")}
+              canSign={can("notes.sign")}
+              canAmend={can("notes.amend")}
               error={error}
               busy={busy}
               onClose={() => setEditing(null)}
-              onSave={(note, operation, reason) =>
+              onSave={(note, operation, reason, kind) =>
                 void act(
                   async () => {
                     if (editing === "new") {
                       await careApi("/encounters", "POST", {
                         patient_id: chart.patient.id,
+                        note_kind: kind,
                         ...note,
                       });
                     } else {

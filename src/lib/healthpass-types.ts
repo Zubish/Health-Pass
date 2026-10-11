@@ -1,6 +1,13 @@
 export type Me = {
   user: { id: string; name: string; email: string; patient_id: string | null };
   role: string;
+  permissions?: string[];
+  jobRoles?: { id: string; name: string; clinical_scope: string | null }[];
+  clinicalScopes?: string[];
+  isOwner?: boolean;
+  accessExpired?: boolean;
+  supportAccess?: boolean;
+  accessExpiresAt?: string | null;
   organization: { id: string; name: string; workspace_code?: string } | null;
   pendingMembership?: boolean;
   branch?: { id: string; name: string } | null;
@@ -26,6 +33,7 @@ export type Note = {
 };
 export type Encounter = Note & {
   id: string;
+  note_kind?: string;
   version: number;
   status: string;
   organization_name: string;

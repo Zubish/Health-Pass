@@ -1,3 +1,4 @@
+import { hasPermission, resolveMembership } from "./roles.mjs";
 import { workspaceRoutes } from "./workspaces.mjs";
 import { randomUUID, randomBytes } from "node:crypto";
 import {
@@ -89,6 +90,7 @@ export function createApi(db, config = process.env) {
     resource,
     correlation,
     consent = null,
+    details = null,
   ) {
     await tx.run(
       "INSERT INTO audits(id,actor_id,organization_id,patient_id,resource_id,action,decision,purpose,consent_id,created_at,correlation_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
@@ -100,7 +102,7 @@ export function createApi(db, config = process.env) {
         resource ?? null,
         action,
         decision,
-        "care and record governance",
+        details ?? "care and record governance",
         consent,
         now(),
         correlation,
@@ -118,10 +120,11 @@ export function createApi(db, config = process.env) {
     await tx.run("UPDATE sessions SET last_seen_at=? WHERE id=?", [now(), user.session_id]);
     if (user.organization_id) {
       const membership = await tx.get(
-        "SELECT role,active,branch_id FROM memberships WHERE user_id=? AND organization_id=?",
+        "SELECT * FROM memberships WHERE user_id=? AND organization_id=?",
         [user.id, user.organization_id],
       );
       if (!membership) fail(403, "Your facility membership is unavailable.");
+      await resolveMembership(tx, membership, user);
       user.pendingMembership = !membership.active || !user.verified;
       user.branch_id = membership.branch_id;
       user.role = membership.role;
@@ -133,22 +136,23 @@ export function createApi(db, config = process.env) {
   };
   const strong = (actor) => {
     authenticated(actor);
+    if (actor.accessExpired)
+      fail(403, "Your workspace access has expired. Contact its administrator.");
     if (actor.pendingMembership)
       fail(403, "Your facility access is awaiting administrator approval.");
     if (actor.organization_id && !actor.mfa_verified && !actor.mfa_skipped)
       fail(403, "Verify with your authenticator or choose Skip for now.");
   };
-  const clinician = (actor) => {
+  const permit = (actor, key) => {
     strong(actor);
-    if (actor.role !== "clinician")
-      fail(403, "Only an authorized clinician can change clinical records.");
+    if (!hasPermission(actor, key)) fail(403, "Your workspace roles do not permit this action.");
   };
   async function access(tx, actor, patientId, write = false) {
     strong(actor);
     const patient = await tx.get("SELECT * FROM patients WHERE id=?", [patientId]);
     if (!patient) fail(404, "Patient unavailable.");
     if (actor.patient_id === patientId && !write) return { patient, consent: null };
-    if (actor.role !== "clinician") fail(403, "Clinical access is not permitted.");
+    if (!hasPermission(actor, "records.view")) fail(403, "Clinical access is not permitted.");
     const local = await tx.get(
       "SELECT patient_id FROM patient_links WHERE patient_id=? AND organization_id=?",
       [patientId, actor.organization_id],
@@ -312,6 +316,13 @@ export function createApi(db, config = process.env) {
       return {
         user: safeUser(actor),
         role: actor.role,
+        permissions: actor.permissions ?? [],
+        jobRoles: actor.jobRoles ?? [],
+        clinicalScopes: actor.clinicalScopes ?? [],
+        isOwner: !!actor.isOwner,
+        accessExpired: !!actor.accessExpired,
+        supportAccess: !!actor.supportAccess,
+        accessExpiresAt: actor.accessExpiresAt ?? null,
         pendingMembership: !!actor.pendingMembership,
         branch: actor.branch_id
           ? await tx.get("SELECT id,name FROM branches WHERE id=? AND organization_id=?", [
@@ -385,11 +396,10 @@ export function createApi(db, config = process.env) {
             [actor.patient_id],
           ),
         };
-      if (!["clinician", "reception"].includes(actor.role))
-        fail(403, "Patient registry access is not permitted.");
+      permit(actor, "registry.view");
       const rows = await tx.all(
-        `SELECT DISTINCT p.id,p.healthpass_id,p.name,p.dob,p.created_at FROM patients p LEFT JOIN patient_links l ON l.patient_id=p.id LEFT JOIN consents c ON c.patient_id=p.id WHERE (l.organization_id=? AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM branch_patient_links bp WHERE bp.patient_id=p.id AND bp.branch_id=?))) ${actor.role === "clinician" ? "OR (c.recipient_id=? AND c.revoked_at IS NULL AND c.expires_at>?)" : ""} ORDER BY p.name`,
-        actor.role === "clinician"
+        `SELECT DISTINCT p.id,p.healthpass_id,p.name,p.dob,p.created_at FROM patients p LEFT JOIN patient_links l ON l.patient_id=p.id LEFT JOIN consents c ON c.patient_id=p.id WHERE (l.organization_id=? AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM branch_patient_links bp WHERE bp.patient_id=p.id AND bp.branch_id=?))) ${hasPermission(actor, "records.view") ? "OR (c.recipient_id=? AND c.revoked_at IS NULL AND c.expires_at>?)" : ""} ORDER BY p.name`,
+        hasPermission(actor, "records.view")
           ? [
               actor.organization_id,
               actor.branch_id ?? null,
@@ -403,8 +413,7 @@ export function createApi(db, config = process.env) {
       return { patients: rows };
     }
     if (path === "/patients" && method === "POST") {
-      if (!["clinician", "reception"].includes(actor.role))
-        fail(403, "Registration is not permitted.");
+      permit(actor, "registry.create");
       const data = patientInput(body);
       const id = randomUUID();
       // No automatic demographic matching/merge; every uncertain identity remains separate.
@@ -459,7 +468,7 @@ export function createApi(db, config = process.env) {
             e.status !== "draft" ||
             (e.organization_id === actor.organization_id &&
               (!actor.branch_id || e.branch_id === actor.branch_id) &&
-              actor.role === "clinician"),
+              hasPermission(actor, "records.view")),
         );
       // Patient and partner readers receive signed snapshots, never newer unsaved draft content.
       const records = [];
@@ -472,16 +481,21 @@ export function createApi(db, config = process.env) {
           encounter.status === "draft" &&
           encounter.organization_id === actor.organization_id &&
           (!actor.branch_id || encounter.branch_id === actor.branch_id) &&
-          actor.role === "clinician"
+          hasPermission(actor, "records.view")
             ? encounter
             : { ...encounter, ...JSON.parse(versions[0]?.payload ?? "{}") };
         records.push({
           ...full,
           versions: versions.map((v) => ({ ...v, payload: JSON.parse(v.payload) })),
           editable:
+            encounter.author_id === actor.id &&
+            actor.clinicalScopes?.includes(encounter.note_kind) &&
+            (encounter.status === "draft"
+              ? hasPermission(actor, "notes.edit") || hasPermission(actor, "notes.sign")
+              : hasPermission(actor, "notes.amend")) &&
             encounter.organization_id === actor.organization_id &&
             (!actor.branch_id || encounter.branch_id === actor.branch_id) &&
-            actor.role === "clinician",
+            hasPermission(actor, "records.view"),
         });
       }
       await audit(tx, actor, "chart.read", "allow", patient.id, patient.id, correlation, consent);
@@ -490,7 +504,7 @@ export function createApi(db, config = process.env) {
     match = path.match(/^\/patients\/([^/]+)\/profile$/);
     if (match && method === "PATCH") {
       const { patient, consent } = await access(tx, actor, match[1], true);
-      clinician(actor);
+      permit(actor, "profile.edit");
       if (!["unknown", "reviewed", "none-known"].includes(body.allergy_status))
         fail(400, "Choose an allergy verification status.");
       const allergies = text(body.allergies ?? "", "allergies");
@@ -518,7 +532,10 @@ export function createApi(db, config = process.env) {
       return { updated: true };
     }
     if (path === "/encounters" && method === "POST") {
-      clinician(actor);
+      permit(actor, "notes.create");
+      const kind = body.note_kind ?? actor.clinicalScopes[0];
+      if (!actor.clinicalScopes.includes(kind))
+        fail(403, "Your reviewed clinical scope does not cover this note type.");
       const { patient, consent } = await access(
         tx,
         actor,
@@ -530,7 +547,7 @@ export function createApi(db, config = process.env) {
         date = now();
       // A partner clinician creates their own record; they do not rewrite the source facility's note.
       await tx.run(
-        "INSERT INTO encounters(id,patient_id,organization_id,author_id,status,complaint,history,findings,assessment,plan,created_at,updated_at,branch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO encounters(id,patient_id,organization_id,author_id,status,complaint,history,findings,assessment,plan,created_at,updated_at,branch_id,note_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [
           id,
           patient.id,
@@ -541,6 +558,7 @@ export function createApi(db, config = process.env) {
           date,
           date,
           actor.branch_id ?? null,
+          kind,
         ],
       );
       await audit(tx, actor, "encounter.create", "allow", patient.id, id, correlation, consent);
@@ -548,9 +566,14 @@ export function createApi(db, config = process.env) {
     }
     match = path.match(/^\/encounters\/([^/]+)(?:\/(sign|amend))?$/);
     if (match && ["PATCH", "POST"].includes(method)) {
-      clinician(actor);
+      permit(
+        actor,
+        match[2] === "sign" ? "notes.sign" : match[2] === "amend" ? "notes.amend" : "notes.edit",
+      );
       const encounter = await tx.get("SELECT * FROM encounters WHERE id=?", [match[1]]);
       if (!encounter) fail(404, "Encounter unavailable.");
+      if (encounter.author_id !== actor.id || !actor.clinicalScopes.includes(encounter.note_kind))
+        fail(403, "You can only change your own notes within your reviewed clinical scope.");
       const { consent } = await access(tx, actor, encounter.patient_id, true);
       if (
         encounter.organization_id !== actor.organization_id ||
@@ -592,6 +615,12 @@ export function createApi(db, config = process.env) {
           : noteInput(encounter);
       if (!note.assessment || !note.plan)
         fail(400, "Assessment and plan are required before signing.");
+      if (
+        operation === "sign" &&
+        !hasPermission(actor, "notes.edit") &&
+        Object.keys(note).some((key) => note[key] !== encounter[key])
+      )
+        fail(403, "Signing permission does not grant permission to edit the draft.");
       const reason =
         operation === "amend" ? text(body.reason, "amendment reason", 1000, true) : null;
       const previous = await tx.get(
@@ -712,14 +741,19 @@ export function createApi(db, config = process.env) {
       return { revoked: true };
     }
     if (path === "/audit" && method === "GET") {
+      if (!actor.patient_id) permit(actor, "audit.view");
       const rows = actor.patient_id
         ? await tx.all(
             "SELECT a.*,u.name AS actor_name,o.name AS organization_name FROM audits a LEFT JOIN users u ON u.id=a.actor_id LEFT JOIN organizations o ON o.id=a.organization_id WHERE a.patient_id=? ORDER BY a.created_at DESC LIMIT 100",
             [actor.patient_id],
           )
         : await tx.all(
-            "SELECT a.*,u.name AS actor_name FROM audits a LEFT JOIN users u ON u.id=a.actor_id WHERE a.organization_id=? ORDER BY a.created_at DESC LIMIT 100",
-            [actor.organization_id],
+            "SELECT a.*,u.name AS actor_name FROM audits a LEFT JOIN users u ON u.id=a.actor_id WHERE a.organization_id=? AND (CAST(? AS TEXT) IS NULL OR a.actor_id=?) ORDER BY a.created_at DESC LIMIT 100",
+            [
+              actor.organization_id,
+              hasPermission(actor, "audit.manage") ? null : actor.id,
+              actor.id,
+            ],
           );
       await audit(tx, actor, "audit.read", "allow", actor.patient_id, null, correlation);
       return { audits: rows };

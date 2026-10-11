@@ -58,3 +58,7 @@ Migration 004 adds a session-scoped `mfa_skipped` flag. The skip endpoint requir
 GreenSprings Hospital’s existing creator membership was inspected: active, verified administrator, with unfinished authenticator setup. No account, credential or membership mutation is needed. The creator can use Professional sign-in with the facility code and the original registration credentials, then skip the authenticator screen.
 
 Validation: 29 integration checks across SQLite and embedded PostgreSQL, typecheck and production build; browser checks cover creator workspace access, unfinished setup, incorrect-code retry, skip, refresh, logout and facility-code sign-in with skip.
+
+### Workspace-defined roles — 11 October 2026
+
+The three fixed internal membership categories now serve compatibility only. [Workspace roles](./workspace-roles.md) provide named templates, custom roles, multiple assignments and API-enforced permissions, with reviewed clinical scopes and temporary Zed Tech support grants. The creator retains administration without automatic clinical authority. Role changes affect existing sessions; optional authenticator choice and the 30-minute idle timeout remain in effect.

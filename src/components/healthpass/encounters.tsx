@@ -1,3 +1,4 @@
+import { scopeNames } from "./role-management";
 import { useBlocker } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Stethoscope } from "lucide-react";
@@ -10,12 +11,20 @@ export function NoteEditor({
   busy,
   onClose,
   onSave,
+  scopes,
+  canEdit,
+  canSign,
+  canAmend,
 }: {
   error: string;
   encounter: Encounter | "new";
   busy: boolean;
   onClose: () => void;
-  onSave: (note: Note, operation: string, reason?: string) => void;
+  scopes: string[];
+  canEdit: boolean;
+  canSign: boolean;
+  canAmend: boolean;
+  onSave: (note: Note, operation: string, reason?: string, kind?: string) => void;
 }) {
   const [initial] = useState<Note>(() =>
       encounter === "new"
@@ -27,6 +36,9 @@ export function NoteEditor({
     [note, setNote] = useState<Note>(initial),
     [reason, setReason] = useState(""),
     [discard, setDiscard] = useState(false);
+  const [kind, setKind] = useState(
+    encounter === "new" ? scopes[0] : (encounter.note_kind ?? "general"),
+  );
   const signed = encounter !== "new" && encounter.status !== "draft";
   const dirty =
     Object.keys(blank).some((key) => note[key as keyof Note] !== initial[key as keyof Note]) ||
@@ -93,9 +105,23 @@ export function NoteEditor({
         onSubmit={(e) => {
           e.preventDefault();
           if (busy) return;
-          onSave(note, signed ? "amend" : "save", reason);
+          onSave(note, signed ? "amend" : "save", reason, kind);
         }}
       >
+        {encounter === "new" ? (
+          <label>
+            Note type
+            <select aria-label="Note type" value={kind} onChange={(e) => setKind(e.target.value)}>
+              {scopes.map((scope) => (
+                <option key={scope} value={scope}>
+                  {scopeNames[scope]} note
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <p className="hp-fine">{scopeNames[kind]} note</p>
+        )}
         {Object.keys(blank).map((key) => (
           <label key={key}>
             {
@@ -111,7 +137,7 @@ export function NoteEditor({
             }
             <textarea
               value={note[key as keyof Note]}
-              disabled={busy}
+              disabled={busy || (!canEdit && !(signed && canAmend))}
               required={key === "complaint" || (signed && ["assessment", "plan"].includes(key))}
               maxLength={6000}
               onChange={(e) => setNote({ ...note, [key]: e.target.value })}
@@ -139,15 +165,15 @@ export function NoteEditor({
           >
             Cancel
           </button>
-          <button className="hp-button primary" disabled={busy}>
+          <button className="hp-button primary" disabled={busy || (signed ? !canAmend : !canEdit)}>
             {signed ? "Sign amendment" : "Save draft"}
           </button>
-          {encounter !== "new" && !signed && (
+          {encounter !== "new" && !signed && canSign && (
             <button
               className="hp-button primary"
               disabled={busy || !note.assessment.trim() || !note.plan.trim()}
               type="button"
-              onClick={() => onSave(note, "sign")}
+              onClick={() => onSave(note, "sign", undefined, kind)}
             >
               Save & sign
             </button>
@@ -179,7 +205,8 @@ export function EncounterCard({
         <div>
           <h3>{encounter.complaint}</h3>
           <small>
-            {date(encounter.created_at)} · {encounter.organization_name}
+            {date(encounter.created_at)} · {encounter.organization_name} ·{" "}
+            {scopeNames[encounter.note_kind ?? "general"]}
           </small>
         </div>
         <span className={`hp-chip ${encounter.status === "draft" ? "amber" : "teal"}`}>

@@ -1,3 +1,4 @@
+import { createDefaultRoles } from "./roles.mjs";
 import { randomUUID } from "node:crypto";
 import { openDatabase } from "./db.mjs";
 import { passwordHash } from "./security.mjs";
@@ -78,6 +79,14 @@ export async function seed(db, password) {
           role,
         ]);
     }
+    for (const org of ["org-lagos", "org-ibadan"]) await createDefaultRoles(tx, org);
+    await tx.run(
+      "INSERT INTO membership_roles(membership_id,role_id) SELECT id,'role-' || organization_id || '-' || role FROM memberships",
+    );
+    await tx.run("UPDATE memberships SET is_owner=1 WHERE role='administrator'");
+    await tx.run(
+      "UPDATE memberships SET clinical_verified=1,clinical_scopes='[\"general\"]',clinical_review_reference='Synthetic reviewed clinical fixture' WHERE role='clinician'",
+    );
     await tx.run(
       "UPDATE users SET login_email=email,account_scope=COALESCE((SELECT organization_id FROM memberships WHERE user_id=users.id LIMIT 1),'patient')",
     );

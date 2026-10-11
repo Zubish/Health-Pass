@@ -67,7 +67,9 @@ function Workspace() {
       localStorage.setItem(key, String(last));
       if (last - lastSync >= 60000) {
         lastSync = last;
-        void careApi("/auth/me").catch(() => {});
+        void careApi("/auth/me")
+          .then((data) => setMe(data))
+          .catch(() => {});
       }
     };
     const events = ["pointerdown", "keydown", "touchstart", "scroll"];
@@ -115,16 +117,17 @@ function Workspace() {
         serviceError={error}
       />
     );
-  if (me.pendingMembership)
+  if (me.pendingMembership || me.accessExpired)
     return (
       <main className="hp-auth">
         <div className="hp-auth-card">
           <Mark />
-          <h1>Workspace access requested</h1>
+          <h1>{me.accessExpired ? "Workspace access expired" : "Workspace access requested"}</h1>
           <p>{me.organization?.name}</p>
           <p>
-            Your administrator must approve your membership, role and branch before you can access
-            care records.
+            {me.accessExpired
+              ? "Your access grant has expired. Contact the facility administrator to arrange a new review or support grant."
+              : "Your administrator must approve your membership, job roles and branch before you can access app tools."}
           </p>
           <button className="hp-button primary" onClick={() => void refresh()}>
             Check approval status

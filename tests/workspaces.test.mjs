@@ -421,3 +421,377 @@ test("optional authenticator choice preserves enrollment and pending membership 
     await db.close();
   }
 });
+
+async function requestStaff(client, owner, code, email, profession = "Synthetic professional") {
+  const staff = client();
+  assert.equal(
+    (
+      await staff("/auth/workspace-register", "POST", {
+        name: email,
+        email,
+        password,
+        workspace_code: code,
+        profession,
+        registration_number: "SYNTHETIC-REVIEW-ONLY",
+      })
+    ).status,
+    200,
+  );
+  const settings = (await owner("/workspace/settings")).data;
+  return { staff, member: settings.members.find((m) => m.email === email), settings };
+}
+async function approveRole(owner, member, settings, roleIds, extra = {}) {
+  return owner("/workspace/members/" + member.id, "PATCH", {
+    role_ids: roleIds,
+    branch_id: settings.branches[0].id,
+    review_reference: "Synthetic identity review",
+    verified: "confirmed",
+    ...extra,
+  });
+}
+
+test("workspace roles isolate tenants, revoke access immediately and retain creator administration", async () => {
+  const { db, client, facility } = await fixture();
+  try {
+    const a = await facility("Synthetic Role A"),
+      b = await facility("Synthetic Role B");
+    const { staff, member, settings } = await requestStaff(
+      client,
+      a.c,
+      a.code,
+      "roles@synthetic.invalid",
+    );
+    for (const name of [
+      "General practitioner",
+      "Nurse / midwife",
+      "Pharmacist",
+      "Pharmacy technician",
+    ])
+      assert.ok(settings.roles.some((r) => r.name === name));
+    const created = await a.c("/workspace/roles", "POST", {
+      name: "Front desk coordinator",
+      description: "Synthetic operational role",
+      permissions: ["registry.view", "registry.create"],
+    });
+    assert.equal(created.status, 200);
+    assert.equal(
+      (await b.c("/workspace/settings")).data.roles.some((r) => r.id === created.data.id),
+      false,
+    );
+    assert.equal(
+      (
+        await b.c("/workspace/roles/" + created.data.id, "PATCH", {
+          name: "Cross tenant",
+          permissions: [],
+        })
+      ).status,
+      404,
+    );
+    const foreign = (await b.c("/workspace/settings")).data.roles[0].id;
+    assert.equal((await approveRole(a.c, member, settings, [foreign])).status, 400);
+    assert.equal(
+      (
+        await approveRole(a.c, member, settings, [
+          created.data.id,
+          settings.roles.find((r) => r.template_key === "accountant").id,
+        ])
+      ).status,
+      200,
+    );
+    await staff("/auth/mfa/skip", "POST", {});
+    assert.equal((await staff("/auth/me")).data.jobRoles.length, 2);
+    assert.equal((await staff("/patients")).status, 200);
+    assert.equal((await staff("/patients", "POST", { name: "Synthetic registered" })).status, 200);
+    assert.equal(
+      (await staff("/encounters", "POST", { patient_id: "missing", complaint: "Synthetic" }))
+        .status,
+      403,
+    );
+    assert.equal(
+      (
+        await staff("/workspace/roles", "POST", {
+          name: "Escalation",
+          permissions: ["roles.manage", "workspace.view"],
+        })
+      ).status,
+      403,
+    );
+    assert.equal(
+      (await a.c("/workspace/roles", "POST", { name: "front desk coordinator", permissions: [] }))
+        .status,
+      409,
+    );
+    assert.equal(
+      (
+        await a.c("/workspace/roles", "POST", {
+          name: "Future prescription",
+          permissions: ["prescriptions.sign"],
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await a.c("/workspace/roles", "POST", {
+          name: "Missing read dependency",
+          permissions: ["notes.sign"],
+          clinical_scope: "general",
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await a.c("/workspace/roles/" + created.data.id, "PATCH", {
+          name: "Front desk coordinator",
+          permissions: [],
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await staff("/patients")).status, 403);
+    assert.deepEqual((await staff("/auth/me")).data.permissions, []);
+    const admin = settings.roles.find((r) => r.template_key === "administrator");
+    assert.equal(
+      (
+        await a.c("/workspace/roles/" + admin.id, "PATCH", {
+          name: admin.name,
+          permissions: [],
+          active: false,
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await a.c("/workspace/settings")).status, 200);
+    assert.equal((await a.c("/patients")).status, 403);
+    assert.equal(
+      (
+        await a.c("/workspace/roles", "POST", {
+          name: "Owner retained administration",
+          permissions: [],
+        })
+      ).status,
+      200,
+    );
+    const audit = await db.transaction((tx) =>
+      tx.get("SELECT action FROM audits WHERE action='role.updated'"),
+    );
+    assert.equal(audit.action, "role.updated");
+  } finally {
+    await db.close();
+  }
+});
+
+test("clinical roles require reviewed scope and cannot sign other professionals or disciplines", async () => {
+  const { db, client, facility } = await fixture();
+  try {
+    const a = await facility("Synthetic Clinical Roles");
+    const gp = await requestStaff(
+      client,
+      a.c,
+      a.code,
+      "gp@synthetic.invalid",
+      "General practitioner",
+    );
+    const gpRole = gp.settings.roles.find((r) => r.template_key === "gp");
+    assert.equal((await approveRole(a.c, gp.member, gp.settings, [gpRole.id])).status, 400);
+    assert.equal(
+      (
+        await approveRole(a.c, gp.member, gp.settings, [gpRole.id], {
+          clinical_verified: "confirmed",
+          clinical_review_reference: "Synthetic GP scope review",
+        })
+      ).status,
+      200,
+    );
+    await gp.staff("/auth/mfa/skip", "POST", {});
+    const patient = await gp.staff("/patients", "POST", {
+      name: "Synthetic Clinical Scope Patient",
+    });
+    assert.equal(patient.status, 200);
+    const note = {
+      patient_id: patient.data.id,
+      complaint: "Synthetic scope note",
+      assessment: "Synthetic assessment",
+      plan: "Synthetic plan",
+    };
+    const gnote = await gp.staff("/encounters", "POST", { ...note, note_kind: "general" });
+    assert.equal(gnote.status, 200);
+    assert.equal(
+      (await gp.staff("/encounters", "POST", { ...note, note_kind: "medication" })).status,
+      403,
+    );
+    const nurse = await requestStaff(client, a.c, a.code, "nurse@synthetic.invalid", "Nurse");
+    const nurseRole = nurse.settings.roles.find((r) => r.template_key === "nurse");
+    assert.equal(
+      (
+        await approveRole(a.c, nurse.member, nurse.settings, [nurseRole.id], {
+          clinical_verified: "confirmed",
+          clinical_review_reference: "Synthetic nursing scope review",
+        })
+      ).status,
+      200,
+    );
+    await nurse.staff("/auth/mfa/skip", "POST", {});
+    const nnote = await nurse.staff("/encounters", "POST", { ...note, note_kind: "nursing" });
+    assert.equal(nnote.status, 200);
+    assert.equal(
+      (await nurse.staff("/encounters/" + gnote.data.id + "/sign", "POST", { version: 1 })).status,
+      403,
+    );
+    assert.equal(
+      (await gp.staff("/encounters/" + nnote.data.id + "/sign", "POST", { version: 1 })).status,
+      403,
+    );
+    assert.equal(
+      (await nurse.staff("/encounters/" + nnote.data.id + "/sign", "POST", { version: 1 })).status,
+      200,
+    );
+    const tech = await requestStaff(
+      client,
+      a.c,
+      a.code,
+      "tech@synthetic.invalid",
+      "Pharmacy technician",
+    );
+    const techRole = tech.settings.roles.find((r) => r.template_key === "pharmacy-technician");
+    assert.equal((await approveRole(a.c, tech.member, tech.settings, [techRole.id])).status, 200);
+    await tech.staff("/auth/mfa/skip", "POST", {});
+    assert.equal((await tech.staff("/patients")).status, 200);
+    assert.equal((await tech.staff("/patients/" + patient.data.id)).status, 403);
+    assert.equal(
+      (
+        await a.c("/workspace/roles/" + techRole.id, "PATCH", {
+          name: techRole.name,
+          permissions: ["registry.view", "records.view"],
+          clinical_scope: "general",
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await tech.staff("/patients/" + patient.data.id)).status,
+      403,
+      "role editing does not establish clinical verification",
+    );
+    assert.equal(
+      (
+        await approveRole(a.c, tech.member, tech.settings, [techRole.id], {
+          provider_support_verified: 1,
+        })
+      ).status,
+      400,
+    );
+    const onlyView = await a.c("/workspace/roles", "POST", {
+      name: "Registered record reviewer",
+      permissions: ["registry.view", "records.view"],
+      clinical_scope: "general",
+    });
+    assert.equal(
+      (
+        await approveRole(a.c, gp.member, gp.settings, [onlyView.data.id], {
+          clinical_verified: "confirmed",
+          clinical_review_reference: "Synthetic changed access",
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await gp.staff("/patients/" + patient.data.id)).status, 200);
+    assert.equal(
+      (await gp.staff("/encounters/" + gnote.data.id + "/sign", "POST", { version: 1 })).status,
+      403,
+    );
+  } finally {
+    await db.close();
+  }
+});
+
+test("Zed Tech support requires operator identity verification and an expiring nonclinical facility grant", async () => {
+  const { db, client, facility } = await fixture();
+  try {
+    const a = await facility("Synthetic Support Facility");
+    const request = await requestStaff(
+      client,
+      a.c,
+      a.code,
+      "support@synthetic.invalid",
+      "Zed Tech support",
+    );
+    const role = request.settings.roles.find((r) => r.template_key === "zed-support"),
+      gp = request.settings.roles.find((r) => r.template_key === "gp");
+    const future = new Date(Date.now() + 3600000).toISOString();
+    assert.equal(
+      (
+        await approveRole(a.c, request.member, request.settings, [role.id], {
+          access_expires_at: future,
+          provider_support_verified: 1,
+        })
+      ).status,
+      400,
+    );
+    await db.transaction((tx) =>
+      tx.run("UPDATE users SET provider_support_verified=1 WHERE id=?", [request.member.user_id]),
+    );
+    assert.equal((await approveRole(a.c, request.member, request.settings, [role.id])).status, 400);
+    assert.equal(
+      (
+        await approveRole(a.c, request.member, request.settings, [role.id], {
+          access_expires_at: new Date(Date.now() + 48 * 3600000).toISOString(),
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await approveRole(a.c, request.member, request.settings, [role.id, gp.id], {
+          access_expires_at: future,
+          clinical_verified: "confirmed",
+          clinical_review_reference: "Synthetic review",
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await a.c("/workspace/roles/" + role.id, "PATCH", {
+          name: role.name,
+          permissions: ["workspace.view", "records.view"],
+          clinical_scope: "general",
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await approveRole(a.c, request.member, request.settings, [role.id], {
+          access_expires_at: future,
+        })
+      ).status,
+      200,
+    );
+    await request.staff("/auth/mfa/skip", "POST", {});
+    const info = await request.staff("/workspace/settings");
+    assert.equal(info.status, 200);
+    assert.deepEqual(info.data.members, []);
+    assert.equal((await request.staff("/patients")).status, 403);
+    assert.equal((await request.staff("/audit")).status, 403);
+    assert.equal(
+      (await request.staff("/workspace/branches", "POST", { name: "Escalation" })).status,
+      403,
+    );
+    await db.transaction((tx) =>
+      tx.run("UPDATE memberships SET access_expires_at=? WHERE id=?", [
+        new Date(Date.now() - 1000).toISOString(),
+        request.member.id,
+      ]),
+    );
+    assert.equal((await request.staff("/auth/me")).data.accessExpired, true);
+    assert.equal((await request.staff("/workspace/settings")).status, 403);
+    const grant = await db.transaction((tx) =>
+      tx.get("SELECT action FROM audits WHERE action='support.granted'"),
+    );
+    assert.equal(grant.action, "support.granted");
+  } finally {
+    await db.close();
+  }
+});

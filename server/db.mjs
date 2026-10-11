@@ -91,9 +91,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   };
   if (config.NODE_ENV === "production" && config.HEALTHPASS_RUN_MIGRATIONS !== "1") {
     await db.transaction(async (tx) => {
-      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='004'")))
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='005'")))
         throw new Error(
-          "Apply schema migrations 001 through 004 using the migration identity before starting the API.",
+          "Apply schema migrations 001 through 005 using the migration identity before starting the API.",
         );
     });
     return db;
@@ -147,6 +147,17 @@ export async function openDatabase(config = process.env, dependencies = {}) {
       if (engine === "sqlite") pool.exec(optionalSchema);
       else await tx.run(optionalSchema);
       await tx.run("INSERT INTO schema_migrations(version) VALUES ('004')");
+    }
+  });
+  await db.transaction(async (tx) => {
+    if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='005'"))) {
+      const roleSchema = readFileSync(
+        new URL("./migrations/005-workspace-roles.sql", import.meta.url),
+        "utf8",
+      );
+      if (engine === "sqlite") pool.exec(roleSchema);
+      else await tx.run(roleSchema);
+      await tx.run("INSERT INTO schema_migrations(version) VALUES ('005')");
     }
   });
   return db;

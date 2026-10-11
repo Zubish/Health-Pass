@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "api": "node --env-file-if-exists=.env server/index.mjs",
+    "verify-support": "node --env-file-if-exists=.env server/verify-support.mjs",
     "seed": "node --env-file-if-exists=.env server/seed.mjs",
     "test": "node tests/run.mjs",
     "typecheck": "tsc --noEmit",

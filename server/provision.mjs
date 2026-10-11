@@ -1,3 +1,4 @@
+import { createDefaultRoles } from "./roles.mjs";
 import { parseArgs } from "node:util";
 import { randomUUID, randomBytes } from "node:crypto";
 import { openDatabase } from "./db.mjs";
@@ -61,6 +62,18 @@ try {
       "INSERT INTO memberships(id,user_id,organization_id,role,branch_id) VALUES (?,?,?,?,?)",
       [randomUUID(), user, org, values.role, values.role === "administrator" ? null : branch],
     );
+    await createDefaultRoles(tx, org);
+    await tx.run(
+      "INSERT INTO membership_roles(membership_id,role_id) SELECT id,? FROM memberships WHERE user_id=?",
+      ["role-" + org + "-" + values.role, user],
+    );
+    if (values.role === "administrator")
+      await tx.run("UPDATE memberships SET is_owner=1 WHERE user_id=?", [user]);
+    if (values.role === "clinician" && values.verified)
+      await tx.run(
+        "UPDATE memberships SET clinical_verified=1,clinical_scopes='[\"general\"]',clinical_review_reference='Operator reviewed clinical credentials' WHERE user_id=?",
+        [user],
+      );
     console.log("Workspace code:", code);
     await tx.run(
       "INSERT INTO audits(id,actor_id,organization_id,resource_id,action,decision,purpose,created_at,correlation_id) VALUES (?,?,?,?,?,?,?,?,?)",
