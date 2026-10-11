@@ -140,10 +140,23 @@ export function WorkspaceSettings({
                       {m.registration_number ? ` · ${m.registration_number}` : ""}
                     </small>
                     <p>
-                      <span className={`hp-chip ${m.active && m.verified ? "teal" : "amber"}`}>
-                        {m.active && m.verified ? "Active" : "Awaiting approval"}
+                      <span
+                        className={`hp-chip ${m.active && m.verified && !(m.access_expires_at && Date.parse(m.access_expires_at) <= Date.now()) ? "teal" : "amber"}`}
+                      >
+                        {m.access_expires_at && Date.parse(m.access_expires_at) <= Date.now()
+                          ? "Access expired"
+                          : m.active && m.verified
+                            ? "Active"
+                            : m.verified
+                              ? "Suspended"
+                              : "Awaiting approval"}
                       </span>
                     </p>
+                    {m.access_expires_at && (
+                      <p className="hp-fine">
+                        Access expiry: {new Date(m.access_expires_at).toLocaleString()}
+                      </p>
+                    )}
                     <p className="hp-fine">
                       {data.assignments
                         .filter((a) => a.membership_id === m.id)
@@ -162,7 +175,15 @@ export function WorkspaceSettings({
                     ) : (
                       <StaffAccess
                         key={
-                          m.id +
+                          JSON.stringify([
+                            m.id,
+                            m.active,
+                            m.verified,
+                            m.branch_id,
+                            m.review_reference,
+                            m.clinical_review_reference,
+                            m.access_expires_at,
+                          ]) +
                           data.assignments
                             .filter((a) => a.membership_id === m.id)
                             .map((a) => a.role_id)

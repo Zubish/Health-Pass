@@ -25,6 +25,8 @@ Clinical role creation does not verify a person. Staff assignment requires an id
 
 The creator retains administrative capabilities even if an administrator template is edited or disabled. Another authorised administrator must review the creator's personal clinical roles; users cannot review their own access. The creator cannot be suspended through staff role management. Other role managers do not receive creator immunity. Audits retain role changes and membership assignments, including permission/scope details; signed clinical snapshots remain immutable.
 
+Staff management keeps disabled assigned roles visible so administrators can remove them before saving a replacement. Expired grants display their expiry and an Access expired status; suspended memberships are distinguished from pending approvals. Choosing Zed Tech support clears other roles, and choosing a regular staff role clears support, matching the server's exclusive-support rule. Saved membership changes refresh the review form, including branch and expiry fields.
+
 ## Zed Tech support
 
 Facility IT titles do not establish Zed Tech employment. Only the platform operator can verify provider staff identity using the private server CLI:

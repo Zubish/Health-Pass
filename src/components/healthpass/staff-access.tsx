@@ -41,6 +41,7 @@ export function StaffAccess({
     r.permissions.some((key) => catalog.some((p) => p.key === key && p.category === "clinical")),
   );
   const support = selectedRoles.some((r) => r.template_key === "zed-support");
+  const hasDisabledRole = selectedRoles.some((r) => !r.active);
   const expiry = member.access_expires_at
     ? new Date(
         Date.parse(member.access_expires_at) -
@@ -68,7 +69,7 @@ export function StaffAccess({
         <fieldset className="hp-permission-group">
           <legend>Job roles</legend>
           {roles
-            .filter((r) => r.active)
+            .filter((r) => r.active || assignments.includes(r.id))
             .map((role) => (
               <label className="hp-permission-option" key={role.id}>
                 <input
@@ -76,23 +77,37 @@ export function StaffAccess({
                   checked={selected.includes(role.id)}
                   disabled={
                     busy ||
+                    (!role.active && !selected.includes(role.id)) ||
                     (role.template_key === "zed-support" && !member.provider_support_verified)
                   }
-                  onChange={(e) =>
-                    setSelected((previous) =>
-                      e.target.checked
-                        ? [...previous, role.id]
-                        : previous.filter((id) => id !== role.id),
-                    )
-                  }
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setSelected((previous) => {
+                      if (!checked) return previous.filter((id) => id !== role.id);
+                      if (role.template_key === "zed-support") return [role.id];
+                      return [
+                        ...previous.filter(
+                          (id) => roles.find((r) => r.id === id)?.template_key !== "zed-support",
+                        ),
+                        role.id,
+                      ];
+                    });
+                  }}
                 />
                 <span>
                   {role.name}
+                  {!role.active ? " · Disabled" : ""}
                   {role.clinical_scope ? ` · ${scopeNames[role.clinical_scope]}` : ""}
                 </span>
               </label>
             ))}
         </fieldset>
+        {hasDisabledRole && (
+          <p className="hp-notice" role="status">
+            Remove disabled roles and choose an active role before updating access. Disabled roles
+            grant no permissions.
+          </p>
+        )}
         <label>
           Branch
           <select
@@ -165,7 +180,10 @@ export function StaffAccess({
             permissions are assigned.
           </p>
         )}
-        <button className="hp-button primary" disabled={busy || !selected.length}>
+        <button
+          className="hp-button primary"
+          disabled={busy || !selected.length || hasDisabledRole}
+        >
           {member.active ? "Update access" : "Approve access"}
         </button>
       </form>
