@@ -297,7 +297,7 @@ function Landing() {
                 {
                   icon: ShieldCheck,
                   title: "An extra sign-in check",
-                  copy: "Professional accounts use authenticator verification before accessing the care workspace.",
+                  copy: "Professional accounts can add optional authenticator protection to their workspace sign-in.",
                 },
                 {
                   icon: History,
@@ -503,7 +503,7 @@ function FAQ() {
     {
       question: "How does a care team get access?",
       answer:
-        "Choose Create account, then Professional, and use your facility’s workspace code to request access. Check the facility name before continuing. Your administrator reviews your membership before care access is enabled, and professionals complete authenticator verification. If your facility is new to HealthPass, its administrator can choose Facility to create its workspace.",
+        "Choose Create account, then Professional, and use your facility’s workspace code to request access. Check the facility name before continuing. Your administrator reviews your membership before care access is enabled, and authenticator protection is optional. If your facility is new to HealthPass, its administrator can choose Facility to create its workspace.",
     },
     {
       question: "Can I change a signed clinical note?",

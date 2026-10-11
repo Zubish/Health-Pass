@@ -189,7 +189,7 @@ test("codes request access only; reviewed approval, branch scopes and suspension
     assert.equal(
       (await staff("/patients")).status,
       403,
-      "approved professionals still require MFA",
+      "approved professionals choose authenticator verification or skip",
     );
     await mfa(staff);
     const patient = await staff("/patients", "POST", { name: "Synthetic branch patient" });
@@ -314,6 +314,109 @@ test("workspace confirmation identifies only the requested facility without gran
       400,
     );
     assert.equal((await anonymous("/auth/workspace-check", "POST", {})).status, 400);
+  } finally {
+    await db.close();
+  }
+});
+
+test("facility creators can skip unfinished authenticator setup and sign back into their own workspace", async () => {
+  const { db, client } = await fixture();
+  try {
+    const owner = client();
+    const created = await owner("/auth/facility-register", "POST", {
+      name: "Synthetic Creator",
+      email: "creator@synthetic.invalid",
+      password,
+      facility_name: "Synthetic Creator Facility",
+      facility_type: "hospital",
+      address: "Synthetic address",
+      branch_name: "Main",
+      authority: "confirmed",
+    });
+    assert.equal(created.status, 200);
+    const me = await owner("/auth/me");
+    assert.equal(me.data.role, "administrator");
+    assert.equal(me.data.pendingMembership, false);
+    assert.equal(me.data.mfaRequired, true);
+    assert.equal((await owner("/auth/mfa/setup", "POST", {})).status, 200);
+    assert.equal((await owner("/auth/mfa/skip", "POST", {})).status, 200);
+    assert.equal((await owner("/auth/me")).data.mfaRequired, false);
+    assert.equal((await owner("/workspace/settings")).status, 200);
+    assert.equal(
+      (await owner("/patients")).status,
+      403,
+      "skipping cannot grant administrator clinical access",
+    );
+    const state = await db.transaction((tx) =>
+      tx.get("SELECT mfa_verified,mfa_skipped FROM sessions"),
+    );
+    assert.deepEqual({ ...state }, { mfa_verified: 0, mfa_skipped: 1 });
+    const event = await db.transaction((tx) =>
+      tx.get("SELECT action FROM audits WHERE action='auth.mfa_skipped'"),
+    );
+    assert.equal(event.action, "auth.mfa_skipped");
+    assert.equal((await owner("/auth/logout", "POST", {})).status, 200);
+    assert.equal((await owner("/auth/mfa/skip", "POST", {})).status, 401);
+    assert.equal(
+      (
+        await owner("/auth/login", "POST", {
+          email: "creator@synthetic.invalid",
+          password,
+          account_type: "professional",
+          workspace_code: created.data.workspace_code,
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await owner("/auth/me")).data.mfaRequired, true, "the choice is session-scoped");
+    assert.equal((await owner("/auth/mfa/skip", "POST", {})).status, 200);
+    assert.equal((await owner("/workspace/settings")).status, 200);
+    await db.transaction((tx) =>
+      tx.run("UPDATE sessions SET last_seen_at=?", [
+        new Date(Date.now() - 31 * 60000).toISOString(),
+      ]),
+    );
+    assert.equal((await owner("/auth/mfa/skip", "POST", {})).status, 401);
+  } finally {
+    await db.close();
+  }
+});
+test("optional authenticator choice preserves enrollment and pending membership restrictions", async () => {
+  const { db, client, facility } = await fixture();
+  try {
+    const owner = await facility("Synthetic Enrolled Owner");
+    await owner.c("/auth/logout", "POST", {});
+    assert.equal(
+      (
+        await owner.c("/auth/login", "POST", {
+          email: "owner@synthetic.invalid",
+          password,
+          account_type: "professional",
+          workspace_code: owner.code,
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await owner.c("/auth/me")).data.mfaEnrolled, true);
+    assert.equal((await owner.c("/auth/mfa/skip", "POST", {})).status, 200);
+    assert.equal((await owner.c("/auth/me")).data.mfaEnrolled, true);
+    assert.equal((await owner.c("/workspace/settings")).status, 200);
+    const staff = client();
+    assert.equal(
+      (
+        await staff("/auth/workspace-register", "POST", {
+          name: "Synthetic Pending",
+          email: "pending@synthetic.invalid",
+          password,
+          workspace_code: owner.code,
+          profession: "Pharmacy Technician",
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await staff("/auth/mfa/skip", "POST", {})).status, 403);
+    assert.equal((await staff("/patients")).status, 403);
+    assert.equal((await client()("/auth/mfa/skip", "POST", {})).status, 401);
   } finally {
     await db.close();
   }

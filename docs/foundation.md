@@ -138,3 +138,7 @@ See [account-workspaces.md](./account-workspaces.md) for inspected RxLedger mech
 ## Confirmed account UX correction — 11 October 2026
 
 The owner superseded the earlier first-time access setup inside Sign in: **Create account** offers three cards, Patient, Professional and Facility. Professional registration collects personal/professional details and the existing facility’s workspace code; its action is **Request access**. Facility creation creates the workspace and branches with an administrator identity. **Sign in** offers Patient and Professional only, since a facility is not a user. Professional sign-in checks and displays the selected facility using its workspace code before proceeding. Preserve “Already have an account? Sign in”; remove “Existing facility workspace? Sign in”. Facility-scoped independent credentials and reviewed membership requirements remain in force.
+
+## Confirmed optional authenticator decision — 11 October 2026
+
+The owner removed compulsory authenticator verification. Users must be able to **Skip for now** and continue after password authentication and the applicable facility/membership checks. This supersedes earlier requirements for mandatory professional TOTP. Facility creators are active administrators of their own workspace and do not require a separate staff access request or approval. A separate ecosystem authenticator application, working like a regular authenticator, is planned for later. HealthPass retains optional TOTP support for that future integration; the separate app is not part of this implementation.

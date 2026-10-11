@@ -9,6 +9,7 @@ export async function careApi<T = any>(path: string, method = "GET", body?: unkn
   const data = await response.json();
   if (
     response.status === 401 &&
+    (path !== "/auth/mfa/verify" || data.error === "Sign in to continue.") &&
     ![
       "/auth/login",
       "/auth/register",

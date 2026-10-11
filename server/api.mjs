@@ -111,7 +111,7 @@ export function createApi(db, config = process.env) {
     const token = request.headers.get("cookie")?.match(/(?:^|;\s*)hp_session=([a-f0-9]+)/)?.[1];
     if (!token) return null;
     const user = await tx.get(
-      "SELECT u.*, s.id AS session_id,s.organization_id,s.mfa_verified,s.created_at AS session_created FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND s.last_seen_at>? AND u.active=1",
+      "SELECT u.*, s.id AS session_id,s.organization_id,s.mfa_verified,s.mfa_skipped,s.created_at AS session_created FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND s.last_seen_at>? AND u.active=1",
       [hash(token), now(), new Date(Date.now() - 30 * 60 * 1000).toISOString()],
     );
     if (!user) return null;
@@ -135,8 +135,8 @@ export function createApi(db, config = process.env) {
     authenticated(actor);
     if (actor.pendingMembership)
       fail(403, "Your facility access is awaiting administrator approval.");
-    if (actor.organization_id && (!actor.totp_secret || !actor.mfa_verified))
-      fail(403, "Complete authenticator verification first.");
+    if (actor.organization_id && !actor.mfa_verified && !actor.mfa_skipped)
+      fail(403, "Verify with your authenticator or choose Skip for now.");
   };
   const clinician = (actor) => {
     strong(actor);
@@ -320,7 +320,7 @@ export function createApi(db, config = process.env) {
             ])
           : null,
         organization: org,
-        mfaRequired: !!org && (!actor.totp_secret || !actor.mfa_verified),
+        mfaRequired: !!org && !actor.mfa_verified && !actor.mfa_skipped,
         mfaEnrolled: !!actor.totp_secret,
       };
     }
@@ -328,6 +328,14 @@ export function createApi(db, config = process.env) {
       await tx.run("DELETE FROM sessions WHERE id=?", [actor.session_id]);
       outputHeaders.set("set-cookie", cookie("", 0));
       return { signedOut: true };
+    }
+    if (path === "/auth/mfa/skip" && method === "POST") {
+      if (!actor.organization_id) fail(400, "Authenticator choice is for professional workspaces.");
+      if (actor.pendingMembership)
+        fail(403, "Your facility access is awaiting administrator approval.");
+      await tx.run("UPDATE sessions SET mfa_skipped=1 WHERE id=?", [actor.session_id]);
+      await audit(tx, actor, "auth.mfa_skipped", "allow", null, null, correlation);
+      return { skipped: true };
     }
     if (path === "/auth/mfa/setup" && method === "POST") {
       if (!actor.organization_id || actor.totp_secret)

@@ -1,15 +1,15 @@
 # Account and facility workspaces — 11 October 2026
 
-Implemented following the owner's account-choice and identity clarifications. RxLedger `Zubish/RxLedger` at `5c9aea6` was inspected: `src/components/AuthViews.tsx` separates workspace setup from workspace-selected sign-in/access requests; `server/_shared.ts` resolves the tenant by workspace code; branch scope is managed within that tenant. HealthPass adopts the selection pattern while retaining its clinical access checks and professional MFA.
+Implemented following the owner's account-choice and identity clarifications. RxLedger `Zubish/RxLedger` at `5c9aea6` was inspected: `src/components/AuthViews.tsx` separates workspace setup from workspace-selected sign-in/access requests; `server/_shared.ts` resolves the tenant by workspace code; branch scope is managed within that tenant. HealthPass adopts the selection pattern while retaining its clinical access checks and optional authenticator protection.
 
 ## Account paths
 
 - Landing **Create account** opens `/workspace?mode=register`, with separate Patient, Professional and Facility cards.
 - **Create professional account** opens `/workspace?mode=professional` directly for a professional access request. Facility creation has its own `/workspace?mode=facility` form.
 - Patient creation uses name, optional DOB/contact, email and password. Patient sign-in resolves the patient identity independently of professional accounts.
-- Facility creation uses the administrator's name/email/password, facility type/name/address, initial branch and authority declaration. It creates an isolated workspace, a random workspace code and an administrator membership. Ownership permits administration, not clinical records or authoring. Professional MFA is required before workspace management.
+- Facility creation uses the administrator's name/email/password, facility type/name/address, initial branch and authority declaration. It creates an isolated workspace, a random workspace code and an administrator membership. Ownership permits administration, not clinical records or authoring. The creator is an active administrator immediately and may set up an authenticator or skip it to continue.
 - Professional creation is under **Create account → Professional**, using workspace code, name, profession, applicable registration number, email and password. **Request access** creates a pending membership, not immediate care access. Sign-in has only Patient and Professional choices; facilities are workspaces, not users. Professional sign-in requires workspace code, email and password.
-- The administrator reviews identity and applicable credentials, records a review reference, and approves a supported role and branch. Approved professionals still complete MFA. Suspension and branch changes take effect on subsequent API requests, including existing sessions.
+- The administrator reviews identity and applicable credentials, records a review reference, and approves a supported role and branch. Approved professionals may verify with an authenticator or skip it for their current session. Suspension and branch changes take effect on subsequent API requests, including existing sessions.
 
 ## Identity and branch isolation
 
@@ -48,3 +48,13 @@ The owner corrected the initial combined Professional/Facility flow. Create acco
 Professional registration and sign-in both require checking the workspace code before their submit action is enabled. The API returns only the facility name and supplied code; it does not create a session or reveal members, branches, addresses or records. The confirmed name stays visible before submitting and during professional MFA. Editing the code invalidates the confirmation, including any in-flight result. Authentication and membership creation independently validate the code on the server. A facility administrator must create a workspace first if one does not exist.
 
 Validation: 25 integration checks across SQLite and embedded PostgreSQL, typecheck and production build. Browser verification covered three creation cards, separate forms, a Pharmacy Technician access request, unknown and edited codes, pending approval, administrator approval, MFA, two sign-in options, facility confirmation before sign-in/MFA, navigation/refresh and mobile width.
+
+### Optional authenticator protection and creator access (11 October 2026)
+
+Confirmed owner decision: authenticator verification is optional. The post-password screen offers **Skip for now** both before setup, after unfinished setup and for already enrolled users. A separate ecosystem authenticator app is planned for later; this change does not build that app. Email/password sign-in and the facility workspace code remain required.
+
+Migration 004 adds a session-scoped `mfa_skipped` flag. The skip endpoint requires an authenticated, approved professional/administrator session, records `auth.mfa_skipped`, and leaves `mfa_verified` and the account’s authenticator enrollment unchanged. A new login prompts for the optional choice again. Staff approval, workspace/branch scope, role permissions, audit records and the 30-minute idle timeout remain enforced. Incorrect authenticator codes now show a retry error rather than clearing a valid password session.
+
+GreenSprings Hospital’s existing creator membership was inspected: active, verified administrator, with unfinished authenticator setup. No account, credential or membership mutation is needed. The creator can use Professional sign-in with the facility code and the original registration credentials, then skip the authenticator screen.
+
+Validation: 29 integration checks across SQLite and embedded PostgreSQL, typecheck and production build; browser checks cover creator workspace access, unfinished setup, incorrect-code retry, skip, refresh, logout and facility-code sign-in with skip.

@@ -259,6 +259,12 @@ export function Auth({
                         </p>
                       </div>
                     )}
+                    {signin && (
+                      <p className="hp-fine">
+                        Created this facility? Sign in here with the email and password you used to
+                        create its workspace.
+                      </p>
+                    )}
                     {staffSetup && (
                       <p className="hp-fine">
                         If your facility is not on HealthPass yet, its administrator can create a
@@ -402,11 +408,27 @@ export function Mfa({ me, onSuccess }: { me: Me; onSuccess: () => Promise<void> 
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   async function setup() {
+    setBusy(true);
+    setError("");
     try {
       const result = await careApi("/auth/mfa/setup", "POST", {});
       setSecret(result.secret);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function skip() {
+    setBusy(true);
+    setError("");
+    try {
+      await careApi("/auth/mfa/skip", "POST", {});
+      await onSuccess();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
   async function submit(e: FormEvent) {
@@ -425,20 +447,25 @@ export function Mfa({ me, onSuccess }: { me: Me; onSuccess: () => Promise<void> 
     <main className="hp-auth">
       <div className="hp-auth-card">
         <Mark />
-        <h1>Protect your care workspace</h1>
+        <h1>Authenticator protection is optional</h1>
         {me.organization && (
           <div className="hp-notice" role="status">
             <strong>{me.organization.name}</strong>
             <p>You are continuing into this facility’s workspace.</p>
+            {me.organization.workspace_code && (
+              <p>
+                Workspace code: <strong>{me.organization.workspace_code}</strong>
+              </p>
+            )}
           </div>
         )}
         <p>
           {me.mfaEnrolled
-            ? "Enter the six-digit code from your authenticator."
-            : "Add HealthPass to your authenticator before accessing clinical records."}
+            ? "Enter the six-digit code from your authenticator, or skip it for this session."
+            : "Add an authenticator for extra protection, or skip for now and continue to your workspace."}
         </p>
         {!me.mfaEnrolled && !secret && (
-          <button className="hp-button primary" onClick={setup}>
+          <button className="hp-button primary" disabled={busy} onClick={setup}>
             Set up authenticator
           </button>
         )}
@@ -471,6 +498,9 @@ export function Mfa({ me, onSuccess }: { me: Me; onSuccess: () => Promise<void> 
             </button>
           </form>
         )}
+        <button className="hp-button secondary" disabled={busy} onClick={() => void skip()}>
+          Skip for now
+        </button>
         {error && (
           <p className="hp-error" role="alert">
             {error}
