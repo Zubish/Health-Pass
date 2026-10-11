@@ -32,3 +32,11 @@ Production deployment of commit `23d8c4e` is READY at the canonical address. Eig
 Primary-care designation, patient-selected individual professional access, partial/full grants, consultant-specific access and scoped delegation, proxies, verified emergency release, external contributor invitations and future Rai redaction remain recorded in `foundation.md`. They are not activated by workspace creation or this migration. Current facility-level consent does not provide those finer controls. Do not claim they are already available or broaden access on their basis.
 
 No automated credential-verification service, email verification, password recovery or proxy OTP delivery is added here. Manual administrator review is recorded rather than presented as independent external verification. Prescribing and other future clinical modules retain their separate authorization requirements.
+
+### Navigation and idle sessions (11 October 2026)
+
+Workspace tabs and selected record IDs now use validated URL search parameters. Browser back/forward restore visited views; refresh restores the current view after rechecking authentication. Account choice, professional sign-in and first-time access setup also use URL state. No credentials or clinical note text are stored in navigation URLs. Unsaved notes warn before leaving or refreshing.
+
+Sessions expire after 30 minutes of inactivity, matching RxLedger. Migration 003 adds server-side `last_seen_at`; authorized requests renew it, expired sessions cannot read records, and a new login is required. The existing eight-hour absolute session limit remains. Browser interaction renews activity with a throttled authenticated request, while an idle timer clears the workspace and returns to sign-in. Background polling does not keep a session alive.
+
+Validation: typecheck, production build and 23 integration checks across SQLite and embedded PostgreSQL. Browser checks covered account-flow history, workspace back/forward, refresh, and a simulated 30-minute idle timeout returning to sign-in without browser errors.

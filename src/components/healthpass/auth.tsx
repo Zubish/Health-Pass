@@ -9,16 +9,20 @@ export function Auth({
   onSuccess,
   serviceError,
   initialMode,
+  initialSetup,
+  onModeChange,
 }: {
   onSuccess: () => Promise<void>;
   serviceError: string;
   initialMode?: AccountMode;
+  initialSetup?: boolean;
+  onModeChange: (mode?: AccountMode, setup?: boolean) => void;
 }) {
   const [view, setView] = useState(initialMode ?? "signin");
   const [accountType, setAccountType] = useState(
     initialMode === "professional-signin" ? "professional" : "patient",
   );
-  const [firstAccess, setFirstAccess] = useState(false),
+  const [firstAccess, setFirstAccess] = useState(!!initialSetup),
     [error, setError] = useState(serviceError),
     [busy, setBusy] = useState(false);
   const choosing = view === "register",
@@ -28,6 +32,13 @@ export function Auth({
   const staffSetup = signin && accountType === "professional" && firstAccess;
   const creating = patientCreate || facilityCreate || staffSetup;
   function change(next: string) {
+    onModeChange(
+      next === "signin"
+        ? accountType === "professional"
+          ? "professional-signin"
+          : undefined
+        : (next as AccountMode),
+    );
     setView(next);
     setFirstAccess(false);
     setError("");
@@ -125,7 +136,7 @@ export function Auth({
                 className="hp-text-button"
                 onClick={() => {
                   setAccountType("professional");
-                  change("signin");
+                  onModeChange("professional-signin");
                 }}
               >
                 Existing facility workspace? Sign in
@@ -143,6 +154,7 @@ export function Auth({
                       checked={accountType === "patient"}
                       onChange={() => {
                         setAccountType("patient");
+                        onModeChange(undefined);
                         setFirstAccess(false);
                         setError("");
                       }}
@@ -156,6 +168,7 @@ export function Auth({
                       checked={accountType === "professional"}
                       onChange={() => {
                         setAccountType("professional");
+                        onModeChange("professional-signin");
                         setError("");
                       }}
                     />{" "}
@@ -285,6 +298,7 @@ export function Auth({
                   disabled={busy}
                   onClick={() => {
                     setFirstAccess(!firstAccess);
+                    onModeChange("professional-signin", !firstAccess);
                     setError("");
                   }}
                 >

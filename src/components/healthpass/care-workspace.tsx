@@ -1,3 +1,4 @@
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { WorkspaceSettings } from "./workspace-settings";
 import { useEffect, useState } from "react";
 import {
@@ -24,9 +25,17 @@ import type { Me, Patient, Encounter } from "@/lib/healthpass-types";
 import { Mark, Stat, PatientRow, Empty, Modal } from "./primitives";
 import { NoteEditor, EncounterCard } from "./encounters";
 export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promise<void> }) {
-  const [tab, setTab] = useState(me.role === "administrator" ? "workspace" : "overview"),
-    [patients, setPatients] = useState<Patient[]>([]),
-    [selected, setSelected] = useState<string | null>(null),
+  const search = useSearch({ from: "/workspace" });
+  const navigate = useNavigate({ from: "/workspace" });
+  const tab = search.tab ?? (me.role === "administrator" ? "workspace" : "overview");
+  const selected = search.patient ?? null;
+  const setTab = (next: string) => {
+    void navigate({ search: { tab: next } });
+  };
+  const setSelected = (id: string | null) => {
+    void navigate({ search: { tab: "patients", patient: id ?? undefined } });
+  };
+  const [patients, setPatients] = useState<Patient[]>([]),
     [chart, setChart] = useState<{ patient: Patient; encounters: Encounter[] } | null>(null),
     [query, setQuery] = useState(""),
     [error, setError] = useState(""),
@@ -68,7 +77,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     setError("");
     try {
       setChart(await careApi(`/patients/${id}`));
-      setSelected(id);
+      if (selected !== id) setSelected(id);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -77,7 +86,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
   }
   async function loadTab(next: string) {
     setError("");
-    setTab(next);
+    if (tab !== next) setTab(next);
     try {
       if (next === "audit") setAudit((await careApi("/audit")).audits);
       if (next === "sharing") {
@@ -96,6 +105,12 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
       .then((data) => setHealth(data.mode))
       .catch(() => {});
   }, []);
+  useEffect(() => {
+    setChart(null);
+    setEditing(null);
+    if (selected && canChart) void loadChart(selected);
+    else void loadTab(tab);
+  }, [tab, selected]);
   async function act(action: () => Promise<void>, message: string) {
     setBusy(true);
     setError("");
@@ -135,9 +150,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
               key={id}
               className={tab === id ? "active" : ""}
               onClick={() => {
-                setSelected(null);
-                setChart(null);
-                void loadTab(id);
+                setTab(id);
               }}
             >
               <Icon size={19} />

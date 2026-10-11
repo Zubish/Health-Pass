@@ -91,9 +91,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   };
   if (config.NODE_ENV === "production" && config.HEALTHPASS_RUN_MIGRATIONS !== "1") {
     await db.transaction(async (tx) => {
-      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='002'")))
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='003'")))
         throw new Error(
-          "Apply schema migrations 001 and 002 using the migration identity before starting the API.",
+          "Apply schema migrations 001, 002 and 003 using the migration identity before starting the API.",
         );
     });
     return db;
@@ -125,6 +125,17 @@ export async function openDatabase(config = process.env, dependencies = {}) {
       if (engine === "sqlite") pool.exec(workspaceSchema);
       else await tx.run(workspaceSchema);
       await tx.run("INSERT INTO schema_migrations(version) VALUES ('002')");
+    }
+  });
+  await db.transaction(async (tx) => {
+    if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='003'"))) {
+      const idleSchema = readFileSync(
+        new URL("./migrations/003-session-idle.sql", import.meta.url),
+        "utf8",
+      );
+      if (engine === "sqlite") pool.exec(idleSchema);
+      else await tx.run(idleSchema);
+      await tx.run("INSERT INTO schema_migrations(version) VALUES ('003')");
     }
   });
   return db;

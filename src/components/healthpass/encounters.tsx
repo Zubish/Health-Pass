@@ -1,3 +1,4 @@
+import { useBlocker } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Stethoscope } from "lucide-react";
 import { blank, date } from "@/lib/healthpass-types";
@@ -30,6 +31,10 @@ export function NoteEditor({
   const dirty =
     Object.keys(blank).some((key) => note[key as keyof Note] !== initial[key as keyof Note]) ||
     !!reason;
+  useBlocker({
+    shouldBlockFn: () =>
+      busy || (dirty && !window.confirm("Leave this page? Unsaved note changes will be lost.")),
+  });
   useEffect(() => {
     if (!dirty && !busy) return;
     const warn = (event: BeforeUnloadEvent) => {

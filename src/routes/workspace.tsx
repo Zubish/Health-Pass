@@ -6,7 +6,14 @@ import { Auth, Mfa, type AccountMode } from "@/components/healthpass/auth";
 import { Mark } from "@/components/healthpass/primitives";
 import { CareWorkspace } from "@/components/healthpass/care-workspace";
 export const Route = createFileRoute("/workspace")({
-  validateSearch: (search: Record<string, unknown>): { mode?: AccountMode } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { mode?: AccountMode; tab?: string; patient?: string; setup?: boolean } => ({
+    tab: ["overview", "workspace", "patients", "sharing", "audit"].includes(String(search.tab))
+      ? String(search.tab)
+      : undefined,
+    patient: typeof search.patient === "string" ? search.patient : undefined,
+    setup: search.setup === true || search.setup === "true" || undefined,
     mode: ["register", "patient", "professional", "professional-signin"].includes(
       String(search.mode),
     )
@@ -17,10 +24,62 @@ export const Route = createFileRoute("/workspace")({
   head: () => ({ meta: [{ title: "HealthPass · Care workspace" }] }),
 });
 function Workspace() {
-  const { mode } = Route.useSearch();
+  const { mode, setup } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [me, setMe] = useState<Me | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
+
+  async function signOut() {
+    setMe(null);
+    await navigate({ search: {}, replace: true, ignoreBlocker: true });
+    try {
+      await careApi("/auth/logout", "POST", {});
+    } catch {}
+  }
+  useEffect(() => {
+    const expired = () => {
+      if (me) void signOut();
+    };
+    window.addEventListener("healthpass-session-expired", expired);
+    return () => window.removeEventListener("healthpass-session-expired", expired);
+  }, [me]);
+  useEffect(() => {
+    if (!me) return;
+    const idle = 30 * 60 * 1000;
+    let last = Date.now(),
+      lastSync = last;
+    const key = "healthpass-last-activity";
+    localStorage.setItem(key, String(last));
+    const check = () => {
+      last = Math.max(last, Number(localStorage.getItem(key)) || 0);
+      if (Date.now() - last >= idle) {
+        localStorage.removeItem(key);
+        void signOut();
+      }
+    };
+    const activity = () => {
+      if (Date.now() - last >= idle) {
+        check();
+        return;
+      }
+      last = Date.now();
+      localStorage.setItem(key, String(last));
+      if (last - lastSync >= 60000) {
+        lastSync = last;
+        void careApi("/auth/me").catch(() => {});
+      }
+    };
+    const events = ["pointerdown", "keydown", "touchstart", "scroll"];
+    events.forEach((event) => window.addEventListener(event, activity, { passive: true }));
+    const timer = window.setInterval(check, 1000);
+    window.addEventListener("focus", check);
+    return () => {
+      clearInterval(timer);
+      events.forEach((event) => window.removeEventListener(event, activity));
+      window.removeEventListener("focus", check);
+    };
+  }, [me]);
   async function refresh() {
     setLoading(true);
     try {
@@ -45,7 +104,16 @@ function Workspace() {
     );
   if (!me)
     return (
-      <Auth key={mode ?? "login"} initialMode={mode} onSuccess={refresh} serviceError={error} />
+      <Auth
+        key={`${mode ?? "login"}-${setup ?? false}`}
+        initialMode={mode}
+        initialSetup={setup}
+        onModeChange={(next, staff) => {
+          void navigate({ search: { mode: next, setup: staff } });
+        }}
+        onSuccess={refresh}
+        serviceError={error}
+      />
     );
   if (me.pendingMembership)
     return (
@@ -64,8 +132,7 @@ function Workspace() {
           <button
             className="hp-text-button"
             onClick={async () => {
-              await careApi("/auth/logout", "POST", {});
-              await refresh();
+              await signOut();
             }}
           >
             Sign out
@@ -78,8 +145,7 @@ function Workspace() {
     <CareWorkspace
       me={me}
       onLogout={async () => {
-        await careApi("/auth/logout", "POST", {});
-        await refresh();
+        await signOut();
       }}
     />
   );

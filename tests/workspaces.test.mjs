@@ -245,3 +245,49 @@ test("codes request access only; reviewed approval, branch scopes and suspension
     await db.close();
   }
 });
+
+test("sessions renew on activity and expire after thirty idle minutes", async () => {
+  const { db, client } = await fixture();
+  try {
+    const c = client();
+    assert.equal(
+      (
+        await c("/auth/register", "POST", {
+          name: "Synthetic Idle",
+          email: "idle@synthetic.invalid",
+          password,
+          dob: "1990-01-01",
+        })
+      ).status,
+      200,
+    );
+    await db.transaction((tx) =>
+      tx.run("UPDATE sessions SET last_seen_at=?", [
+        new Date(Date.now() - 29 * 60000).toISOString(),
+      ]),
+    );
+    assert.equal((await c("/auth/me")).status, 200);
+    const session = await db.transaction((tx) => tx.get("SELECT last_seen_at FROM sessions"));
+    assert.ok(Date.now() - Date.parse(session.last_seen_at) < 5000);
+    await db.transaction((tx) =>
+      tx.run("UPDATE sessions SET last_seen_at=?", [
+        new Date(Date.now() - 31 * 60000).toISOString(),
+      ]),
+    );
+    assert.equal((await c("/auth/me")).status, 401);
+    assert.equal((await c("/patients")).status, 401);
+    assert.equal(
+      (
+        await c("/auth/login", "POST", {
+          email: "idle@synthetic.invalid",
+          password,
+          account_type: "patient",
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await c("/auth/me")).status, 200);
+  } finally {
+    await db.close();
+  }
+});

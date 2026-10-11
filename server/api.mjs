@@ -111,10 +111,11 @@ export function createApi(db, config = process.env) {
     const token = request.headers.get("cookie")?.match(/(?:^|;\s*)hp_session=([a-f0-9]+)/)?.[1];
     if (!token) return null;
     const user = await tx.get(
-      "SELECT u.*, s.id AS session_id,s.organization_id,s.mfa_verified,s.created_at AS session_created FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.active=1",
-      [hash(token), now()],
+      "SELECT u.*, s.id AS session_id,s.organization_id,s.mfa_verified,s.created_at AS session_created FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND s.last_seen_at>? AND u.active=1",
+      [hash(token), now(), new Date(Date.now() - 30 * 60 * 1000).toISOString()],
     );
     if (!user) return null;
+    await tx.run("UPDATE sessions SET last_seen_at=? WHERE id=?", [now(), user.session_id]);
     if (user.organization_id) {
       const membership = await tx.get(
         "SELECT role,active,branch_id FROM memberships WHERE user_id=? AND organization_id=?",
@@ -173,13 +174,14 @@ export function createApi(db, config = process.env) {
     );
     const token = randomBytes(32).toString("hex");
     await tx.run(
-      "INSERT INTO sessions(id,user_id,token_hash,organization_id,expires_at,created_at) VALUES (?,?,?,?,?,?)",
+      "INSERT INTO sessions(id,user_id,token_hash,organization_id,expires_at,created_at,last_seen_at) VALUES (?,?,?,?,?,?,?)",
       [
         randomUUID(),
         user.id,
         hash(token),
         membership?.organization_id ?? null,
         new Date(Date.now() + 28800000).toISOString(),
+        now(),
         now(),
       ],
     );
