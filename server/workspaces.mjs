@@ -189,6 +189,11 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
         fail(400, "Clinical permissions require a clinical scope.");
       const dependencies = {
         "registry.create": "registry.view",
+        "visits.view": "registry.view",
+        "visits.manage": "visits.view",
+        "visits.document": "records.view",
+        "observations.create": "records.view",
+        "followups.manage": "records.view",
         "records.view": "registry.view",
         "profile.edit": "records.view",
         "notes.create": "records.view",

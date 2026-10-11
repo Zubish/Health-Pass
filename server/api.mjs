@@ -1,5 +1,7 @@
 import { hasPermission, resolveMembership } from "./roles.mjs";
 import { workspaceRoutes } from "./workspaces.mjs";
+import { handlePatientLinking } from "./patient-linking.mjs";
+import { handleVisits, validateEncounterVisit } from "./visits.mjs";
 import { randomUUID, randomBytes } from "node:crypto";
 import {
   hash,
@@ -315,6 +317,25 @@ export function createApi(db, config = process.env) {
       return { registered: true };
     }
     authenticated(actor);
+    const context = {
+      actor,
+      path,
+      method,
+      body,
+      searchParams: new URL(request.url).searchParams,
+      permit,
+      strong,
+      access,
+      fail,
+      text,
+      audit,
+      correlation,
+      limit,
+    };
+    const linkingResult = await handlePatientLinking(tx, context);
+    if (linkingResult !== undefined) return linkingResult;
+    const visitResult = await handleVisits(tx, context);
+    if (visitResult !== undefined) return visitResult;
     if (path === "/auth/me" && method === "GET") {
       const org = actor.organization_id
         ? await tx.get("SELECT * FROM organizations WHERE id=?", [actor.organization_id])
@@ -490,10 +511,12 @@ export function createApi(db, config = process.env) {
         )
         .filter(
           (e) =>
-            e.status !== "draft" ||
-            (e.organization_id === actor.organization_id &&
-              (!actor.branch_id || e.branch_id === actor.branch_id) &&
-              hasPermission(actor, "records.view")),
+            (e.status !== "draft" ||
+              (e.author_id === actor.id &&
+                e.organization_id === actor.organization_id &&
+                (!actor.branch_id || e.branch_id === actor.branch_id) &&
+                hasPermission(actor, "records.view"))) &&
+            (!e.visit_id || e.author_id === actor.id || actor.patient_id === patient.id),
         );
       // Patient and partner readers receive signed snapshots, never newer unsaved draft content.
       const records = [];
@@ -509,10 +532,25 @@ export function createApi(db, config = process.env) {
           hasPermission(actor, "records.view")
             ? encounter
             : { ...encounter, ...JSON.parse(versions[0]?.payload ?? "{}") };
+        const { create_request_payload, client_request_id, ...released } = full;
+        let visitEditable = true;
+        if (encounter.visit_id) {
+          const visit = await tx.get(
+            "SELECT assigned_user_id,status FROM care_visits WHERE id=? AND organization_id=?",
+            [encounter.visit_id, actor.organization_id],
+          );
+          visitEditable =
+            !!visit &&
+            visit.assigned_user_id === actor.id &&
+            hasPermission(actor, "visits.document") &&
+            (visit.status === "in-progress" ||
+              (encounter.status !== "draft" && visit.status === "completed"));
+        }
         records.push({
-          ...full,
+          ...released,
           versions: versions.map((v) => ({ ...v, payload: JSON.parse(v.payload) })),
           editable:
+            visitEditable &&
             encounter.author_id === actor.id &&
             actor.clinicalScopes?.includes(encounter.note_kind) &&
             (encounter.status === "draft"
@@ -570,9 +608,37 @@ export function createApi(db, config = process.env) {
       const note = noteInput(body),
         id = randomUUID(),
         date = now();
+      const visit = body.visit_id
+        ? await validateEncounterVisit(tx, context, body.visit_id, patient.id)
+        : null;
+      const requestKey =
+        body.client_request_id === undefined
+          ? null
+          : text(body.client_request_id, "request ID", 100, true);
+      const requestPayload = JSON.stringify({
+        patient_id: patient.id,
+        visit_id: visit?.id ?? null,
+        note_kind: kind,
+        ...note,
+      });
+      const replayDraft = (existing) => {
+        if (existing.create_request_payload !== requestPayload)
+          fail(
+            409,
+            "This request was already used for different note content. Reload the chart before continuing.",
+          );
+        return { id: existing.id, version: existing.version };
+      };
+      if (requestKey) {
+        const existing = await tx.get(
+          "SELECT id,version,create_request_payload FROM encounters WHERE author_id=? AND client_request_id=?",
+          [actor.id, requestKey],
+        );
+        if (existing) return replayDraft(existing);
+      }
       // A partner clinician creates their own record; they do not rewrite the source facility's note.
-      await tx.run(
-        "INSERT INTO encounters(id,patient_id,organization_id,author_id,status,complaint,history,findings,assessment,plan,created_at,updated_at,branch_id,note_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      const inserted = await tx.get(
+        "INSERT INTO encounters(id,patient_id,organization_id,author_id,status,complaint,history,findings,assessment,plan,created_at,updated_at,branch_id,note_kind,visit_id,client_request_id,create_request_payload) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(author_id,client_request_id) DO NOTHING RETURNING id",
         [
           id,
           patient.id,
@@ -582,10 +648,21 @@ export function createApi(db, config = process.env) {
           ...Object.values(note),
           date,
           date,
-          actor.branch_id ?? null,
+          visit?.branch_id ?? actor.branch_id ?? null,
           kind,
+          visit?.id ?? null,
+          requestKey,
+          requestPayload,
         ],
       );
+      if (!inserted) {
+        return replayDraft(
+          await tx.get(
+            "SELECT id,version,create_request_payload FROM encounters WHERE author_id=? AND client_request_id=?",
+            [actor.id, requestKey],
+          ),
+        );
+      }
       await audit(tx, actor, "encounter.create", "allow", patient.id, id, correlation, consent);
       return { id, version: 1 };
     }
@@ -599,6 +676,10 @@ export function createApi(db, config = process.env) {
       if (!encounter) fail(404, "Encounter unavailable.");
       if (encounter.author_id !== actor.id || !actor.clinicalScopes.includes(encounter.note_kind))
         fail(403, "You can only change your own notes within your reviewed clinical scope.");
+      if (encounter.visit_id)
+        await validateEncounterVisit(tx, context, encounter.visit_id, encounter.patient_id, {
+          allowCompleted: match[2] === "amend",
+        });
       const { consent } = await access(tx, actor, encounter.patient_id, true);
       if (
         encounter.organization_id !== actor.organization_id ||

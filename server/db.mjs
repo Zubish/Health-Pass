@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { upgradeVisitRoles } from "./roles.mjs";
 
 export async function openDatabase(config = process.env, dependencies = {}) {
   let engine, pool;
@@ -91,9 +92,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   };
   if (config.NODE_ENV === "production" && config.HEALTHPASS_RUN_MIGRATIONS !== "1") {
     await db.transaction(async (tx) => {
-      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='006'")))
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='008'")))
         throw new Error(
-          "Apply schema migrations 001 through 006 using the migration identity before starting the API.",
+          "Apply schema migrations 001 through 008 using the migration identity before starting the API.",
         );
     });
     return db;
@@ -171,5 +172,31 @@ export async function openDatabase(config = process.env, dependencies = {}) {
       await tx.run("INSERT INTO schema_migrations(version) VALUES ('006')");
     }
   });
+  for (const [version, file] of [
+    ["007", "007-patient-link-invitations.sql"],
+    ["008", "008-care-visits.sql"],
+  ]) {
+    await db.transaction(async (tx) => {
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version=?", [version]))) {
+        const schema = readFileSync(new URL("./migrations/" + file, import.meta.url), "utf8");
+        if (engine === "sqlite") pool.exec(schema);
+        else await tx.run(schema);
+        if (version === "008") {
+          await upgradeVisitRoles(tx);
+          for (const table of ["visit_events", "visit_observations"]) {
+            if (engine === "sqlite") {
+              pool.exec(`CREATE TRIGGER ${table}_no_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT, 'Visit record is immutable'); END;
+                CREATE TRIGGER ${table}_no_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT, 'Visit record is immutable'); END;`);
+            } else {
+              await tx.run(
+                `CREATE TRIGGER ${table}_immutable BEFORE UPDATE OR DELETE ON ${table} FOR EACH ROW EXECUTE FUNCTION hp_immutable()`,
+              );
+            }
+          }
+        }
+        await tx.run("INSERT INTO schema_migrations(version) VALUES (?)", [version]);
+      }
+    });
+  }
   return db;
 }

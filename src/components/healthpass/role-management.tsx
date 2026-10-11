@@ -57,6 +57,11 @@ export function RoleManagement({
   function toggle(key: string, checked: boolean) {
     const dependencies: Record<string, string> = {
       "registry.create": "registry.view",
+      "visits.view": "registry.view",
+      "visits.manage": "visits.view",
+      "visits.document": "records.view",
+      "observations.create": "records.view",
+      "followups.manage": "records.view",
       "records.view": "registry.view",
       "profile.edit": "records.view",
       "notes.create": "records.view",

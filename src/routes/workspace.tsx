@@ -8,11 +8,22 @@ import { CareWorkspace } from "@/components/healthpass/care-workspace";
 export const Route = createFileRoute("/workspace")({
   validateSearch: (
     search: Record<string, unknown>,
-  ): { mode?: AccountMode; tab?: string; patient?: string; setup?: boolean } => ({
-    tab: ["overview", "workspace", "patients", "sharing", "audit"].includes(String(search.tab))
+  ): {
+    mode?: AccountMode;
+    tab?: string;
+    patient?: string;
+    visit?: string;
+    branch?: string;
+    setup?: boolean;
+  } => ({
+    tab: ["overview", "workspace", "patients", "sharing", "audit", "today", "visits"].includes(
+      String(search.tab),
+    )
       ? String(search.tab)
       : undefined,
     patient: typeof search.patient === "string" ? search.patient : undefined,
+    visit: typeof search.visit === "string" ? search.visit : undefined,
+    branch: typeof search.branch === "string" ? search.branch : undefined,
     setup: search.setup === true || search.setup === "true" || undefined,
     mode: ["register", "patient", "professional", "facility", "professional-signin"].includes(
       String(search.mode),

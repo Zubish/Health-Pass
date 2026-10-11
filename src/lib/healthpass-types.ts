@@ -33,6 +33,7 @@ export type Note = {
 };
 export type Encounter = Note & {
   id: string;
+  visit_id?: string | null;
   note_kind?: string;
   version: number;
   status: string;

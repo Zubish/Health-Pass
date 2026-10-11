@@ -1,0 +1,13 @@
+CREATE TABLE care_visits (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL REFERENCES patients(id), organization_id TEXT NOT NULL REFERENCES organizations(id), branch_id TEXT NOT NULL REFERENCES branches(id), assigned_user_id TEXT NOT NULL REFERENCES users(id), created_by TEXT NOT NULL REFERENCES users(id), client_request_id TEXT NOT NULL, request_payload TEXT NOT NULL, active_key TEXT, status TEXT NOT NULL CHECK(status IN ('waiting','in-progress','completed','cancelled')), version INTEGER NOT NULL DEFAULT 1, checked_in_at TEXT NOT NULL, started_at TEXT, completed_at TEXT, updated_at TEXT NOT NULL, UNIQUE(organization_id,created_by,client_request_id), UNIQUE(organization_id,active_key));
+CREATE INDEX care_visit_queue ON care_visits(organization_id,branch_id,status,checked_in_at,id);
+CREATE TABLE visit_events (id TEXT PRIMARY KEY, visit_id TEXT NOT NULL REFERENCES care_visits(id), actor_id TEXT NOT NULL REFERENCES users(id), action TEXT NOT NULL, from_status TEXT, to_status TEXT, assigned_user_id TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL);
+CREATE INDEX visit_event_history ON visit_events(visit_id,created_at,id);
+CREATE TABLE visit_observations (id TEXT PRIMARY KEY, visit_id TEXT NOT NULL REFERENCES care_visits(id), author_id TEXT NOT NULL REFERENCES users(id), client_request_id TEXT, request_payload TEXT NOT NULL, discipline TEXT NOT NULL CHECK(discipline IN ('general','nursing')), values_json TEXT NOT NULL, observed_at TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(visit_id,author_id,client_request_id));
+CREATE INDEX visit_observation_history ON visit_observations(visit_id,observed_at,id);
+CREATE TABLE visit_followups (id TEXT PRIMARY KEY, visit_id TEXT NOT NULL REFERENCES care_visits(id), author_id TEXT NOT NULL REFERENCES users(id), client_request_id TEXT, request_payload TEXT NOT NULL, title TEXT NOT NULL, due_at TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('open','completed','cancelled')), version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(visit_id,author_id,client_request_id));
+CREATE INDEX visit_followup_work ON visit_followups(author_id,status,due_at);
+ALTER TABLE encounters ADD COLUMN visit_id TEXT REFERENCES care_visits(id);
+CREATE INDEX encounter_visit ON encounters(visit_id,author_id,status);
+ALTER TABLE encounters ADD COLUMN client_request_id TEXT;
+ALTER TABLE encounters ADD COLUMN create_request_payload TEXT;
+CREATE UNIQUE INDEX encounter_create_request ON encounters(author_id,client_request_id);

@@ -7,7 +7,11 @@ const proxyChecks = spawnSync(process.execPath, ["tests/proxy.test.mjs"], { stdi
 if (proxyChecks.status !== 0) process.exit(proxyChecks.status ?? 1);
 for (const engine of ["sqlite", "postgres"]) {
   console.log(`\nFoundation integration checks · ${engine}`);
-  for (const file of ["tests/foundation.test.mjs", "tests/workspaces.test.mjs"]) {
+  for (const file of [
+    "tests/foundation.test.mjs",
+    "tests/workspaces.test.mjs",
+    "tests/care-workflows.test.mjs",
+  ]) {
     const result = spawnSync(process.execPath, [file], {
       stdio: "inherit",
       env: { ...process.env, HEALTHPASS_TEST_ENGINE: engine },

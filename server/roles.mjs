@@ -1,6 +1,15 @@
 export const permissionCatalog = [
   { key: "registry.view", label: "View patient registry", category: "operational" },
   { key: "registry.create", label: "Register patients", category: "operational" },
+  { key: "visits.view", label: "View arrival queue", category: "operational" },
+  { key: "visits.manage", label: "Check in and route visits", category: "operational" },
+  { key: "visits.document", label: "Document assigned visits", category: "clinical" },
+  {
+    key: "observations.create",
+    label: "Record observations for assigned visits",
+    category: "clinical",
+  },
+  { key: "followups.manage", label: "Manage assigned visit follow-up", category: "clinical" },
   { key: "records.view", label: "View clinical records", category: "clinical" },
   { key: "profile.edit", label: "Review allergies and patient context", category: "clinical" },
   { key: "notes.create", label: "Create clinical note drafts", category: "clinical" },
@@ -148,6 +157,39 @@ export const roleTemplates = [
     ],
   },
 ];
+for (const role of roleTemplates) {
+  if (["gp", "nurse", "pharmacist", "clinician", "reception"].includes(role.key)) {
+    role.permissions.push("visits.view");
+    if (role.permissions.includes("registry.create")) role.permissions.push("visits.manage");
+    if (role.permissions.includes("notes.create")) {
+      role.permissions.push("visits.document", "followups.manage");
+      if (["general", "nursing"].includes(role.clinical_scope))
+        role.permissions.push("observations.create");
+    }
+  }
+}
+export async function upgradeVisitRoles(tx) {
+  const existing = await tx.all(
+    "SELECT id,template_key,clinical_scope,permissions FROM workspace_roles",
+  );
+  for (const role of existing) {
+    if (!["gp", "nurse", "pharmacist", "clinician", "reception"].includes(role.template_key))
+      continue;
+    const permissions = new Set(JSON.parse(role.permissions));
+    if (permissions.has("registry.view")) permissions.add("visits.view");
+    if (permissions.has("registry.create")) permissions.add("visits.manage");
+    if (permissions.has("records.view") && permissions.has("notes.create")) {
+      permissions.add("visits.document");
+      permissions.add("followups.manage");
+      if (["general", "nursing"].includes(role.clinical_scope))
+        permissions.add("observations.create");
+    }
+    await tx.run("UPDATE workspace_roles SET permissions=? WHERE id=?", [
+      JSON.stringify([...permissions]),
+      role.id,
+    ]);
+  }
+}
 export const clinicalPermissions = new Set(
   permissionCatalog.filter((p) => p.category === "clinical").map((p) => p.key),
 );

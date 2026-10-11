@@ -24,11 +24,14 @@ import { date } from "@/lib/healthpass-types";
 import type { Me, Patient, Encounter } from "@/lib/healthpass-types";
 import { Mark, Stat, PatientRow, Empty, Modal } from "./primitives";
 import { NoteEditor, EncounterCard } from "./encounters";
+import { PatientLinking, FacilityLinking } from "./patient-linking";
+import { Visits } from "./visits";
 export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promise<void> }) {
   const search = useSearch({ from: "/workspace" });
   const navigate = useNavigate({ from: "/workspace" });
   const can = (permission: string) => me.permissions?.includes(permission) ?? false;
-  const tab = search.tab ?? (can("workspace.view") ? "workspace" : "overview");
+  const tab =
+    search.tab ?? (can("workspace.view") ? "workspace" : can("visits.view") ? "today" : "overview");
   const selected = search.patient ?? null;
   const setTab = (next: string) => {
     void navigate({ search: { tab: next } });
@@ -43,6 +46,9 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
     [register, setRegister] = useState(false),
+    [linkExisting, setLinkExisting] = useState(false),
+    [noteVisit, setNoteVisit] = useState<{ id: string; patient_id: string } | null>(null),
+    [noteRequestKey, setNoteRequestKey] = useState(""),
     [editing, setEditing] = useState<Encounter | "new" | null>(null),
     [profile, setProfile] = useState(false),
     [audit, setAudit] = useState<any[]>([]),
@@ -61,6 +67,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
         ["audit", "Access history", History],
       ] as const)
     : ([
+        ...(can("visits.view") ? [["today", "Today's work", ClipboardList] as const] : []),
         ["overview", "Overview", LayoutDashboard],
         ...(can("workspace.view") ? [["workspace", "Workspace & branches", Users] as const] : []),
         ...(canRegistry ? [["patients", "Patient registry", Users] as const] : []),
@@ -100,11 +107,14 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     }
   }
   useEffect(() => {
-    void loadRegistry().catch((e) => setError(e.message));
     void careApi("/health")
       .then((data) => setHealth(data.mode))
       .catch(() => {});
   }, []);
+  useEffect(() => {
+    if (tab === "patients" || tab === "overview")
+      void loadRegistry().catch((e) => setError(e.message));
+  }, [tab]);
   useEffect(() => {
     setChart(null);
     setEditing(null);
@@ -112,7 +122,16 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     else void loadTab(tab);
   }, [tab, selected]);
   useEffect(() => {
-    if (!nav.some(([id]) => id === tab) || (selected && !canChart))
+    if (noteVisit && chart?.patient.id === noteVisit.patient_id) setEditing("new");
+  }, [noteVisit, chart?.patient.id]);
+  useEffect(() => {
+    if (editing === "new") setNoteRequestKey(crypto.randomUUID());
+  }, [editing]);
+  useEffect(() => {
+    if (
+      (!nav.some(([id]) => id === tab) && !(tab === "visits" && can("visits.view"))) ||
+      (selected && !canChart)
+    )
       void navigate({ search: { tab: "overview" }, replace: true });
   }, [me.permissions?.join(","), tab, selected]);
   async function act(action: () => Promise<void>, message: string) {
@@ -220,6 +239,32 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           )}
           {tab === "workspace" && can("workspace.view") && (
             <WorkspaceSettings permissions={me.permissions ?? []} userId={me.user.id} />
+          )}
+          {(tab === "today" || tab === "visits") && can("visits.view") && (
+            <Visits
+              me={me}
+              onOpenChart={(id) =>
+                void navigate({
+                  search: {
+                    tab: "patients",
+                    patient: id,
+                    visit: search.visit,
+                    branch: search.branch,
+                  },
+                })
+              }
+              onDocumentVisit={(visit) => {
+                setNoteVisit({ id: visit.id, patient_id: visit.patient_id });
+                void navigate({
+                  search: {
+                    tab: "patients",
+                    patient: visit.patient_id,
+                    visit: visit.id,
+                    branch: visit.branch_id,
+                  },
+                });
+              }}
+            />
           )}
           {!isPatient && !me.permissions?.length && (
             <div className="hp-notice" role="status">
@@ -380,6 +425,14 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                 )}
               </div>
               <section className="hp-panel">
+                {canRegister && (
+                  <div className="hp-panel-heading">
+                    <p>Already has a HealthPass account?</p>
+                    <button className="hp-button secondary" onClick={() => setLinkExisting(true)}>
+                      Link existing account
+                    </button>
+                  </div>
+                )}
                 <div className="hp-search">
                   <Search size={18} />
                   <input
@@ -414,6 +467,25 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           )}
           {tab === "patients" && canChart && selected && chart && (
             <>
+              {search.visit && can("visits.view") && (
+                <div className="hp-notice">
+                  <strong>Care visit</strong>
+                  <p>
+                    Return to the visit to record observations, arrange follow-up or complete it
+                    after signing your note.
+                  </p>
+                  <button
+                    className="hp-button secondary"
+                    onClick={() =>
+                      void navigate({
+                        search: { tab: "today", visit: search.visit, branch: search.branch },
+                      })
+                    }
+                  >
+                    Back to visit
+                  </button>
+                </div>
+              )}
               <button
                 className="hp-back"
                 onClick={() => {
@@ -433,7 +505,13 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                   </p>
                 </div>
                 {can("notes.create") && (
-                  <button className="hp-button primary" onClick={() => setEditing("new")}>
+                  <button
+                    className="hp-button primary"
+                    onClick={() => {
+                      setNoteVisit(null);
+                      setEditing("new");
+                    }}
+                  >
                     <Plus size={17} /> New encounter
                   </button>
                 )}
@@ -526,6 +604,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                   </p>
                 </div>
               </div>
+              {isPatient && <PatientLinking />}
               <div className="hp-sharing-grid">
                 <section className="hp-panel hp-padded">
                   <h2>Share with a care team</h2>
@@ -738,6 +817,17 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
               </form>
             </Modal>
           )}
+          {linkExisting && (
+            <FacilityLinking
+              onClose={() => setLinkExisting(false)}
+              onLinked={(id) => {
+                setLinkExisting(false);
+                void loadRegistry();
+                setTab("patients");
+                if (canChart) setSelected(id);
+              }}
+            />
+          )}
           {editing && chart && canChart && (
             <NoteEditor
               encounter={editing}
@@ -747,13 +837,18 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
               canAmend={can("notes.amend")}
               error={error}
               busy={busy}
-              onClose={() => setEditing(null)}
+              onClose={() => {
+                setEditing(null);
+                setNoteVisit(null);
+              }}
               onSave={(note, operation, reason, kind) =>
                 void act(
                   async () => {
                     if (editing === "new") {
                       await careApi("/encounters", "POST", {
                         patient_id: chart.patient.id,
+                        visit_id: noteVisit?.id,
+                        client_request_id: noteRequestKey,
                         note_kind: kind,
                         ...note,
                       });
@@ -777,6 +872,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                     }
                     await loadChart(chart.patient.id);
                     setEditing(null);
+                    setNoteVisit(null);
                   },
                   operation === "save"
                     ? "Draft saved to the care service."
