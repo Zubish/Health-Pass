@@ -195,6 +195,15 @@ test("codes request access only; reviewed approval, branch scopes and suspension
     const patient = await staff("/patients", "POST", { name: "Synthetic branch patient" });
     assert.equal(patient.status, 200);
     assert.equal((await staff("/patients/" + patient.data.id)).status, 200);
+    const draft = await staff("/encounters", "POST", {
+      patient_id: patient.data.id,
+      complaint: "Synthetic branch consultation",
+    });
+    assert.equal(draft.status, 200);
+    assert.equal(
+      (await staff("/patients/" + patient.data.id)).data.encounters[0].id,
+      draft.data.id,
+    );
     const second = (await a.c("/workspace/branches", "POST", { name: "Second branch" })).data.id;
     assert.equal(
       (
@@ -209,6 +218,23 @@ test("codes request access only; reviewed approval, branch scopes and suspension
     );
     assert.equal((await staff("/patients")).data.patients.length, 0);
     assert.equal((await staff("/patients/" + patient.data.id)).status, 403);
+    assert.equal(
+      (
+        await staff("/encounters/" + draft.data.id, "PATCH", {
+          version: draft.data.version,
+          complaint: "Synthetic denied change",
+        })
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await staff("/encounters/" + draft.data.id + "/sign", "POST", {
+          version: draft.data.version,
+        })
+      ).status,
+      403,
+    );
     assert.equal(
       (await a.c("/workspace/members/" + member.id, "PATCH", { action: "suspend" })).status,
       200,
