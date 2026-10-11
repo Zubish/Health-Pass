@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ArrowLeft, ArrowRight, ShieldCheck, LockKeyhole } from "lucide-react";
 import { careApi } from "@/lib/healthpass-client";
 import type { Me } from "@/lib/healthpass-types";
 import { Mark } from "./primitives";
-export type AccountMode = "register" | "patient" | "professional" | "professional-signin";
+export type AccountMode =
+  "register" | "patient" | "professional" | "facility" | "professional-signin";
 export function Auth({
   onSuccess,
   serviceError,
@@ -20,16 +21,25 @@ export function Auth({
 }) {
   const [view, setView] = useState(initialMode ?? "signin");
   const [accountType, setAccountType] = useState(
-    initialMode === "professional-signin" ? "professional" : "patient",
+    ["professional-signin", "professional", "facility"].includes(initialMode ?? "")
+      ? "professional"
+      : "patient",
   );
+  const [workspaceCode, setWorkspaceCode] = useState(""),
+    [confirmedWorkspace, setConfirmedWorkspace] = useState<{ code: string; name: string } | null>(
+      null,
+    ),
+    [checkingWorkspace, setCheckingWorkspace] = useState(false);
+  const workspaceCheck = useRef(0);
   const [firstAccess, setFirstAccess] = useState(!!initialSetup),
     [error, setError] = useState(serviceError),
     [busy, setBusy] = useState(false);
   const choosing = view === "register",
     patientCreate = view === "patient",
-    facilityCreate = view === "professional",
-    signin = !choosing && !patientCreate && !facilityCreate;
-  const staffSetup = signin && accountType === "professional" && firstAccess;
+    facilityCreate = view === "facility";
+  const staffSetup = view === "professional" || (view === "professional-signin" && firstAccess);
+  const signin = !choosing && !patientCreate && !facilityCreate && !staffSetup;
+  const needsWorkspace = staffSetup || (signin && accountType === "professional");
   const creating = patientCreate || facilityCreate || staffSetup;
   function change(next: string) {
     onModeChange(
@@ -43,11 +53,41 @@ export function Auth({
     setFirstAccess(false);
     setError("");
   }
+  async function checkWorkspace() {
+    const attempt = ++workspaceCheck.current;
+    setCheckingWorkspace(true);
+    setConfirmedWorkspace(null);
+    setError("");
+    try {
+      const result = await careApi<{ workspace: { name: string; workspace_code: string } }>(
+        "/auth/workspace-check",
+        "POST",
+        { workspace_code: workspaceCode },
+      );
+      if (attempt === workspaceCheck.current)
+        setConfirmedWorkspace({
+          code: result.workspace.workspace_code,
+          name: result.workspace.name,
+        });
+    } catch (e) {
+      if (attempt === workspaceCheck.current) setError((e as Error).message);
+    } finally {
+      if (attempt === workspaceCheck.current) setCheckingWorkspace(false);
+    }
+  }
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
     setError("");
     const values = Object.fromEntries(new FormData(e.currentTarget));
+    if (
+      needsWorkspace &&
+      (!confirmedWorkspace || confirmedWorkspace.code !== workspaceCode.trim().toUpperCase())
+    ) {
+      setError("Check your workspace code and confirm the facility before continuing.");
+      setBusy(false);
+      return;
+    }
     try {
       const path = patientCreate
         ? "/auth/register"
@@ -56,7 +96,10 @@ export function Auth({
           : staffSetup
             ? "/auth/workspace-register"
             : "/auth/login";
-      await careApi(path, "POST", { ...values, account_type: accountType });
+      await careApi(path, "POST", {
+        ...values,
+        account_type: needsWorkspace || facilityCreate ? "professional" : "patient",
+      });
       await onSuccess();
     } catch (e) {
       setError((e as Error).message);
@@ -106,7 +149,7 @@ export function Auth({
                 : facilityCreate
                   ? "Create your facility workspace"
                   : staffSetup
-                    ? "Set up your workspace access"
+                    ? "Create your professional account"
                     : "Welcome back"}
           </h2>
           <p>
@@ -117,7 +160,7 @@ export function Auth({
                 : facilityCreate
                   ? "Create a dedicated EMR/EHR workspace and its first branch. You will manage workspace access as its administrator."
                   : staffSetup
-                    ? "Use your facility’s workspace code. Your administrator reviews your access before you can work."
+                    ? "Confirm your facility’s workspace, then request access. Your administrator reviews your details before you can work."
                     : "Sign in to your patient account or your facility workspace."}
           </p>
           {choosing ? (
@@ -128,18 +171,14 @@ export function Auth({
                 <ArrowRight size={18} />
               </button>
               <button className="hp-account-option" onClick={() => change("professional")}>
-                <strong>Healthcare professional / facility</strong>
-                <span>Create your facility’s workspace and branches.</span>
+                <strong>Professional</strong>
+                <span>Work with your care team in your facility’s workspace.</span>
                 <ArrowRight size={18} />
               </button>
-              <button
-                className="hp-text-button"
-                onClick={() => {
-                  setAccountType("professional");
-                  onModeChange("professional-signin");
-                }}
-              >
-                Existing facility workspace? Sign in
+              <button className="hp-account-option" onClick={() => change("facility")}>
+                <strong>Facility</strong>
+                <span>Create your facility workspace and branches.</span>
+                <ArrowRight size={18} />
               </button>
             </div>
           ) : (
@@ -177,20 +216,56 @@ export function Auth({
                 </fieldset>
               )}
               <form onSubmit={submit}>
-                {signin && accountType === "professional" && (
-                  <label>
-                    Workspace code
-                    <input
-                      name="workspace_code"
-                      required
-                      maxLength={80}
-                      autoCapitalize="characters"
-                      placeholder="HP-…"
-                    />
-                    <small>
-                      Provided by your facility administrator. Credentials apply to this workspace.
-                    </small>
-                  </label>
+                {needsWorkspace && (
+                  <div>
+                    <label>
+                      Workspace code
+                      <input
+                        name="workspace_code"
+                        required
+                        maxLength={80}
+                        autoCapitalize="characters"
+                        autoComplete="off"
+                        placeholder="HP-…"
+                        value={workspaceCode}
+                        onChange={(e) => {
+                          ++workspaceCheck.current;
+                          setWorkspaceCode(e.target.value);
+                          setConfirmedWorkspace(null);
+                          setCheckingWorkspace(false);
+                          setError("");
+                        }}
+                      />
+                      <small>
+                        Provided by your facility administrator. Check the code to confirm where you
+                        will work.
+                      </small>
+                    </label>
+                    <button
+                      type="button"
+                      className="hp-button secondary"
+                      disabled={checkingWorkspace || !workspaceCode.trim() || busy}
+                      onClick={() => void checkWorkspace()}
+                    >
+                      {checkingWorkspace ? "Checking workspace…" : "Check workspace"}
+                    </button>
+                    {confirmedWorkspace && (
+                      <div className="hp-notice" role="status">
+                        <strong>{confirmedWorkspace.name}</strong>
+                        <p>
+                          {staffSetup
+                            ? "You are requesting access to this facility."
+                            : "You are signing in to this facility."}
+                        </p>
+                      </div>
+                    )}
+                    {staffSetup && (
+                      <p className="hp-fine">
+                        If your facility is not on HealthPass yet, its administrator can create a
+                        Facility workspace first.
+                      </p>
+                    )}
+                  </div>
                 )}
                 {creating && (
                   <label>
@@ -279,34 +354,22 @@ export function Auth({
                     {error}
                   </div>
                 )}
-                <button className="hp-button primary" disabled={busy}>
+                <button
+                  className="hp-button primary"
+                  disabled={busy || (needsWorkspace && !confirmedWorkspace)}
+                >
                   {busy
                     ? "Please wait…"
                     : facilityCreate
                       ? "Create facility workspace"
                       : staffSetup
-                        ? "Request workspace access"
+                        ? "Request access"
                         : patientCreate
                           ? "Create patient account"
                           : "Sign in"}
                   <ArrowRight size={16} />
                 </button>
               </form>
-              {signin && accountType === "professional" && (
-                <button
-                  className="hp-text-button"
-                  disabled={busy}
-                  onClick={() => {
-                    setFirstAccess(!firstAccess);
-                    onModeChange("professional-signin", !firstAccess);
-                    setError("");
-                  }}
-                >
-                  {firstAccess
-                    ? "Already set up? Sign in"
-                    : "First time in this workspace? Set up access"}
-                </button>
-              )}
             </>
           )}
           <button
@@ -322,7 +385,7 @@ export function Auth({
               membership and authenticator verification.
             </p>
           )}
-          {signin && accountType === "professional" && (
+          {needsWorkspace && (
             <p className="hp-fine">
               You may use the same or different credentials at another facility. Each workspace
               keeps its own identity and permissions.
@@ -363,6 +426,12 @@ export function Mfa({ me, onSuccess }: { me: Me; onSuccess: () => Promise<void> 
       <div className="hp-auth-card">
         <Mark />
         <h1>Protect your care workspace</h1>
+        {me.organization && (
+          <div className="hp-notice" role="status">
+            <strong>{me.organization.name}</strong>
+            <p>You are continuing into this facility’s workspace.</p>
+          </div>
+        )}
         <p>
           {me.mfaEnrolled
             ? "Enter the six-digit code from your authenticator."

@@ -134,3 +134,7 @@ These requirements refine the earlier external-contribution discussion and the c
 ## Implemented account/workspace slice — 2026-10-11
 
 See [account-workspaces.md](./account-workspaces.md) for inspected RxLedger mechanics, account forms, facility-scoped identities, Sign in access setup, reviewed membership approval, branch enforcement, migration 002 and tests. The subsequent patient-directed access and Rai requirements above remain saved for their own implementation.
+
+## Confirmed account UX correction — 11 October 2026
+
+The owner superseded the earlier first-time access setup inside Sign in: **Create account** offers three cards, Patient, Professional and Facility. Professional registration collects personal/professional details and the existing facility’s workspace code; its action is **Request access**. Facility creation creates the workspace and branches with an administrator identity. **Sign in** offers Patient and Professional only, since a facility is not a user. Professional sign-in checks and displays the selected facility using its workspace code before proceeding. Preserve “Already have an account? Sign in”; remove “Existing facility workspace? Sign in”. Facility-scoped independent credentials and reviewed membership requirements remain in force.

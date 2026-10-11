@@ -503,7 +503,7 @@ function FAQ() {
     {
       question: "How does a care team get access?",
       answer:
-        "Professional accounts are provisioned through facility onboarding and require reviewed membership before clinical access is enabled. Professionals also complete authenticator verification. If your facility has not been onboarded, creating a patient account will not grant professional access.",
+        "Choose Create account, then Professional, and use your facility’s workspace code to request access. Check the facility name before continuing. Your administrator reviews your membership before care access is enabled, and professionals complete authenticator verification. If your facility is new to HealthPass, its administrator can choose Facility to create its workspace.",
     },
     {
       question: "Can I change a signed clinical note?",

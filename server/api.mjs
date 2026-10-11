@@ -189,6 +189,17 @@ export function createApi(db, config = process.env) {
   }
   const workspace = workspaceRoutes({ fail, text, emailValue, audit, makeSession, cookie, strong });
   async function dispatch(tx, request, path, method, body, actor, correlation, outputHeaders) {
+    if (path === "/auth/workspace-check" && method === "POST") {
+      limit("workspace-check", 60);
+      const code = text(body.workspace_code, "workspace code", 80, true).toUpperCase();
+      const organization = await tx.get(
+        "SELECT name,workspace_code FROM organizations WHERE workspace_code=?",
+        [code],
+      );
+      if (!organization)
+        fail(400, "Workspace not found. Check the code with your facility administrator.");
+      return { workspace: organization };
+    }
     if (path === "/auth/facility-register" || path === "/auth/workspace-register")
       limit("workspace-registration", 30);
     const workspaceResult = await workspace(

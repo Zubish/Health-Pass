@@ -14,7 +14,7 @@ export const Route = createFileRoute("/workspace")({
       : undefined,
     patient: typeof search.patient === "string" ? search.patient : undefined,
     setup: search.setup === true || search.setup === "true" || undefined,
-    mode: ["register", "patient", "professional", "professional-signin"].includes(
+    mode: ["register", "patient", "professional", "facility", "professional-signin"].includes(
       String(search.mode),
     )
       ? (search.mode as AccountMode)

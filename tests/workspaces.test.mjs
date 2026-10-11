@@ -291,3 +291,30 @@ test("sessions renew on activity and expire after thirty idle minutes", async ()
     await db.close();
   }
 });
+
+test("workspace confirmation identifies only the requested facility without granting access", async () => {
+  const { db, client, facility } = await fixture();
+  try {
+    const a = await facility("Synthetic Confirmation A"),
+      b = await facility("Synthetic Confirmation B");
+    const anonymous = client();
+    const checked = await anonymous("/auth/workspace-check", "POST", {
+      workspace_code: a.code.toLowerCase(),
+    });
+    assert.equal(checked.status, 200);
+    assert.deepEqual(checked.data, {
+      workspace: { name: "Synthetic Confirmation A", workspace_code: a.code },
+    });
+    assert.equal((await anonymous("/auth/me")).status, 401);
+    assert.equal((await anonymous("/patients")).status, 401);
+    const changed = await anonymous("/auth/workspace-check", "POST", { workspace_code: b.code });
+    assert.equal(changed.data.workspace.name, "Synthetic Confirmation B");
+    assert.equal(
+      (await anonymous("/auth/workspace-check", "POST", { workspace_code: "HP-INVALID" })).status,
+      400,
+    );
+    assert.equal((await anonymous("/auth/workspace-check", "POST", {})).status, 400);
+  } finally {
+    await db.close();
+  }
+});
