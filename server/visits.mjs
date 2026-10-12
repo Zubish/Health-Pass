@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { hasPermission, resolveMembership } from "./roles.mjs";
+import { visitParticipation } from "./care-handoffs.mjs";
 
 const timestamp = () => new Date().toISOString();
-const operationalSelect = `SELECT v.id,v.patient_id,p.name AS patient_name,p.healthpass_id,v.branch_id,b.name AS branch_name,v.assigned_user_id,u.name AS assigned_name,v.status,v.version,v.checked_in_at,v.started_at,v.completed_at,v.updated_at FROM care_visits v JOIN patients p ON p.id=v.patient_id JOIN branches b ON b.id=v.branch_id JOIN users u ON u.id=v.assigned_user_id`;
+const operationalSelect = `SELECT v.id,v.patient_id,p.name AS patient_name,p.healthpass_id,v.branch_id,b.name AS branch_name,v.assigned_user_id,u.name AS assigned_name,v.status,v.version,v.checked_in_at,v.started_at,v.completed_at,v.updated_at,h.id AS pending_handoff_id,h.to_user_id AS pending_handoff_to_user_id,target.name AS pending_handoff_to_name,h.expires_at AS pending_handoff_expires_at FROM care_visits v JOIN patients p ON p.id=v.patient_id JOIN branches b ON b.id=v.branch_id JOIN users u ON u.id=v.assigned_user_id LEFT JOIN visit_handoffs h ON h.visit_id=v.id AND h.organization_id=v.organization_id AND h.branch_id=v.branch_id AND h.pending_key=v.id AND h.status='pending' LEFT JOIN users target ON target.id=h.to_user_id`;
 const activeStatuses = new Set(["waiting", "in-progress"]);
 const vitalLimits = {
   systolic: [40, 300],
@@ -87,11 +88,25 @@ async function clinicalAccess(
   visit,
   permission,
   { permit, access, fail },
-  { write = true } = {},
+  { write = true, participant = false } = {},
 ) {
   permit(actor, permission);
-  if (visit.assigned_user_id !== actor.id)
-    fail(403, "Clinical visit work is limited to the assigned professional.");
+  if (write) {
+    // Serialize care writes and handoff decisions before rechecking assignment.
+    // This lock changes no semantic version or clinical content.
+    const refreshed = await tx.get(
+      "UPDATE care_visits SET version=version WHERE id=? AND organization_id=? RETURNING *",
+      [visit.id, actor.organization_id],
+    );
+    if (!refreshed || (actor.branch_id && refreshed.branch_id !== actor.branch_id))
+      fail(404, "Visit unavailable in this workspace and branch.");
+    Object.assign(visit, refreshed);
+  }
+  if (
+    visit.assigned_user_id !== actor.id &&
+    !(participant && (await visitParticipation(tx, actor, visit.id)))
+  )
+    fail(403, "Clinical visit work is limited to an authorised visit participant.");
   // Operational routing never establishes consent or clinical chart authority.
   return access(tx, actor, visit.patient_id, write);
 }
@@ -150,10 +165,20 @@ export async function validateEncounterVisit(
   const { actor, fail, permit, access } = context;
   if (!visitId) return null;
   const visit = await scopedVisit(tx, actor, visitId, fail);
-  await clinicalAccess(tx, actor, visit, "visits.document", { permit, access, fail });
+  await clinicalAccess(
+    tx,
+    actor,
+    visit,
+    "visits.document",
+    { permit, access, fail },
+    { participant: allowCompleted },
+  );
   if (visit.patient_id !== patientId)
     fail(400, "The note and visit must belong to the same patient.");
-  if (visit.status !== "in-progress" && !(allowCompleted && visit.status === "completed"))
+  if (
+    visit.status !== "in-progress" &&
+    !(allowCompleted && ["completed", "cancelled"].includes(visit.status))
+  )
     fail(409, "Start the visit before adding or changing a linked note.");
   return visit;
 }
@@ -327,10 +352,11 @@ export async function handleVisits(tx, context) {
     let clinicalAllowed = false;
     let accessScope = null;
     let clinicalPolicy = null;
-    if (visit.assigned_user_id === actor.id && hasPermission(actor, "visits.document")) {
+    if (hasPermission(actor, "visits.document")) {
       try {
         const result = await clinicalAccess(tx, actor, visit, "visits.document", context, {
           write: false,
+          participant: true,
         });
         accessScope = visitAccessScope(result, actor);
         clinicalPolicy = result.accessPolicy ?? null;
@@ -364,13 +390,20 @@ export async function handleVisits(tx, context) {
     const observations =
       clinicalAllowed && scopedParameters.length
         ? await tx.all(
-            `SELECT id,author_id,discipline,values_json,observed_at,created_at FROM visit_observations WHERE visit_id=? AND discipline IN (${categoryFilter}) ORDER BY observed_at DESC,id DESC LIMIT 100`,
+            `SELECT o.id,o.author_id,u.name AS author_name,o.discipline,o.values_json,o.observed_at,o.created_at FROM visit_observations o JOIN users u ON u.id=o.author_id WHERE o.visit_id=? AND o.discipline IN (${categoryFilter}) ORDER BY o.observed_at DESC,o.id DESC LIMIT 100`,
             [visit.id, ...scopedParameters],
           )
         : [];
     return {
       visit: summary,
       clinicalAllowed,
+      canDocument:
+        clinicalAllowed &&
+        visit.assigned_user_id === actor.id &&
+        !!accessScope?.canContribute &&
+        (actor.clinicalScopes ?? []).some((scope) =>
+          accessScope.contributionScopes.includes(scope),
+        ),
       accessScope,
       observations: observations.map(({ values_json, ...row }) => ({
         ...row,
@@ -379,8 +412,8 @@ export async function handleVisits(tx, context) {
       followUps:
         clinicalAllowed && followUpScopes.length
           ? await tx.all(
-              `SELECT id,author_id,discipline,title,due_at,status,version,created_at,updated_at FROM visit_followups WHERE visit_id=? AND author_id=? AND discipline IN (${followUpCategoryFilter}) ORDER BY due_at,id LIMIT 100`,
-              [visit.id, actor.id, ...followUpScopes],
+              `SELECT f.id,f.author_id,u.name AS author_name,f.discipline,f.title,f.due_at,f.status,f.version,f.created_at,f.updated_at FROM visit_followups f JOIN users u ON u.id=f.author_id WHERE f.visit_id=? AND f.discipline IN (${followUpCategoryFilter}) ORDER BY f.due_at,f.id LIMIT 100`,
+              [visit.id, ...followUpScopes],
             )
           : [],
     };
@@ -418,6 +451,13 @@ export async function handleVisits(tx, context) {
         );
       } else if (status === "completed" && visit.status === "in-progress") {
         const result = await clinicalAccess(tx, actor, visit, "visits.document", context);
+        if (
+          await tx.get(
+            "SELECT id FROM visit_handoffs WHERE visit_id=? AND status='pending' LIMIT 1",
+            [visit.id],
+          )
+        )
+          fail(409, "Resolve or withdraw the pending handoff before completing this visit.");
         contributionDiscipline(
           result,
           actor,
@@ -434,6 +474,8 @@ export async function handleVisits(tx, context) {
         );
         if (!signed) fail(409, "Sign a clinical note linked to this visit before completing it.");
       } else fail(409, "This visit status transition is not available.");
+      if (body.version !== visit.version)
+        fail(409, "This visit changed. Refresh it before continuing.");
       action = "visit." + status;
     }
     const date = timestamp();
@@ -452,6 +494,44 @@ export async function handleVisits(tx, context) {
     );
     if ((result.rowCount ?? result.changes) !== 1)
       fail(409, "This visit changed. Refresh it before continuing.");
+    if (status === "cancelled") {
+      const pending = await tx.all(
+        "SELECT id,version FROM visit_handoffs WHERE visit_id=? AND status='pending'",
+        [visit.id],
+      );
+      for (const handoff of pending) {
+        const cancelled = await tx.run(
+          "UPDATE visit_handoffs SET status='cancelled',pending_key=NULL,resolved_at=?,version=version+1 WHERE id=? AND version=? AND status='pending'",
+          [date, handoff.id, handoff.version],
+        );
+        if ((cancelled.rowCount ?? cancelled.changes) !== 1)
+          fail(409, "The handoff changed. Refresh this visit before cancelling it.");
+        await tx.run(
+          "INSERT INTO visit_events(id,visit_id,actor_id,action,from_status,to_status,assigned_user_id,created_at) VALUES (?,?,?,?,?,?,?,?)",
+          [
+            randomUUID(),
+            visit.id,
+            actor.id,
+            "handoff.cancelled",
+            visit.status,
+            "cancelled",
+            visit.assigned_user_id,
+            date,
+          ],
+        );
+        await audit(
+          tx,
+          actor,
+          "visit.handoff.cancelled",
+          "allow",
+          visit.patient_id,
+          handoff.id,
+          correlation,
+          null,
+          JSON.stringify({ reason: "visit_cancelled" }),
+        );
+      }
+    }
     await recordEvent(
       tx,
       actor,
@@ -619,7 +699,9 @@ export async function handleVisits(tx, context) {
   }
 
   if (match[2] === "follow-ups" && method === "PATCH" && match[3]) {
-    const accessResult = await clinicalAccess(tx, actor, visit, "followups.manage", context);
+    const accessResult = await clinicalAccess(tx, actor, visit, "followups.manage", context, {
+      participant: true,
+    });
     const task = await tx.get(
       "SELECT * FROM visit_followups WHERE id=? AND visit_id=? AND author_id=?",
       [match[3], visit.id, actor.id],

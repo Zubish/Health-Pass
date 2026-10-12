@@ -524,6 +524,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                   </p>
                 </div>
                 {can("notes.create") &&
+                  !search.visit &&
                   chart.accessScope.canContribute &&
                   chart.accessScope.contributionScopes.length > 0 && (
                     <button

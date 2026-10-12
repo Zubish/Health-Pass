@@ -6,6 +6,7 @@ import { date } from "@/lib/healthpass-types";
 import type { Me, Patient } from "@/lib/healthpass-types";
 import type { CareVisit, VisitDetail } from "@/lib/healthpass-visit-types";
 import { Empty, Modal } from "./primitives";
+import { VisitHandoff } from "./visit-handoff";
 
 type Team = {
   professionals: { id: string; name: string; clinicalScopes: string[] }[];
@@ -138,7 +139,11 @@ export function Visits({
       current = false;
     };
   }, [teamBranch]);
-  const shown = mine ? visits.filter((v) => v.assigned_user_id === me.user.id) : visits;
+  const shown = mine
+    ? visits.filter(
+        (v) => v.assigned_user_id === me.user.id || v.pending_handoff_to_user_id === me.user.id,
+      )
+    : visits;
   const visit = detail?.visit;
   const own = visit?.assigned_user_id === me.user.id;
   return (
@@ -237,12 +242,12 @@ export function Visits({
                 onChange={(e) => setMine(e.target.checked)}
                 style={{ width: 18, height: 18, flexShrink: 0 }}
               />
-              <span>My assignments only</span>
+              <span>My assignments and incoming handoffs</span>
             </label>
           </section>
           <section className="hp-panel">
             <div className="hp-panel-heading">
-              <h2>{mine ? "My assigned visits" : "Branch arrival queue"}</h2>
+              <h2>{mine ? "My work and incoming handoffs" : "Branch arrival queue"}</h2>
             </div>
             {shown.length ? (
               shown.map((v) => (
@@ -261,6 +266,15 @@ export function Visits({
                       {v.assigned_name ? `Assigned to ${v.assigned_name}` : "Unassigned"} · Arrived{" "}
                       {date(v.checked_in_at)}
                     </small>
+                    {v.pending_handoff_id && (
+                      <small>
+                        {v.pending_handoff_expires_at &&
+                        Date.parse(v.pending_handoff_expires_at) <= Date.now()
+                          ? "Expired handoff"
+                          : "Handoff requested"}{" "}
+                        · {v.pending_handoff_to_name}
+                      </small>
+                    )}
                   </span>
                   <span
                     style={{ display: "inline-flex" }}
@@ -421,11 +435,12 @@ export function Visits({
                 </form>
               )}
             </section>
+            <VisitHandoff visit={visit} me={me} onChanged={loadDetail} onOpenChart={onOpenChart} />
             {!detail.clinicalAllowed ? (
               <p className="hp-notice">
                 This view contains arrival and assignment information. Clinical care is available
-                only to the assigned professional with the required patient access and reviewed
-                permissions.
+                only to authorised care participants with current patient access and reviewed
+                permissions. New visit documentation remains the assigned professional’s work.
               </p>
             ) : (
               <>
@@ -497,10 +512,13 @@ export function Visits({
                         <div>
                           <strong>{f.title}</strong>
                           <p>Due {date(f.due_at)}</p>
-                          <small>{f.status}</small>
+                          <small>
+                            {f.status} · {f.author_name || "Original task author"}
+                          </small>
                         </div>
                         {f.status === "open" &&
-                          own &&
+                          detail.clinicalAllowed &&
+                          f.author_id === me.user.id &&
                           can("followups.manage") &&
                           canContribute &&
                           (contributionScopes.includes(f.discipline ?? "general") ||

@@ -13,6 +13,10 @@ export type CareVisit = {
   started_at: string | null;
   completed_at: string | null;
   updated_at: string;
+  pending_handoff_id?: string | null;
+  pending_handoff_to_user_id?: string | null;
+  pending_handoff_to_name?: string | null;
+  pending_handoff_expires_at?: string | null;
 };
 export type VisitObservation = {
   id: string;
@@ -22,6 +26,8 @@ export type VisitObservation = {
 };
 export type VisitFollowUp = {
   id: string;
+  author_id?: string;
+  author_name?: string;
   discipline?: string;
   title: string;
   due_at: string;
@@ -32,6 +38,7 @@ export type VisitFollowUp = {
 export type VisitDetail = {
   visit: CareVisit;
   clinicalAllowed: boolean;
+  canDocument?: boolean;
   accessScope?: import("./healthpass-types").AccessScope;
   observations: VisitObservation[];
   followUps: VisitFollowUp[];

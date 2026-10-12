@@ -16,3 +16,5 @@ Public app: **https://health-pass-psi.vercel.app/**. Use this stable address for
 Use synthetic data only until the hosting, clinical and privacy pilot requirements in the implementation notes have been reviewed and completed.
 
 Patient-directed sharing: [named-professional access and delegation](docs/named-access.md).
+
+Clinical continuity: [explicit handoff and preserved care ownership](docs/care-handoffs.md).

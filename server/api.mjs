@@ -2,6 +2,7 @@ import { hasPermission, resolveMembership } from "./roles.mjs";
 import { workspaceRoutes } from "./workspaces.mjs";
 import { handlePatientLinking } from "./patient-linking.mjs";
 import { handleVisits, validateEncounterVisit } from "./visits.mjs";
+import { handleCareHandoffs, participatingVisitIds, visitParticipation } from "./care-handoffs.mjs";
 import {
   handleProfessionalAccess,
   resolveProfessionalAccess,
@@ -160,8 +161,8 @@ export function createApi(db, config = process.env) {
     strong(actor);
     if (!hasPermission(actor, key)) fail(403, "Your workspace roles do not permit this action.");
   };
-  async function access(tx, actor, patientId, write = false) {
-    strong(actor);
+  async function access(tx, actor, patientId, write = false, { checkSession = true } = {}) {
+    if (checkSession) strong(actor);
     const patient = await tx.get("SELECT * FROM patients WHERE id=?", [patientId]);
     if (!patient) fail(404, "Patient unavailable.");
     const legacyPolicy = {
@@ -360,6 +361,8 @@ export function createApi(db, config = process.env) {
       permit,
       strong,
       access,
+      careAuthority: (tx, candidate, patientId, write = false) =>
+        access(tx, candidate, patientId, write, { checkSession: false }),
       fail,
       text,
       audit,
@@ -370,6 +373,8 @@ export function createApi(db, config = process.env) {
     if (linkingResult !== undefined) return linkingResult;
     const sharingResult = await handleProfessionalAccess(tx, context);
     if (sharingResult !== undefined) return sharingResult;
+    const handoffResult = await handleCareHandoffs(tx, context);
+    if (handoffResult !== undefined) return handoffResult;
     const visitResult = await handleVisits(tx, context);
     if (visitResult !== undefined) return visitResult;
     if (path === "/auth/me" && method === "GET") {
@@ -539,6 +544,7 @@ export function createApi(db, config = process.env) {
     let match = path.match(/^\/patients\/([^/]+)$/);
     if (match && method === "GET") {
       const { patient, consent, accessPolicy } = await access(tx, actor, match[1]);
+      const sharedVisits = new Set(await participatingVisitIds(tx, actor, patient.id));
       const encounters = await tx.all(
         "SELECT e.*,u.name AS author_name,o.name AS organization_name FROM encounters e JOIN users u ON u.id=e.author_id JOIN organizations o ON o.id=e.organization_id WHERE e.patient_id=? ORDER BY e.created_at DESC",
         [patient.id],
@@ -563,6 +569,7 @@ export function createApi(db, config = process.env) {
             (!e.visit_id ||
               e.author_id === actor.id ||
               actor.patient_id === patient.id ||
+              sharedVisits.has(e.visit_id) ||
               (accessPolicy.restricted &&
                 accessPolicy.scopes.includes(e.note_kind ?? "general"))) &&
             (!accessPolicy.restricted || accessPolicy.scopes.includes(e.note_kind ?? "general")) &&
@@ -593,10 +600,12 @@ export function createApi(db, config = process.env) {
           );
           visitEditable =
             !!visit &&
-            visit.assigned_user_id === actor.id &&
+            (visit.assigned_user_id === actor.id ||
+              (encounter.status !== "draft" &&
+                (await visitParticipation(tx, actor, encounter.visit_id)))) &&
             hasPermission(actor, "visits.document") &&
             (visit.status === "in-progress" ||
-              (encounter.status !== "draft" && visit.status === "completed"));
+              (encounter.status !== "draft" && ["completed", "cancelled"].includes(visit.status)));
         }
         records.push({
           ...released,

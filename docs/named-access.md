@@ -22,7 +22,7 @@ A root grant expires within 90 days. Patient grant creation and professional del
 
 The patient may allow one-level delegation and separately allow delegation to another facility. Both default off. A granted professional may delegate only the same or narrower categories/profile/contribute scope, for the same patient and no later expiry. Only currently reviewed active professionals are eligible. Child grants cannot delegate again. Patient and delegator may revoke children; the patient sees recipient, facility, delegator, scope, purpose, status and expiry. Parent revocation/expiry or loss of the delegator's reviewed clinical authority invalidates child access immediately. Delegation never grants a new workspace membership, branch permission, global registry search, or visit assignment.
 
-Named grants authorize permitted signed linked-visit notes as well as historical notes. Visit assignment is still required for the current visit's clinical actions. Shared nurse-to-consultant handoff is a separate transition; this slice permits scoped record sharing and contribution without transferring ownership of a visit or another author's draft.
+Named grants authorize permitted signed linked-visit notes as well as historical notes. Visit assignment is still required for the current visit's clinical actions. [Explicit same-facility handoff](care-handoffs.md) is now implemented in the subsequent slice. It requires existing contribution/source-reading authority and recipient acceptance; named sharing alone still does not transfer visit responsibility or another author’s draft.
 
 ## Contract shared between modules
 
