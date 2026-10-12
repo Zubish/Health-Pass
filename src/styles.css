@@ -2601,6 +2601,7 @@ button.hp-patient-row:hover {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: 8px;
 }
+.hp-login label.hp-permission-option,
 .hp-shell label.hp-permission-option,
 .hp-auth label.hp-permission-option {
   display: flex;
@@ -2611,6 +2612,7 @@ button.hp-patient-row:hover {
   min-height: 44px;
   cursor: pointer;
 }
+.hp-login label.hp-permission-option input[type="checkbox"],
 .hp-shell label.hp-permission-option input[type="checkbox"],
 .hp-auth label.hp-permission-option input[type="checkbox"] {
   display: inline-block;
@@ -2621,6 +2623,7 @@ button.hp-patient-row:hover {
   padding: 0;
   accent-color: #7a2038;
 }
+.hp-login label.hp-permission-option span,
 .hp-shell label.hp-permission-option span,
 .hp-auth label.hp-permission-option span {
   flex: 1;
