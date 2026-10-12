@@ -3053,3 +3053,55 @@ button.hp-patient-row:hover {
     display: none;
   }
 }
+
+.hp-responsibility-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: 24px;
+}
+.hp-responsibility-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.hp-responsibility-details {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 10px;
+  margin: 20px 0;
+}
+.hp-responsibility-details dt {
+  color: #687682;
+  font-size: 12px;
+}
+.hp-responsibility-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.hp-responsibility-history {
+  margin-top: 20px;
+  border-top: 1px solid #edf0f3;
+  padding-top: 14px;
+}
+.hp-responsibility-history summary {
+  cursor: pointer;
+  min-height: 44px;
+  color: #526b69;
+}
+.hp-responsibility-history > div {
+  padding: 12px 0;
+  border-top: 1px solid #edf0f3;
+}
+.hp-responsibility-history small {
+  color: #687682;
+}
+@media (max-width: 599px) {
+  .hp-responsibility-details {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .hp-responsibility-details dd {
+    margin-bottom: 10px;
+  }
+}

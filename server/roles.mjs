@@ -1,5 +1,15 @@
 export const permissionCatalog = [
   {
+    key: "careteam.view",
+    label: "View responsible consultants and care teams",
+    category: "operational",
+  },
+  {
+    key: "careteam.manage",
+    label: "Assign and manage responsible consultants",
+    category: "operational",
+  },
+  {
     key: "primary.manage",
     label: "Accept or decline primary care relationships",
     category: "operational",
@@ -35,6 +45,7 @@ export const roleTemplates = [
     description: "Manage staff, roles and branches; no clinical access.",
     clinical_scope: null,
     permissions: [
+      "careteam.manage",
       "primary.manage",
       "workspace.view",
       "branches.manage",
@@ -164,6 +175,8 @@ export const roleTemplates = [
   },
 ];
 for (const role of roleTemplates) {
+  if (["gp", "nurse", "pharmacist", "clinician"].includes(role.key))
+    role.permissions.push("careteam.view");
   if (["gp", "nurse", "pharmacist", "clinician", "reception"].includes(role.key)) {
     role.permissions.push("visits.view");
     if (role.permissions.includes("registry.create")) role.permissions.push("visits.manage");
@@ -263,6 +276,23 @@ export async function upgradePrimaryRoles(tx) {
       await tx.run("UPDATE workspace_roles SET permissions=? WHERE id=?", [
         JSON.stringify([...permissions, "primary.manage"]),
         row.id,
+      ]);
+  }
+}
+
+export async function upgradeCareResponsibilities(tx) {
+  for (const r of await tx.all("SELECT id,template_key,permissions FROM workspace_roles")) {
+    const permission =
+      r.template_key === "administrator"
+        ? "careteam.manage"
+        : ["gp", "nurse", "pharmacist", "clinician"].includes(r.template_key)
+          ? "careteam.view"
+          : null;
+    const permissions = JSON.parse(r.permissions);
+    if (permission && !permissions.includes(permission))
+      await tx.run("UPDATE workspace_roles SET permissions=? WHERE id=?", [
+        JSON.stringify([...permissions, permission]),
+        r.id,
       ]);
   }
 }

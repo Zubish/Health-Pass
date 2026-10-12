@@ -2,6 +2,7 @@ import { hasPermission, resolveMembership } from "./roles.mjs";
 import { workspaceRoutes } from "./workspaces.mjs";
 import { handlePatientOnboarding, patientForEmail } from "./patient-onboarding.mjs";
 import { deliverPatientEmails } from "./patient-email.mjs";
+import { handleCareResponsibilities } from "./care-responsibilities.mjs";
 import { handlePatientLinking } from "./patient-linking.mjs";
 import { handleVisits, validateEncounterVisit } from "./visits.mjs";
 import { handleCareHandoffs, participatingVisitIds, visitParticipation } from "./care-handoffs.mjs";
@@ -423,6 +424,8 @@ export function createApi(db, config = process.env) {
       cookie,
       outputHeaders,
     };
+    const responsibilityResult = await handleCareResponsibilities(tx, context);
+    if (responsibilityResult !== undefined) return responsibilityResult;
     const onboardingResult = await handlePatientOnboarding(tx, context);
     if (onboardingResult !== undefined) return onboardingResult;
     const linkingResult = await handlePatientLinking(tx, context);

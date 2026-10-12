@@ -1,4 +1,5 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { CareResponsibilities, PatientResponsibleConsultant } from "./care-responsibilities";
 import { WorkspaceShell } from "./workspace-navigation";
 import { WorkspaceSettings } from "./workspace-settings";
 import { useEffect, useState } from "react";
@@ -73,11 +74,15 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
         ["patients", "My record", FileHeart],
         ["sharing", "Sharing", ShieldCheck],
         ["relationships", "Care relationships", Users],
+        ["careteam", "My care team", Stethoscope],
         ["audit", "Access history", History],
       ] as const)
     : ([
         ...(can("visits.view") ? [["today", "Today's work", ClipboardList] as const] : []),
         ["overview", "Overview", LayoutDashboard],
+        ...(can("careteam.view") || can("careteam.manage")
+          ? [["careteam", "Care responsibility", Stethoscope] as const]
+          : []),
         ...(can("workspace.view") ? [["workspace", "Workspace & branches", Users] as const] : []),
         ...(canRegistry ? [["patients", "Patient registry", Users] as const] : []),
         ...(canRegister || can("primary.manage")
@@ -566,6 +571,9 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
               </section>
               <aside className="hp-panel hp-profile-summary">
                 <h2>Patient context</h2>
+                {(isPatient || can("careteam.view") || can("careteam.manage")) && (
+                  <PatientResponsibleConsultant patientId={chart.patient.id} />
+                )}
                 <dl>
                   <dt>HealthPass ID</dt>
                   <dd>{chart.patient.healthpass_id}</dd>
@@ -816,6 +824,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           />
         )}
         {tab === "relationships" && <CareRelationships me={me} />}
+        {tab === "careteam" && <CareResponsibilities me={me} />}
         {linkExisting && (
           <FacilityLinking
             onClose={() => setLinkExisting(false)}

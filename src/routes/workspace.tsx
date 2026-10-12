@@ -20,6 +20,7 @@ export const Route = createFileRoute("/workspace")({
   } => ({
     claim: typeof search.claim === "string" ? search.claim : undefined,
     tab: [
+      "careteam",
       "relationships",
       "overview",
       "workspace",

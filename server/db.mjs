@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { upgradeVisitRoles, upgradePrimaryRoles } from "./roles.mjs";
+import { upgradeVisitRoles, upgradePrimaryRoles, upgradeCareResponsibilities } from "./roles.mjs";
 
 export async function openDatabase(config = process.env, dependencies = {}) {
   let engine, pool;
@@ -92,9 +92,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   };
   if (config.NODE_ENV === "production" && config.HEALTHPASS_RUN_MIGRATIONS !== "1") {
     await db.transaction(async (tx) => {
-      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='011'")))
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='012'")))
         throw new Error(
-          "Apply schema migrations 001 through 011 using the migration identity before starting the API.",
+          "Apply schema migrations 001 through 012 using the migration identity before starting the API.",
         );
     });
     return db;
@@ -178,6 +178,7 @@ export async function openDatabase(config = process.env, dependencies = {}) {
     ["009", "009-professional-access.sql"],
     ["010", "010-care-handoffs.sql"],
     ["011", "011-patient-onboarding.sql"],
+    ["012", "012-care-responsibilities.sql"],
   ]) {
     await db.transaction(async (tx) => {
       if (!(await tx.get("SELECT version FROM schema_migrations WHERE version=?", [version]))) {
@@ -198,6 +199,17 @@ export async function openDatabase(config = process.env, dependencies = {}) {
           }
         }
         if (version === "011") await upgradePrimaryRoles(tx);
+        if (version === "012") {
+          await upgradeCareResponsibilities(tx);
+          if (engine === "sqlite")
+            pool.exec(
+              "CREATE TRIGGER care_responsibility_events_no_update BEFORE UPDATE ON care_responsibility_events BEGIN SELECT RAISE(ABORT, 'Care responsibility history is immutable'); END; CREATE TRIGGER care_responsibility_events_no_delete BEFORE DELETE ON care_responsibility_events BEGIN SELECT RAISE(ABORT, 'Care responsibility history is immutable'); END;",
+            );
+          else
+            await tx.run(
+              "CREATE TRIGGER care_responsibility_events_immutable BEFORE UPDATE OR DELETE ON care_responsibility_events FOR EACH ROW EXECUTE FUNCTION hp_immutable()",
+            );
+        }
         await tx.run("INSERT INTO schema_migrations(version) VALUES (?)", [version]);
       }
     });
