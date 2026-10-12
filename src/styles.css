@@ -3105,3 +3105,5 @@ button.hp-patient-row:hover {
     margin-bottom: 10px;
   }
 }
+
+.hp-workspace-signin-link { display: block; overflow-wrap: anywhere; margin-bottom: 1rem; }

@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+const signinChecks = spawnSync(process.execPath, ["--test", "tests/signin-preferences.test.mjs"], { stdio: "inherit" });
+if (signinChecks.status !== 0) process.exit(signinChecks.status ?? 1);
 const functionChecks = spawnSync(process.execPath, ["tests/function.test.mjs"], {
   stdio: "inherit",
 });

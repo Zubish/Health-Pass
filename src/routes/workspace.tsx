@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { readSigninPreference } from "@/lib/healthpass-signin";
 import { careApi } from "@/lib/healthpass-client";
 import type { Me } from "@/lib/healthpass-types";
 import { Auth, Mfa, type AccountMode } from "@/components/healthpass/auth";
@@ -17,7 +18,9 @@ export const Route = createFileRoute("/workspace")({
     branch?: string;
     setup?: boolean;
     claim?: string;
+    workspace?: string;
   } => ({
+    workspace: typeof search.workspace === "string" ? search.workspace.slice(0, 80) : undefined,
     claim: typeof search.claim === "string" ? search.claim : undefined,
     tab: [
       "careteam",
@@ -46,37 +49,62 @@ export const Route = createFileRoute("/workspace")({
   head: () => ({ meta: [{ title: "HealthPass · Care workspace" }] }),
 });
 function Workspace() {
-  const { mode, setup, claim } = Route.useSearch();
+  const { mode, setup, claim, workspace } = Route.useSearch();
   const navigate = Route.useNavigate();
   const [me, setMe] = useState<Me | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
 
-  async function signOut() {
+  const signOut = useCallback(async () => {
     setMe(null);
-    await navigate({ search: {}, replace: true, ignoreBlocker: true });
+    await navigate({
+      search: {
+        mode:
+          workspace || readSigninPreference()?.workspaceCode ? "professional-signin" : undefined,
+        workspace,
+      },
+      replace: true,
+      ignoreBlocker: true,
+    });
     try {
       await careApi("/auth/logout", "POST", {});
-    } catch {}
-  }
+    } catch {
+      /* The local signed-in view is already cleared. */
+    }
+  }, [navigate, workspace]);
   useEffect(() => {
     const expired = () => {
       if (me) void signOut();
     };
     window.addEventListener("healthpass-session-expired", expired);
     return () => window.removeEventListener("healthpass-session-expired", expired);
-  }, [me]);
+  }, [me, signOut]);
   useEffect(() => {
     if (!me) return;
     const idle = 30 * 60 * 1000;
     let last = Date.now(),
       lastSync = last;
     const key = "healthpass-last-activity";
-    localStorage.setItem(key, String(last));
+    const saveActivity = () => {
+      try {
+        localStorage.setItem(key, String(last));
+      } catch {
+        /* Use this tab's timer when storage is unavailable. */
+      }
+    };
+    saveActivity();
     const check = () => {
-      last = Math.max(last, Number(localStorage.getItem(key)) || 0);
+      try {
+        last = Math.max(last, Number(localStorage.getItem(key)) || 0);
+      } catch {
+        /* The local idle timer still applies. */
+      }
       if (Date.now() - last >= idle) {
-        localStorage.removeItem(key);
+        try {
+          localStorage.removeItem(key);
+        } catch {
+          /* Logout does not depend on browser storage. */
+        }
         void signOut();
       }
     };
@@ -86,7 +114,7 @@ function Workspace() {
         return;
       }
       last = Date.now();
-      localStorage.setItem(key, String(last));
+      saveActivity();
       if (last - lastSync >= 60000) {
         lastSync = last;
         void careApi("/auth/me")
@@ -103,8 +131,8 @@ function Workspace() {
       events.forEach((event) => window.removeEventListener(event, activity));
       window.removeEventListener("focus", check);
     };
-  }, [me]);
-  async function refresh() {
+  }, [me, signOut]);
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
       setMe(await careApi("/auth/me"));
@@ -115,10 +143,17 @@ function Workspace() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+  const initialSearch = useRef({ mode, workspace, claim });
+  useEffect(() => {
+    const { mode, workspace, claim } = initialSearch.current;
+    if (!mode && !workspace && !claim && readSigninPreference()?.workspaceCode) {
+      void navigate({ search: { mode: "professional-signin" }, replace: true });
+    }
+  }, [navigate]);
   useEffect(() => {
     void refresh();
-  }, []);
+  }, [refresh]);
   if (claim)
     return (
       <PatientActivation
@@ -144,15 +179,49 @@ function Workspace() {
   if (!me)
     return (
       <Auth
-        key={`${mode ?? "login"}-${setup ?? false}`}
+        key={`${mode ?? "login"}-${setup ?? false}-${workspace ?? ""}`}
+        initialWorkspace={workspace}
+        onForgetWorkspace={() =>
+          void navigate({ search: { mode: "professional-signin" }, replace: true })
+        }
         initialMode={mode}
         initialSetup={setup}
         onModeChange={(next, staff) => {
-          void navigate({ search: { mode: next, setup: staff } });
+          void navigate({
+            search: {
+              mode: next,
+              setup: staff,
+              workspace:
+                next === "professional-signin" || next === "professional" ? workspace : undefined,
+            },
+          });
         }}
         onSuccess={refresh}
         serviceError={error}
       />
+    );
+  if (workspace && me.organization?.workspace_code !== workspace.trim().toUpperCase())
+    return (
+      <main className="hp-auth">
+        <div className="hp-auth-card">
+          <Mark />
+          <h1>Choose your sign-in workspace</h1>
+          <p>
+            You are currently signed in{" "}
+            {me.organization ? `to ${me.organization.name}` : "to your patient account"}. This link
+            is for a different facility.
+          </p>
+          <button className="hp-button primary" onClick={() => void signOut()}>
+            Sign in to the linked facility
+          </button>
+          <button
+            className="hp-button secondary"
+            onClick={() => void navigate({ search: {}, replace: true })}
+          >
+            Continue in your current account
+          </button>
+        </div>
+      </main>
     );
   if (me.pendingMembership || me.accessExpired)
     return (

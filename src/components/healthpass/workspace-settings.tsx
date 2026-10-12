@@ -7,6 +7,7 @@ import {
 import { StaffAccess, type StaffMember } from "./staff-access";
 import { useEffect, useState } from "react";
 import { careApi } from "@/lib/healthpass-client";
+import { workspaceSigninPath } from "@/lib/healthpass-signin";
 type Settings = {
   organization: { name: string; workspace_code: string };
   branches: { id: string; name: string; address: string }[];
@@ -80,7 +81,30 @@ export function WorkspaceSettings({
         <>
           <section className="hp-panel hp-padded">
             <h2>{data.organization.name}</h2>
-            <p>Workspace code</p>
+            <p>Facility sign-in link</p>
+            <a
+              className="hp-workspace-signin-link"
+              href={workspaceSigninPath(data.organization.name, data.organization.workspace_code)}
+            >
+              {typeof window !== "undefined" ? window.location.origin : ""}
+              {workspaceSigninPath(data.organization.name, data.organization.workspace_code)}
+            </a>
+            <button
+              type="button"
+              className="hp-button secondary"
+              onClick={() => {
+                const link =
+                  window.location.origin +
+                  workspaceSigninPath(data.organization.name, data.organization.workspace_code);
+                void navigator.clipboard?.writeText(link).then(
+                  () => setNotice("Facility sign-in link copied."),
+                  () => setNotice("Select the facility sign-in link to copy it."),
+                );
+              }}
+            >
+              Copy sign-in link
+            </button>
+            <p>Workspace code (alternative)</p>
             <code className="hp-workspace-code">{data.organization.workspace_code}</code>
             <p className="hp-fine">
               Share this code with your team. New staff choose Create account → Professional;

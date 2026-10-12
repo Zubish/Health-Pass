@@ -1,9 +1,14 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ArrowLeft, ArrowRight, ShieldCheck, LockKeyhole } from "lucide-react";
 import { careApi } from "@/lib/healthpass-client";
 import type { Me } from "@/lib/healthpass-types";
 import { Mark } from "./primitives";
+import {
+  readSigninPreference,
+  rememberSigninWorkspace,
+  workspaceSigninPath,
+} from "@/lib/healthpass-signin";
 export type AccountMode =
   "register" | "patient" | "professional" | "facility" | "professional-signin";
 export function Auth({
@@ -11,13 +16,17 @@ export function Auth({
   serviceError,
   initialMode,
   initialSetup,
+  initialWorkspace,
   onModeChange,
+  onForgetWorkspace,
 }: {
   onSuccess: () => Promise<void>;
   serviceError: string;
   initialMode?: AccountMode;
   initialSetup?: boolean;
+  initialWorkspace?: string;
   onModeChange: (mode?: AccountMode, setup?: boolean) => void;
+  onForgetWorkspace: () => void;
 }) {
   const [view, setView] = useState(initialMode ?? "signin");
   const [accountType, setAccountType] = useState(
@@ -31,6 +40,38 @@ export function Auth({
     ),
     [checkingWorkspace, setCheckingWorkspace] = useState(false);
   const workspaceCheck = useRef(0);
+  const [rememberWorkspace, setRememberWorkspace] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  useEffect(() => {
+    const saved = readSigninPreference();
+    const code =
+      initialWorkspace ||
+      (initialMode === "professional-signin" ? saved?.workspaceCode : undefined);
+    if (!code) return;
+    setWorkspaceCode(code.trim().toUpperCase());
+    setRememberWorkspace(saved?.workspaceCode === code.trim().toUpperCase());
+    setRestoring(true);
+    const attempt = ++workspaceCheck.current;
+    let cancelled = false;
+    void careApi<{ workspace: { name: string; workspace_code: string } }>(
+      "/auth/workspace-check",
+      "POST",
+      { workspace_code: code },
+    )
+      .then(({ workspace }) => {
+        if (!cancelled && attempt === workspaceCheck.current)
+          setConfirmedWorkspace({ code: workspace.workspace_code, name: workspace.name });
+      })
+      .catch((e: Error) => {
+        if (!cancelled && attempt === workspaceCheck.current) setError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled && attempt === workspaceCheck.current) setRestoring(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialWorkspace, initialMode]);
   const [firstAccess, setFirstAccess] = useState(!!initialSetup),
     [error, setError] = useState(serviceError),
     [busy, setBusy] = useState(false);
@@ -100,6 +141,9 @@ export function Auth({
         ...values,
         account_type: needsWorkspace || facilityCreate ? "professional" : "patient",
       });
+      if (signin && accountType === "professional") {
+        rememberSigninWorkspace(rememberWorkspace ? confirmedWorkspace?.code : undefined);
+      }
       await onSuccess();
     } catch (e) {
       setError((e as Error).message);
@@ -218,39 +262,49 @@ export function Auth({
               <form onSubmit={submit}>
                 {needsWorkspace && (
                   <div>
-                    <label>
-                      Workspace code
-                      <input
-                        name="workspace_code"
-                        required
-                        maxLength={80}
-                        autoCapitalize="characters"
-                        autoComplete="off"
-                        placeholder="HP-…"
-                        value={workspaceCode}
-                        onChange={(e) => {
-                          ++workspaceCheck.current;
-                          setWorkspaceCode(e.target.value);
-                          setConfirmedWorkspace(null);
-                          setCheckingWorkspace(false);
-                          setError("");
-                        }}
-                      />
-                      <small>
-                        Provided by your facility administrator. Check the code to confirm where you
-                        will work.
-                      </small>
-                    </label>
-                    <button
-                      type="button"
-                      className="hp-button secondary"
-                      disabled={checkingWorkspace || !workspaceCode.trim() || busy}
-                      onClick={() => void checkWorkspace()}
-                    >
-                      {checkingWorkspace ? "Checking workspace…" : "Check workspace"}
-                    </button>
+                    {restoring && <p role="status">Confirming your facility…</p>}
+                    {!confirmedWorkspace && (
+                      <label>
+                        Workspace code
+                        <input
+                          name="workspace_code"
+                          required
+                          maxLength={80}
+                          autoCapitalize="characters"
+                          autoComplete="off"
+                          placeholder="HP-…"
+                          value={workspaceCode}
+                          onChange={(e) => {
+                            ++workspaceCheck.current;
+                            setWorkspaceCode(e.target.value);
+                            setConfirmedWorkspace(null);
+                            setCheckingWorkspace(false);
+                            setError("");
+                          }}
+                        />
+                        <small>
+                          Provided by your facility administrator. Check the code to confirm where
+                          you will work.
+                        </small>
+                      </label>
+                    )}
+                    {!confirmedWorkspace && (
+                      <button
+                        type="button"
+                        className="hp-button secondary"
+                        disabled={restoring || checkingWorkspace || !workspaceCode.trim() || busy}
+                        onClick={() => void checkWorkspace()}
+                      >
+                        {checkingWorkspace ? "Checking workspace…" : "Check workspace"}
+                      </button>
+                    )}
                     {confirmedWorkspace && (
                       <div className="hp-notice" role="status">
+                        <input
+                          type="hidden"
+                          name="workspace_code"
+                          value={confirmedWorkspace.code}
+                        />
                         <strong>{confirmedWorkspace.name}</strong>
                         <p>
                           {staffSetup
@@ -258,6 +312,37 @@ export function Auth({
                             : "You are signing in to this facility."}
                         </p>
                       </div>
+                    )}
+                    {confirmedWorkspace && (
+                      <button
+                        type="button"
+                        className="hp-text-button"
+                        disabled={busy}
+                        onClick={() => {
+                          ++workspaceCheck.current;
+                          rememberSigninWorkspace();
+                          setRememberWorkspace(false);
+                          setConfirmedWorkspace(null);
+                          setWorkspaceCode("");
+                          setRestoring(false);
+                          setCheckingWorkspace(false);
+                          onForgetWorkspace();
+                        }}
+                      >
+                        Use another workspace
+                      </button>
+                    )}
+                    {confirmedWorkspace && (
+                      <p className="hp-fine">
+                        <a
+                          href={workspaceSigninPath(
+                            confirmedWorkspace.name,
+                            confirmedWorkspace.code,
+                          )}
+                        >
+                          Facility sign-in link
+                        </a>
+                      </p>
                     )}
                     {signin && (
                       <p className="hp-fine">
@@ -349,6 +434,22 @@ export function Auth({
                     autoComplete={creating ? "new-password" : "current-password"}
                   />
                 </label>
+                {signin && accountType === "professional" && (
+                  <>
+                    <label className="hp-permission-option">
+                      <input
+                        type="checkbox"
+                        checked={rememberWorkspace}
+                        onChange={(e) => setRememberWorkspace(e.target.checked)}
+                      />
+                      <span>Remember this workspace on this device</span>
+                    </label>
+                    <p className="hp-fine">
+                      For 30 days. You still sign in with your password. Leave unchecked on shared
+                      devices.
+                    </p>
+                  </>
+                )}
                 {facilityCreate && (
                   <label className="hp-checkbox">
                     <input name="authority" type="checkbox" value="confirmed" required /> I am
