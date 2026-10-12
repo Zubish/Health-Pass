@@ -279,6 +279,7 @@ export function Auth({
                             setWorkspaceCode(e.target.value);
                             setConfirmedWorkspace(null);
                             setCheckingWorkspace(false);
+                            setRestoring(false);
                             setError("");
                           }}
                         />
