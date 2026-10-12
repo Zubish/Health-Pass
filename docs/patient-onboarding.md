@@ -39,3 +39,13 @@ Invitation wording: “{Facility} has registered you on HealthPass. Verify your 
 Run `npm test`, `npm run typecheck` and `npm run build`. Tests cover claim preservation, replay/expiry/resend, email uniqueness and concurrent ownership, independent professional identities, masked access requests, profile choices, old-history/named-access protection, primary authority and mocked delivery failures/leases. Browser and hosted verification are recorded after they complete; a prepared adapter is not proof of email delivery.
 
 Apply migration 011 through a migration identity before deploying the restricted API. Roll back application code if needed while preserving all identity, signed record and request/audit history. Do not undo patient ownership or clinical history by deleting rows.
+
+### Verified deployment — 12 October 2026
+
+Feature commit `d2687612060851baaa40684eda417f8ca050327c` is pushed to `feat/healthpass-foundation`. Canonical production alias `https://health-pass-psi.vercel.app/` points to READY deployment `dpl_SpLH6yhmhBqK9mbCEFYbsYsMfeS2`. Neon API deployment 12 completed, and migration 011 is applied with the restricted runtime grants. Initial duplicate-account/address migration checks returned zero; no patient histories were exposed in those checks.
+
+The full suite passed 92 checks (SQLite plus embedded PostgreSQL, function and proxy checks). The final eight onboarding cases also passed on a separate local PostgreSQL 17 server with real pooled connections, including concurrent email reservation, claiming, registration retries and primary decisions. Synthetic per-test databases were removed, and the disposable container was stopped/removed. TypeScript, production build and lint for the new components passed.
+
+Local 390px browser verification passed reception registration, honest unsent-delivery status, actual invitation-link claiming of the same provisional profile, first-facility primary confirmation, fragment removal, duplicate-email routing, request notification, explicit approval with profile sharing off, refresh persistence and no page errors or horizontal overflow.
+
+Hosted verification used explicitly synthetic metadata only: restricted-role registration, actor-scoped retries and duplicate-email prevention, unsent delivery status, patient request notification and mobile approval, primary request/administrator acceptance, no administrator clinical access, primary clearing, anonymous denial and canonical refresh. No clinical notes, observations or follow-up tasks were written, and no real emails were sent. Successful claiming was tested locally; hosted email delivery remains unconfigured and is not claimed as verified.
