@@ -1,3 +1,5 @@
+import { AdmissionCare } from "./admission-care";
+import { ConsultantReferrals } from "./consultant-referrals";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { CareResponsibilities, PatientResponsibleConsultant } from "./care-responsibilities";
 import { WorkspaceShell } from "./workspace-navigation";
@@ -59,10 +61,28 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     [noteRequestKey, setNoteRequestKey] = useState(""),
     [editing, setEditing] = useState<Encounter | "new" | null>(null),
     [profile, setProfile] = useState(false),
-    [audit, setAudit] = useState<any[]>([]),
-    [consents, setConsents] = useState<any[]>([]),
+    [audit, setAudit] = useState<
+      {
+        id: string;
+        action: string;
+        correlation_id: string;
+        actor_name: string | null;
+        organization_name: string | null;
+        decision: string;
+        created_at: string;
+      }[]
+    >([]),
+    [consents, setConsents] = useState<
+      {
+        id: string;
+        recipient_name: string;
+        purpose: string;
+        expires_at: string;
+        revoked_at: string | null;
+      }[]
+    >([]),
     [accessRestricted, setAccessRestricted] = useState<boolean | null>(null),
-    [organizations, setOrganizations] = useState<any[]>([]),
+    [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]),
     [health, setHealth] = useState("");
   const isPatient = me.role === "patient",
     canRegister = can("registry.create"),
@@ -75,11 +95,19 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
         ["sharing", "Sharing", ShieldCheck],
         ["relationships", "Care relationships", Users],
         ["careteam", "My care team", Stethoscope],
+        ["admissions", "My care episodes", Stethoscope],
+        ["referrals", "Consultant referrals", Stethoscope],
         ["audit", "Access history", History],
       ] as const)
     : ([
         ...(can("visits.view") ? [["today", "Today's work", ClipboardList] as const] : []),
         ["overview", "Overview", LayoutDashboard],
+        ...(can("admissions.view") || can("admissions.manage")
+          ? [["admissions", "Admissions & care teams", Stethoscope] as const]
+          : []),
+        ...(can("referrals.create") || can("referrals.respond")
+          ? [["referrals", "Consultant referrals", Stethoscope] as const]
+          : []),
         ...(can("careteam.view") || can("careteam.manage")
           ? [["careteam", "Care responsibility", Stethoscope] as const]
           : []),
@@ -824,6 +852,8 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           />
         )}
         {tab === "relationships" && <CareRelationships me={me} />}
+        {tab === "admissions" && <AdmissionCare me={me} />}
+        {tab === "referrals" && <ConsultantReferrals me={me} />}
         {tab === "careteam" && <CareResponsibilities me={me} />}
         {linkExisting && (
           <FacilityLinking

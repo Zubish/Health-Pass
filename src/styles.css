@@ -3110,3 +3110,7 @@ button.hp-patient-row:hover {
 }
 
 .hp-workspace-signin-link { display: block; overflow-wrap: anywhere; margin-bottom: 1rem; }
+
+.hp-care-episode-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,340px),1fr)); gap: 18px; }
+.hp-individual-access { margin-block: 12px; }
+.hp-care-episode-grid h2 { overflow-wrap: anywhere; }

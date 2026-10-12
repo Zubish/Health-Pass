@@ -1,3 +1,4 @@
+import { careAreaAllows, careAreaPatientPredicate } from "./care-area-access.mjs";
 import { randomUUID } from "node:crypto";
 import { hash } from "./security.mjs";
 import { hasPermission, resolveMembership } from "./roles.mjs";
@@ -47,7 +48,7 @@ export async function handleCareResponsibilities(tx, c) {
     permit,
     fail,
     text,
-    careAuthority,
+    assignmentAuthority: careAuthority,
     audit,
     correlation,
     limit,
@@ -177,7 +178,17 @@ export async function handleCareResponsibilities(tx, c) {
           role_names: user.jobRoles.map((r) => r.name),
         });
     }
-    return { branches, patients, consultants };
+    const admissions = await tx.all(
+      "SELECT patient_id,branch_id FROM care_admissions WHERE organization_id=? AND status='active'",
+      [actor.organization_id],
+    );
+    return {
+      branches,
+      patients: patients.filter((p) =>
+        admissions.some((a) => a.patient_id === p.id && a.branch_id === p.branch_id),
+      ),
+      consultants,
+    };
   }
   if (path === "/care-responsibilities" && method === "GET") {
     view();
@@ -191,8 +202,9 @@ export async function handleCareResponsibilities(tx, c) {
       (status && !["active", "ended"].includes(status))
     )
       fail(400, "Invalid responsibility page or status.");
+    const areaScope = careAreaPatientPredicate(actor);
     const rows = await tx.all(
-      `SELECT r.*,p.name AS patient_name,p.healthpass_id,u.name AS consultant_name,o.name AS facility_name,b.name AS branch_name FROM care_responsibilities r JOIN patients p ON p.id=r.patient_id JOIN users u ON u.id=r.consultant_id JOIN organizations o ON o.id=r.organization_id JOIN branches b ON b.id=r.branch_id WHERE ${patient ? "r.patient_id=?" : "r.organization_id=? AND (CAST(? AS TEXT) IS NULL OR r.branch_id=?)"} AND (CAST(? AS TEXT) IS NULL OR r.patient_id=?) AND (CAST(? AS TEXT) IS NULL OR r.status=?) ORDER BY r.updated_at DESC,r.id LIMIT 51 OFFSET ?`,
+      `SELECT r.*,p.name AS patient_name,p.healthpass_id,u.name AS consultant_name,o.name AS facility_name,b.name AS branch_name,ar.name AS current_area_name FROM care_responsibilities r JOIN patients p ON p.id=r.patient_id JOIN users u ON u.id=r.consultant_id JOIN organizations o ON o.id=r.organization_id JOIN branches b ON b.id=r.branch_id LEFT JOIN care_admissions ca ON ca.id=r.admission_id LEFT JOIN care_areas ar ON ar.id=ca.care_area_id WHERE ${patient ? "r.patient_id=?" : "r.organization_id=? AND (CAST(? AS TEXT) IS NULL OR r.branch_id=?)"} AND (CAST(? AS TEXT) IS NULL OR r.patient_id=?) AND (CAST(? AS TEXT) IS NULL OR r.status=?) AND (${patient ? "1=1" : areaScope.sql}) ORDER BY r.updated_at DESC,r.id LIMIT 51 OFFSET ?`,
       patient
         ? [actor.patient_id, requested, requested, status, status, offset]
         : [
@@ -203,6 +215,7 @@ export async function handleCareResponsibilities(tx, c) {
             requested,
             status,
             status,
+            ...areaScope.args,
             offset,
           ],
     );
@@ -278,13 +291,24 @@ export async function handleCareResponsibilities(tx, c) {
     )
       fail(
         409,
-        "This patient already has a responsible consultant in this facility. Reassign the existing responsibility.",
+        "This patient already has a responsible consultant. Manage the existing assignment under Care responsibility; end any legacy unlinked assignment before creating an admission-linked one.",
       );
+    const admission = await tx.get(
+      "SELECT * FROM care_admissions WHERE patient_id=? AND organization_id=? AND branch_id=? AND status='active'",
+      [patientId, actor.organization_id, branchId],
+    );
+    if (!admission || !careAreaAllows(actor, admission.care_area_id))
+      fail(
+        409,
+        "Open an inpatient or observation episode in this branch before assigning a consultant. Outpatients use consultant referrals.",
+      );
+    if (values.care_setting !== "inpatient")
+      fail(400, "New care-team assignments are only for inpatient or observation episodes.");
     const consultant = await permittedLead(patientId, branchId),
       id = randomUUID(),
       created = now();
     await tx.run(
-      "INSERT INTO care_responsibilities(id,patient_id,organization_id,branch_id,consultant_id,service,ward,care_setting,specialty_review_reference,active_key,request_key,request_payload_hash,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO care_responsibilities(id,patient_id,organization_id,branch_id,consultant_id,service,ward,care_setting,specialty_review_reference,active_key,request_key,request_payload_hash,created_by,created_at,updated_at,admission_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
       [
         id,
         patientId,
@@ -301,6 +325,7 @@ export async function handleCareResponsibilities(tx, c) {
         actor.id,
         created,
         created,
+        admission.id,
       ],
     );
     const row = await tx.get("SELECT * FROM care_responsibilities WHERE id=?", [id]);
@@ -334,6 +359,16 @@ export async function handleCareResponsibilities(tx, c) {
         [now(), row.id],
       );
     } else if (body.action === "reassign") {
+      if (
+        !row.admission_id ||
+        !(await tx.get("SELECT id FROM care_admissions WHERE id=? AND status='active'", [
+          row.admission_id,
+        ]))
+      )
+        fail(
+          409,
+          "Reassignment requires an active admission episode. Legacy ongoing responsibilities may be ended; outpatient referrals are separate.",
+        );
       if (
         !(await tx.get("SELECT id FROM branches WHERE id=? AND organization_id=? AND active=1", [
           row.branch_id,

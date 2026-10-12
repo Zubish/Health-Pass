@@ -2,6 +2,9 @@ export type Me = {
   user: { id: string; name: string; email: string; patient_id: string | null };
   role: string;
   permissions?: string[];
+  deniedPermissions?: string[];
+  careAreaRestricted?: boolean;
+  careAreaIds?: string[];
   jobRoles?: { id: string; name: string; clinical_scope: string | null }[];
   clinicalScopes?: string[];
   isOwner?: boolean;

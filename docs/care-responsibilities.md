@@ -2,6 +2,10 @@
 
 Confirmed 12 October 2026: the facility administrator assigns the consultant accountable for a patient's overall management, especially inpatient/ward care. A paediatrician may lead a child's care while other authorised GPs continue routine care. The GP handling a visit does not automatically become the overall lead.
 
+## Scope update — 12 October 2026
+
+The owner subsequently restricted new care-team assignment to actual inpatient/observation episodes and separated outpatient consultant referrals. Migration 013 links new responsibilities to recorded episodes; old ongoing responsibilities retain history and may be ended. The current workflow and individual/area restrictions are defined in [care-operations.md](care-operations.md). The original release description below remains a historical checkpoint.
+
 ## Implemented scope
 
 An ongoing care responsibility is a separate object from an individual visit, primary care facility and patient sharing grant. It identifies the patient, facility, branch, responsible consultant, service, optional ward and care setting (inpatient or ongoing care). There is one active lead per patient per facility. Administrative reassignment or conclusion preserves the object and append-only history; a later new care period can have a new responsibility. Changing a ward/service or lead requires a reason and current version. Ending responsibility preserves records and individual visits; it is not a clinical discharge action.

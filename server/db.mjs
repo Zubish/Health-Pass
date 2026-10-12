@@ -92,9 +92,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   };
   if (config.NODE_ENV === "production" && config.HEALTHPASS_RUN_MIGRATIONS !== "1") {
     await db.transaction(async (tx) => {
-      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='012'")))
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='013'")))
         throw new Error(
-          "Apply schema migrations 001 through 012 using the migration identity before starting the API.",
+          "Apply schema migrations 001 through 013 using the migration identity before starting the API.",
         );
     });
     return db;
@@ -179,6 +179,7 @@ export async function openDatabase(config = process.env, dependencies = {}) {
     ["010", "010-care-handoffs.sql"],
     ["011", "011-patient-onboarding.sql"],
     ["012", "012-care-responsibilities.sql"],
+    ["013", "013-care-operations.sql"],
   ]) {
     await db.transaction(async (tx) => {
       if (!(await tx.get("SELECT version FROM schema_migrations WHERE version=?", [version]))) {
@@ -208,6 +209,16 @@ export async function openDatabase(config = process.env, dependencies = {}) {
           else
             await tx.run(
               "CREATE TRIGGER care_responsibility_events_immutable BEFORE UPDATE OR DELETE ON care_responsibility_events FOR EACH ROW EXECUTE FUNCTION hp_immutable()",
+            );
+        }
+        if (version === "013") {
+          if (engine === "sqlite")
+            pool.exec(
+              "CREATE TRIGGER care_workflow_events_no_update BEFORE UPDATE ON care_workflow_events BEGIN SELECT RAISE(ABORT, 'Care workflow history is immutable'); END; CREATE TRIGGER care_workflow_events_no_delete BEFORE DELETE ON care_workflow_events BEGIN SELECT RAISE(ABORT, 'Care workflow history is immutable'); END;",
+            );
+          else
+            await tx.run(
+              "CREATE TRIGGER care_workflow_events_immutable BEFORE UPDATE OR DELETE ON care_workflow_events FOR EACH ROW EXECUTE FUNCTION hp_immutable()",
             );
         }
         await tx.run("INSERT INTO schema_migrations(version) VALUES (?)", [version]);

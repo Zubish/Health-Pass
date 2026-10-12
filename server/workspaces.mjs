@@ -17,6 +17,7 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
     return { email, name, password };
   };
   return async (tx, path, method, body, actor, correlation, headers) => {
+    if (/^\/workspace\/members\/[^/]+\/restrictions$/.test(path)) return undefined;
     if (path === "/auth/facility-register" && method === "POST") {
       const { email, name, password } = fields(body);
       const facility = text(body.facility_name, "facility name", 160, true);
@@ -137,6 +138,10 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
         roles: await tx.all("SELECT * FROM workspace_roles WHERE organization_id=? ORDER BY name", [
           org,
         ]),
+        areas: await tx.all(
+          "SELECT a.*,b.name AS branch_name FROM care_areas a JOIN branches b ON b.id=a.branch_id WHERE a.organization_id=? AND (CAST(? AS TEXT) IS NULL OR a.branch_id=?) ORDER BY a.name LIMIT 200",
+          [org, actor.branch_id ?? null, actor.branch_id ?? null],
+        ),
         permissionCatalog,
         templates: roleTemplates.filter((r) => r.key !== "clinician"),
         members: hasPermission(actor, "staff.manage")
@@ -188,6 +193,9 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
       if (permissions.some((key) => clinicalPermissions.has(key)) && !scope)
         fail(400, "Clinical permissions require a clinical scope.");
       const dependencies = {
+        "areas.manage": "workspace.view",
+        "referrals.create": "records.view",
+        "referrals.respond": "records.view",
         "careteam.view": "registry.view",
         "registry.create": "registry.view",
         "visits.view": "registry.view",
@@ -322,6 +330,23 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
           true,
         );
       }
+      const consultantRole = selected.some((r) =>
+        JSON.parse(r.permissions).includes("referrals.respond"),
+      );
+      let consultantReview = "";
+      if (consultantRole) {
+        if (body.consultant_verified !== "confirmed")
+          fail(
+            400,
+            "Confirm that consultant qualifications have been reviewed for the intended services.",
+          );
+        consultantReview = text(
+          body.consultant_review_reference,
+          "consultant qualification review reference",
+          500,
+          true,
+        );
+      }
       const support = selected.some((r) => r.template_key === "zed-support");
       let expiry = null;
       if (body.access_expires_at) {
@@ -348,7 +373,7 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
           ? "administrator"
           : "reception";
       await tx.run(
-        "UPDATE memberships SET active=1,role=?,branch_id=?,review_reference=?,clinical_verified=?,clinical_scopes=?,clinical_review_reference=?,access_expires_at=? WHERE id=?",
+        "UPDATE memberships SET active=1,role=?,branch_id=?,review_reference=?,clinical_verified=?,clinical_scopes=?,clinical_review_reference=?,access_expires_at=?,consultant_verified=?,consultant_review_reference=? WHERE id=?",
         [
           legacy,
           branch.id,
@@ -357,6 +382,8 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
           JSON.stringify(scopes),
           clinicalReference,
           expiry,
+          consultantRole ? 1 : 0,
+          consultantReview,
           member.id,
         ],
       );
@@ -393,6 +420,8 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
           branch: branch.id,
           clinical_scopes: scopes,
           clinical_verified: !!scopes.length,
+          consultant_verified: consultantRole,
+          consultant_review_reference: consultantReview,
           expires_at: expiry,
         }),
       );

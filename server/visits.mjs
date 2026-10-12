@@ -1,9 +1,11 @@
+import { careAreaAllows, careAreaPatientPredicate } from "./care-area-access.mjs";
+import { workflowEvent } from "./care-operations.mjs";
 import { randomUUID } from "node:crypto";
 import { hasPermission, resolveMembership } from "./roles.mjs";
 import { visitParticipation } from "./care-handoffs.mjs";
 
 const timestamp = () => new Date().toISOString();
-const operationalSelect = `SELECT v.id,v.patient_id,p.name AS patient_name,p.healthpass_id,v.branch_id,b.name AS branch_name,v.assigned_user_id,u.name AS assigned_name,v.status,v.version,v.checked_in_at,v.started_at,v.completed_at,v.updated_at,h.id AS pending_handoff_id,h.to_user_id AS pending_handoff_to_user_id,target.name AS pending_handoff_to_name,h.expires_at AS pending_handoff_expires_at FROM care_visits v JOIN patients p ON p.id=v.patient_id JOIN branches b ON b.id=v.branch_id JOIN users u ON u.id=v.assigned_user_id LEFT JOIN visit_handoffs h ON h.visit_id=v.id AND h.organization_id=v.organization_id AND h.branch_id=v.branch_id AND h.pending_key=v.id AND h.status='pending' LEFT JOIN users target ON target.id=h.to_user_id`;
+const operationalSelect = `SELECT v.id,v.patient_id,p.name AS patient_name,p.healthpass_id,v.branch_id,b.name AS branch_name,v.assigned_user_id,u.name AS assigned_name,v.status,v.version,v.care_area_id,v.checked_in_at,v.started_at,v.completed_at,v.updated_at,h.id AS pending_handoff_id,h.to_user_id AS pending_handoff_to_user_id,target.name AS pending_handoff_to_name,h.expires_at AS pending_handoff_expires_at FROM care_visits v JOIN patients p ON p.id=v.patient_id JOIN branches b ON b.id=v.branch_id JOIN users u ON u.id=v.assigned_user_id LEFT JOIN visit_handoffs h ON h.visit_id=v.id AND h.organization_id=v.organization_id AND h.branch_id=v.branch_id AND h.pending_key=v.id AND h.status='pending' LEFT JOIN users target ON target.id=h.to_user_id`;
 const activeStatuses = new Set(["waiting", "in-progress"]);
 const vitalLimits = {
   systolic: [40, 300],
@@ -20,8 +22,26 @@ async function scopedVisit(tx, actor, id, fail) {
     id,
     actor.organization_id,
   ]);
-  if (!visit || (actor.branch_id && visit.branch_id !== actor.branch_id))
+  if (
+    !visit ||
+    (actor.branch_id && visit.branch_id !== actor.branch_id) ||
+    !careAreaAllows(actor, visit.care_area_id)
+  )
     fail(404, "Visit unavailable in this workspace and branch.");
+  if (visit.care_area_id) {
+    const area = await tx.get("SELECT kind FROM care_areas WHERE id=?", [visit.care_area_id]);
+    if (area?.kind !== "outpatient" && activeStatuses.has(visit.status)) {
+      const current = await tx.get(
+        "SELECT id FROM care_admissions WHERE patient_id=? AND organization_id=? AND care_area_id=? AND status='active'",
+        [visit.patient_id, actor.organization_id, visit.care_area_id],
+      );
+      if (!current)
+        fail(
+          409,
+          "The admission ended or moved. Refresh the care episode before opening this ward visit.",
+        );
+    }
+  }
   return visit;
 }
 
@@ -52,7 +72,13 @@ async function eligibleProfessional(tx, actor, userId, branchId) {
     !user.clinicalScopes.length
   )
     return null;
-  return { id: user.id, name: user.name, clinicalScopes: user.clinicalScopes };
+  return {
+    id: user.id,
+    name: user.name,
+    clinicalScopes: user.clinicalScopes,
+    careAreaRestricted: user.careAreaRestricted,
+    careAreaIds: user.careAreaIds,
+  };
 }
 
 async function recordEvent(tx, actor, visit, action, nextStatus, audit, correlation) {
@@ -241,6 +267,11 @@ export async function handleVisits(tx, context) {
     const params = searchParams;
     const where = ["v.organization_id=?"];
     const args = [actor.organization_id];
+    if (actor.careAreaRestricted) {
+      const ids = actor.careAreaIds;
+      where.push(ids.length ? `v.care_area_id IN (${ids.map(() => "?").join(",")})` : "1=0");
+      args.push(...ids);
+    }
     const branchId = params.get("branch_id") ?? actor.branch_id;
     if (branchId) {
       await scopedBranch(tx, actor, branchId, fail, text);
@@ -280,7 +311,32 @@ export async function handleVisits(tx, context) {
     const patientId = text(body.patient_id, "patient ID", 100, true);
     const assignee = text(body.assigned_user_id, "assigned professional", 100, true);
     const requestId = text(body.client_request_id, "check-in request ID", 100, true);
-    const requestPayload = JSON.stringify([patientId, branch.id, assignee]);
+    const admission = await tx.get(
+      "SELECT * FROM care_admissions WHERE patient_id=? AND organization_id=? AND status='active'",
+      [patientId, actor.organization_id],
+    );
+    const areaId = body.care_area_id || admission?.care_area_id || null;
+    if (areaId) {
+      const area = await tx.get(
+        "SELECT * FROM care_areas WHERE id=? AND organization_id=? AND branch_id=? AND active=1",
+        [areaId, actor.organization_id, branch.id],
+      );
+      if (
+        !area ||
+        (admission
+          ? areaId !== admission.care_area_id || area.kind === "outpatient"
+          : area.kind !== "outpatient")
+      )
+        fail(
+          400,
+          "Choose this admission’s current ward or observation area; outpatient visits require an outpatient department.",
+        );
+      if (!area || !careAreaAllows(actor, areaId))
+        fail(403, "Choose an outpatient department within your assigned scope.");
+    } else if (actor.careAreaRestricted) fail(400, "Choose your assigned outpatient department.");
+    const requestPayload = JSON.stringify(
+      areaId ? [patientId, branch.id, assignee, areaId] : [patientId, branch.id, assignee],
+    );
     const existing = await tx.get(
       "SELECT * FROM care_visits WHERE organization_id=? AND created_by=? AND client_request_id=?",
       [actor.organization_id, actor.id, requestId],
@@ -295,8 +351,17 @@ export async function handleVisits(tx, context) {
       [patientId, actor.organization_id, branch.id],
     );
     if (!patient) fail(403, "Register or verify-link this patient in the selected branch first.");
-    if (!(await eligibleProfessional(tx, actor, assignee, branch.id)))
+    const chosenProfessional = await eligibleProfessional(tx, actor, assignee, branch.id);
+    if (!chosenProfessional || !careAreaAllows(chosenProfessional, areaId))
       fail(403, "Choose an approved professional with reviewed clinical access in this branch.");
+    if (
+      admission &&
+      !(await tx.get(
+        "SELECT id FROM admission_team_members WHERE admission_id=? AND user_id=? AND active=1 UNION SELECT id FROM care_responsibilities WHERE admission_id=? AND consultant_id=? AND status='active'",
+        [admission.id, assignee, admission.id, assignee],
+      ))
+    )
+      fail(403, "Assign this professional to the inpatient care team before routing ward care.");
     const activeKey = branch.id + ":" + patientId;
     if (
       await tx.get("SELECT id FROM care_visits WHERE organization_id=? AND active_key=?", [
@@ -308,7 +373,7 @@ export async function handleVisits(tx, context) {
     const id = randomUUID(),
       date = timestamp();
     const inserted = await tx.run(
-      "INSERT INTO care_visits(id,patient_id,organization_id,branch_id,assigned_user_id,created_by,client_request_id,request_payload,active_key,status,checked_in_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'waiting',?,?) ON CONFLICT DO NOTHING",
+      "INSERT INTO care_visits(id,patient_id,organization_id,branch_id,assigned_user_id,created_by,client_request_id,request_payload,active_key,status,checked_in_at,updated_at,care_area_id) VALUES (?,?,?,?,?,?,?,?,?,'waiting',?,?,?) ON CONFLICT DO NOTHING",
       [
         id,
         patientId,
@@ -321,6 +386,7 @@ export async function handleVisits(tx, context) {
         activeKey,
         date,
         date,
+        areaId,
       ],
     );
     if ((inserted.rowCount ?? inserted.changes) !== 1) {
@@ -458,6 +524,16 @@ export async function handleVisits(tx, context) {
           )
         )
           fail(409, "Resolve or withdraw the pending handoff before completing this visit.");
+        if (
+          await tx.get(
+            "SELECT id FROM consultant_referrals WHERE visit_id=? AND kind='transfer' AND status IN ('pending','scheduled')",
+            [visit.id],
+          )
+        )
+          fail(
+            409,
+            "Resolve or withdraw the pending consultant transfer before completing this visit.",
+          );
         contributionDiscipline(
           result,
           actor,
@@ -495,6 +571,19 @@ export async function handleVisits(tx, context) {
     if ((result.rowCount ?? result.changes) !== 1)
       fail(409, "This visit changed. Refresh it before continuing.");
     if (status === "cancelled") {
+      const transfers = await tx.all(
+        "SELECT * FROM consultant_referrals WHERE visit_id=? AND kind='transfer' AND status IN ('pending','scheduled')",
+        [visit.id],
+      );
+      for (const referral of transfers) {
+        await tx.run(
+          "UPDATE consultant_referrals SET status='cancelled',pending_key=NULL,version=version+1,updated_at=? WHERE id=?",
+          [date, referral.id],
+        );
+        await workflowEvent(tx, { actor, audit, correlation }, referral, "referral.cancelled", {
+          reason: "visit_cancelled",
+        });
+      }
       const pending = await tx.all(
         "SELECT id,version FROM visit_handoffs WHERE visit_id=? AND status='pending'",
         [visit.id],

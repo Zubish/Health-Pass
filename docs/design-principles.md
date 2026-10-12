@@ -30,3 +30,7 @@ Apply RxLedger's fixed side-panel pattern across patient and professional worksp
 ## Reduce sign-in fatigue without obscuring context — 12 October 2026
 
 Use verified facility links as the convenient entry and workspace codes as an alternative. A remembered workspace is a device preference with a 30-day expiry, not authentication. Keep the facility name visible before password submission and throughout professional work. Explicit links take precedence over remembered context; a link for another facility must never silently open the current session's workspace. Preserve separate identities and permissions per facility. Offer a clear way to forget or switch the workspace, and keep inactivity logout independent of convenience preferences.
+
+## Reusable role defaults with deliberate individual limits — 12 October 2026
+
+Select a staff member's job roles to inherit reusable workspace permissions. Put exceptions in a separate Individual restrictions section; disabling a permission must override every role and survive later role edits. A job title is not credential evidence. Use a recorded department/ward assignment to constrain patient context, separately from disabling a task such as charting. Keep inpatient team accountability separate from outpatient referrals and each professional's authored records. Allow administrators to configure their facility's operation using supported controls while identity, consent, credential gates, workflow transitions and immutable history remain application rules.

@@ -23,6 +23,8 @@ export const Route = createFileRoute("/workspace")({
     workspace: typeof search.workspace === "string" ? search.workspace.slice(0, 80) : undefined,
     claim: typeof search.claim === "string" ? search.claim : undefined,
     tab: [
+      "admissions",
+      "referrals",
       "careteam",
       "relationships",
       "overview",

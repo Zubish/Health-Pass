@@ -161,3 +161,8 @@ Before real-patient use, resolve the remaining identity/access, clinical review,
 The owner-approved registration and primary-care contract is recorded in [patient-onboarding.md](patient-onboarding.md). Email delivery requires a configured sender; the adapter and queue alone do not mean invitations have been delivered.
 
 **CONFIRMED consultant accountability:** administrators assign the responsible consultant for a patient's ongoing management, including ward/inpatient care, while authorised GPs continue their own care work. This responsibility is distinct from the current visit assignee. The implemented foundation and its specialty-review/access boundaries are recorded in [care-responsibilities.md](care-responsibilities.md); full admission/bed/discharge operations remain separate.
+
+
+## Owner-approved extension — 12 October 2026
+
+Reusable workspace role defaults now have individual denial overrides and department/ward scopes. Inpatient/observation care uses recorded episodes, an accountable consultant and supporting doctors/nurses; outpatient referrals distinguish advice from transfer with consultant acceptance, scheduling and required decline reasons. See [care-operations.md](care-operations.md) for the implementation contract and administrator configuration boundaries. Full bed/discharge management, calendar capacity, external verification and notification delivery are not claimed by this extension.

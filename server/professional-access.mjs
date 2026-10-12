@@ -1,3 +1,4 @@
+import { careAreaAllowsPatient } from "./care-area-access.mjs";
 import { randomUUID } from "node:crypto";
 import { hasPermission, resolveMembership } from "./roles.mjs";
 
@@ -52,7 +53,12 @@ async function effectiveGrant(tx, grant) {
     grant.recipient_user_id,
     grant.recipient_organization_id,
   );
-  if (!recipient || !branchMatches(recipient, grant)) return null;
+  if (
+    !recipient ||
+    !branchMatches(recipient, grant) ||
+    !(await careAreaAllowsPatient(tx, recipient, grant.patient_id))
+  )
+    return null;
   const scopes = scopesOf(grant);
   let contributionScopes = grant.can_contribute
     ? scopes.filter((s) => recipient.clinicalScopes.includes(s))

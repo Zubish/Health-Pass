@@ -1,3 +1,5 @@
+import { CareAreaSettings } from "./care-area-settings";
+import type { CareArea } from "./individual-access";
 import {
   RoleManagement,
   type JobRole,
@@ -10,6 +12,7 @@ import { careApi } from "@/lib/healthpass-client";
 import { workspaceSigninPath } from "@/lib/healthpass-signin";
 type Settings = {
   organization: { name: string; workspace_code: string };
+  areas: CareArea[];
   branches: { id: string; name: string; address: string }[];
   members: StaffMember[];
   roles: JobRole[];
@@ -30,12 +33,16 @@ export function WorkspaceSettings({
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
   async function load() {
-    const settings = await careApi("/workspace/settings");
-    settings.roles = settings.roles.map((role: any) => ({
+    const settings = await careApi<
+      Omit<Settings, "roles"> & {
+        roles: (Omit<JobRole, "permissions"> & { permissions: string })[];
+      }
+    >("/workspace/settings");
+    const roles = settings.roles.map((role) => ({
       ...role,
       permissions: JSON.parse(role.permissions),
     }));
-    setData(settings);
+    setData({ ...settings, roles });
   }
   useEffect(() => {
     void load().catch((e) => setError(e.message));
@@ -198,6 +205,7 @@ export function WorkspaceSettings({
                       </p>
                     ) : (
                       <StaffAccess
+                        areas={data.areas ?? []}
                         key={
                           JSON.stringify([
                             m.id,
@@ -229,6 +237,14 @@ export function WorkspaceSettings({
               </section>
             )}
           </div>
+          {can("areas.manage") && (
+            <CareAreaSettings
+              areas={data.areas ?? []}
+              branches={data.branches}
+              busy={busy}
+              save={change}
+            />
+          )}
           {can("roles.manage") && (
             <RoleManagement
               roles={data.roles}

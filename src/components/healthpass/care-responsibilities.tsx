@@ -16,6 +16,8 @@ type Responsibility = {
   branch_name: string;
   service: string;
   ward: string;
+  current_area_name?: string;
+  admission_id?: string | null;
   care_setting: string;
   access_available: boolean;
   history: {
@@ -196,7 +198,9 @@ export function CareResponsibilities({ me }: { me: Me }) {
                   <dt>Branch / ward</dt>
                   <dd>
                     {row.branch_name}
-                    {row.ward ? " · " + row.ward : ""}
+                    {row.current_area_name || row.ward
+                      ? " · " + (row.current_area_name || row.ward)
+                      : ""}
                   </dd>
                 </dl>
                 {row.status === "active" && !row.access_available && (
@@ -210,7 +214,12 @@ export function CareResponsibilities({ me }: { me: Me }) {
                   <div className="hp-responsibility-actions">
                     <button
                       className="hp-button secondary"
-                      disabled={busy}
+                      disabled={busy || !row.admission_id}
+                      title={
+                        !row.admission_id
+                          ? "End this legacy assignment before creating an episode-linked responsibility."
+                          : undefined
+                      }
                       onClick={() => {
                         setError("");
                         setEditing(row);
@@ -409,11 +418,13 @@ export function CareResponsibilities({ me }: { me: Me }) {
                 defaultValue={editing === "new" ? "inpatient" : editing.care_setting}
               >
                 <option value="inpatient">Inpatient care</option>
-                <option value="ongoing">Ongoing care</option>
               </select>
             </label>
             <label>
-              Ward <small>Optional</small>
+              Assignment label{" "}
+              <small>
+                Optional; actual ward changes are recorded under Admissions & care teams.
+              </small>
               <input
                 name="ward"
                 maxLength={100}
@@ -538,7 +549,7 @@ export function PatientResponsibleConsultant({ patientId }: { patientId: string 
             <strong>{row.consultant_name}</strong>
             <p>
               {row.service} · {row.facility_name}
-              {row.ward ? " · " + row.ward : ""}
+              {row.current_area_name || row.ward ? " · " + (row.current_area_name || row.ward) : ""}
             </p>
             {!row.access_available && <small>Record access currently unavailable</small>}
           </div>

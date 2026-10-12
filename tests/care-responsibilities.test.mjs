@@ -48,6 +48,20 @@ async function fixture() {
       ]);
     }
   });
+  await db.transaction(async (tx) => {
+    await tx.run(
+      "INSERT INTO care_areas(id,organization_id,branch_id,name,kind) VALUES ('responsibility-ward','org-lagos','main-org-lagos','Synthetic ward label','ward')",
+    );
+    await tx.run(
+      "INSERT INTO care_admissions(id,patient_id,organization_id,branch_id,care_area_id,kind,active_key,created_by,created_at,request_key,request_payload) VALUES ('responsibility-admission','patient-ade','org-lagos','main-org-lagos','responsibility-ward','inpatient','org-lagos:patient-ade','admin',?,'synthetic-responsibility-admission','{}')",
+      [new Date().toISOString()],
+    );
+    for (const id of ["doctor-lagos", "colleague"])
+      await tx.run(
+        "INSERT INTO admission_team_members(id,admission_id,user_id,duty) VALUES (?,'responsibility-admission',?,'doctor')",
+        ["responsibility-team-" + id, id],
+      );
+  });
   const api = createApi(db, { PUBLIC_APP_ORIGIN: "http://localhost:3000" });
   function client() {
     let cookie = "";

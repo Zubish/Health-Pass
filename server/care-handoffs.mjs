@@ -8,7 +8,7 @@ const participantSql = `SELECT v.id FROM care_visits v WHERE v.organization_id=?
  (v.assigned_user_id=? OR EXISTS(SELECT 1 FROM visit_handoffs h WHERE h.visit_id=v.id
  AND h.organization_id=v.organization_id AND h.branch_id=v.branch_id AND
  ((h.status='accepted' AND (h.from_user_id=? OR h.to_user_id=?))
- OR (h.status='pending' AND h.to_user_id=? AND h.expires_at>?))))`;
+ OR (h.status='pending' AND h.to_user_id=? AND h.expires_at>?))) OR EXISTS(SELECT 1 FROM consultant_referrals cr WHERE cr.visit_id=v.id AND cr.organization_id=v.organization_id AND cr.branch_id=v.branch_id AND cr.kind='transfer' AND cr.status IN ('accepted','completed') AND (cr.from_user_id=? OR cr.consultant_id=?)))`;
 const participantArgs = (actor) => [
   actor.organization_id,
   actor.branch_id ?? null,
@@ -18,6 +18,8 @@ const participantArgs = (actor) => [
   actor.id,
   actor.id,
   now(),
+  actor.id,
+  actor.id,
 ];
 export async function visitParticipation(tx, actor, visitId) {
   if (!actor?.organization_id) return false;

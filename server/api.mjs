@@ -1,3 +1,6 @@
+import { handleCareOperations } from "./care-operations.mjs";
+import { handleConsultantReferrals } from "./consultant-referrals.mjs";
+import { careAreaAllowsPatient, careAreaPatientPredicate } from "./care-area-access.mjs";
 import { hasPermission, resolveMembership } from "./roles.mjs";
 import { workspaceRoutes } from "./workspaces.mjs";
 import { handlePatientOnboarding, patientForEmail } from "./patient-onboarding.mjs";
@@ -164,7 +167,13 @@ export function createApi(db, config = process.env) {
     strong(actor);
     if (!hasPermission(actor, key)) fail(403, "Your workspace roles do not permit this action.");
   };
-  async function access(tx, actor, patientId, write = false, { checkSession = true } = {}) {
+  async function access(
+    tx,
+    actor,
+    patientId,
+    write = false,
+    { checkSession = true, assignmentCheck = false } = {},
+  ) {
     if (checkSession) strong(actor);
     const patient = await tx.get("SELECT * FROM patients WHERE id=?", [patientId]);
     if (!patient) fail(404, "Patient unavailable.");
@@ -180,7 +189,49 @@ export function createApi(db, config = process.env) {
     if (actor.patient_id === patientId && !write)
       return { patient, consent: null, accessPolicy: legacyPolicy };
     if (!hasPermission(actor, "records.view")) fail(403, "Clinical access is not permitted.");
+    if (!(await careAreaAllowsPatient(tx, actor, patientId)))
+      fail(403, "This patient is outside your assigned department or ward scope.");
+    let episodeScopes = null;
+    const admission = await tx.get(
+      "SELECT id FROM care_admissions WHERE patient_id=? AND organization_id=? AND status='active'",
+      [patientId, actor.organization_id],
+    );
+    if (admission && !assignmentCheck) {
+      const team = await tx.get(
+        "SELECT duty FROM admission_team_members WHERE admission_id=? AND user_id=? AND active=1",
+        [admission.id, actor.id],
+      );
+      const lead = await tx.get(
+        "SELECT id FROM care_responsibilities WHERE admission_id=? AND consultant_id=? AND status='active'",
+        [admission.id, actor.id],
+      );
+      episodeScopes = [
+        ...new Set([
+          ...(team
+            ? [{ doctor: "general", nurse: "nursing", medication: "medication" }[team.duty]]
+            : []),
+          ...(lead ? ["general"] : []),
+        ]),
+      ];
+      if (write && !actor.clinicalScopes.some((scope) => episodeScopes.includes(scope)))
+        fail(
+          403,
+          "Your current inpatient care-team assignment does not permit this care category.",
+        );
+      legacyPolicy.contributionScopes = legacyPolicy.contributionScopes.filter((scope) =>
+        episodeScopes.includes(scope),
+      );
+      legacyPolicy.canContribute = legacyPolicy.contributionScopes.length > 0;
+      legacyPolicy.canEditProfile = legacyPolicy.canContribute;
+    }
     const policy = await resolveProfessionalAccess(tx, actor, patientId);
+    if (episodeScopes) {
+      policy.contributionScopes = policy.contributionScopes.filter((scope) =>
+        episodeScopes.includes(scope),
+      );
+      policy.canContribute = policy.canContribute && policy.contributionScopes.length > 0;
+      policy.canEditProfile = policy.canEditProfile && policy.canContribute;
+    }
     if (policy.restricted) {
       if (!policy.grants.length)
         fail(
@@ -216,7 +267,11 @@ export function createApi(db, config = process.env) {
     return {
       patient,
       consent: grant?.id ?? null,
-      accessPolicy: { ...legacyPolicy, includeProfile, canEditProfile: includeProfile },
+      accessPolicy: {
+        ...legacyPolicy,
+        includeProfile,
+        canEditProfile: includeProfile && legacyPolicy.canEditProfile,
+      },
     };
   }
   const requireContributionScope = (policy, scope) => {
@@ -410,6 +465,8 @@ export function createApi(db, config = process.env) {
       permit,
       strong,
       access,
+      assignmentAuthority: (tx, candidate, patientId, write = false) =>
+        access(tx, candidate, patientId, write, { checkSession: false, assignmentCheck: true }),
       careAuthority: (tx, candidate, patientId, write = false) =>
         access(tx, candidate, patientId, write, { checkSession: false }),
       fail,
@@ -424,6 +481,10 @@ export function createApi(db, config = process.env) {
       cookie,
       outputHeaders,
     };
+    const operationsResult = await handleCareOperations(tx, context);
+    if (operationsResult !== undefined) return operationsResult;
+    const referralsResult = await handleConsultantReferrals(tx, context);
+    if (referralsResult !== undefined) return referralsResult;
     const responsibilityResult = await handleCareResponsibilities(tx, context);
     if (responsibilityResult !== undefined) return responsibilityResult;
     const onboardingResult = await handlePatientOnboarding(tx, context);
@@ -446,6 +507,9 @@ export function createApi(db, config = process.env) {
         permissions: actor.permissions ?? [],
         jobRoles: actor.jobRoles ?? [],
         clinicalScopes: actor.clinicalScopes ?? [],
+        deniedPermissions: actor.deniedPermissions ?? [],
+        careAreaRestricted: !!actor.careAreaRestricted,
+        careAreaIds: actor.careAreaIds ?? [],
         isOwner: !!actor.isOwner,
         accessExpired: !!actor.accessExpired,
         supportAccess: !!actor.supportAccess,
@@ -543,17 +607,21 @@ export function createApi(db, config = process.env) {
           ),
         };
       permit(actor, "registry.view");
+      const areaPredicate = careAreaPatientPredicate(actor);
       const rows = await tx.all(
-        `SELECT DISTINCT p.id,p.healthpass_id,p.name,p.dob,p.created_at FROM patients p LEFT JOIN patient_links l ON l.patient_id=p.id LEFT JOIN consents c ON c.patient_id=p.id LEFT JOIN patient_access_settings pas ON pas.patient_id=p.id WHERE (l.organization_id=? AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM branch_patient_links bp WHERE bp.patient_id=p.id AND bp.branch_id=?))) ${hasPermission(actor, "records.view") ? "OR (c.recipient_id=? AND c.revoked_at IS NULL AND c.expires_at>? AND COALESCE(pas.restricted,0)=0)" : ""} ORDER BY p.name`,
-        hasPermission(actor, "records.view")
-          ? [
-              actor.organization_id,
-              actor.branch_id ?? null,
-              actor.branch_id ?? null,
-              actor.organization_id,
-              now(),
-            ]
-          : [actor.organization_id, actor.branch_id ?? null, actor.branch_id ?? null],
+        `SELECT DISTINCT p.id,p.healthpass_id,p.name,p.dob,p.created_at FROM patients p LEFT JOIN patient_links l ON l.patient_id=p.id LEFT JOIN consents c ON c.patient_id=p.id LEFT JOIN patient_access_settings pas ON pas.patient_id=p.id WHERE ((l.organization_id=? AND (CAST(? AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM branch_patient_links bp WHERE bp.patient_id=p.id AND bp.branch_id=?))) ${hasPermission(actor, "records.view") ? "OR (c.recipient_id=? AND c.revoked_at IS NULL AND c.expires_at>? AND COALESCE(pas.restricted,0)=0)" : ""}) AND (${areaPredicate.sql}) ORDER BY p.name`,
+        [
+          ...(hasPermission(actor, "records.view")
+            ? [
+                actor.organization_id,
+                actor.branch_id ?? null,
+                actor.branch_id ?? null,
+                actor.organization_id,
+                now(),
+              ]
+            : [actor.organization_id, actor.branch_id ?? null, actor.branch_id ?? null]),
+          ...areaPredicate.args,
+        ],
       );
       if (hasPermission(actor, "records.view")) {
         const named = await listProfessionalPatients(tx, actor);

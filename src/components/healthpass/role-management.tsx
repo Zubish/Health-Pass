@@ -56,6 +56,10 @@ export function RoleManagement({
   }
   function toggle(key: string, checked: boolean) {
     const dependencies: Record<string, string> = {
+      "careteam.view": "registry.view",
+      "areas.manage": "workspace.view",
+      "referrals.create": "records.view",
+      "referrals.respond": "records.view",
       "registry.create": "registry.view",
       "visits.view": "registry.view",
       "visits.manage": "visits.view",
@@ -101,7 +105,9 @@ export function RoleManagement({
       <h2>Job roles & permissions</h2>
       <p className="hp-fine">
         Start with a common role or create your own. Permissions apply only to tools available in
-        HealthPass. Clinical authority requires a separate professional credential review.
+        HealthPass. Clinical authority requires a separate professional credential review. New
+        permissions are available here for administrator review; existing role choices and
+        individual restrictions are preserved.
       </p>
       <div className="hp-role-list">
         {roles.map((role) => (

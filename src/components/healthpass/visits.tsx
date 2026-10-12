@@ -6,6 +6,7 @@ import { date } from "@/lib/healthpass-types";
 import type { Me, Patient } from "@/lib/healthpass-types";
 import type { CareVisit, VisitDetail } from "@/lib/healthpass-visit-types";
 import { Empty, Modal } from "./primitives";
+import type { CareArea } from "./individual-access";
 import { VisitHandoff } from "./visit-handoff";
 
 type Team = {
@@ -702,6 +703,13 @@ function CheckIn({
   const [branch, setBranch] = useState(initialBranch || me.branch?.id || "");
   const [professionals, setProfessionals] = useState(team.professionals);
   const [assignee, setAssignee] = useState("");
+  const [areas, setAreas] = useState<CareArea[]>([]),
+    [areaId, setAreaId] = useState("");
+  useEffect(() => {
+    void careApi("/care-areas")
+      .then((v) => setAreas(v.areas))
+      .catch(() => {});
+  }, []);
   const [requestId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -772,6 +780,7 @@ function CheckIn({
             branch_id: branch,
             assigned_user_id: assignee,
             client_request_id: requestId,
+            care_area_id: areaId || undefined,
           })
             .then((data) => onCreated(data.id))
             .catch((e) => setError(e.message))
@@ -815,6 +824,27 @@ function CheckIn({
                 {b.name}
               </option>
             ))}
+          </select>
+        </label>
+        <label>
+          Department / ward
+          <select
+            value={areaId}
+            onChange={(e) => setAreaId(e.target.value)}
+            required={!!me.careAreaRestricted}
+          >
+            <option value="">
+              {me.careAreaRestricted
+                ? "Choose assigned care area"
+                : "No outpatient department recorded / use current admission area"}
+            </option>
+            {areas
+              .filter((a) => a.active && a.branch_id === branch)
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} · {a.kind}
+                </option>
+              ))}
           </select>
         </label>
         <label>

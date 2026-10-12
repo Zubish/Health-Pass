@@ -1,3 +1,5 @@
+// Existing callers use heterogeneous endpoint responses; explicit callers provide their response DTO.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function careApi<T = any>(path: string, method = "GET", body?: unknown): Promise<T> {
   const response = await fetch(`/api/healthpass${path}`, {
     method,

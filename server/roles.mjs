@@ -1,4 +1,22 @@
 export const permissionCatalog = [
+  { key: "areas.manage", label: "Manage departments and wards", category: "operational" },
+  {
+    key: "admissions.manage",
+    label: "Manage admission episodes and care teams",
+    category: "operational",
+  },
+  {
+    key: "admissions.view",
+    label: "View admission episodes and assigned care teams",
+    category: "operational",
+  },
+  { key: "referrals.create", label: "Refer outpatients to consultants", category: "clinical" },
+  {
+    key: "referrals.respond",
+    label: "Accept, schedule and decline consultant referrals",
+    category: "clinical",
+  },
+
   {
     key: "careteam.view",
     label: "View responsible consultants and care teams",
@@ -45,6 +63,9 @@ export const roleTemplates = [
     description: "Manage staff, roles and branches; no clinical access.",
     clinical_scope: null,
     permissions: [
+      "areas.manage",
+      "admissions.manage",
+      "admissions.view",
       "careteam.manage",
       "primary.manage",
       "workspace.view",
@@ -174,10 +195,19 @@ export const roleTemplates = [
     ],
   },
 ];
+roleTemplates.push({
+  ...roleTemplates.find((r) => r.key === "gp"),
+  key: "consultant",
+  name: "Consultant",
+  description:
+    "Reviewed medical consultant; specialist consultation and consultant referral responses.",
+  permissions: [...roleTemplates.find((r) => r.key === "gp").permissions, "referrals.respond"],
+});
 for (const role of roleTemplates) {
-  if (["gp", "nurse", "pharmacist", "clinician"].includes(role.key))
-    role.permissions.push("careteam.view");
-  if (["gp", "nurse", "pharmacist", "clinician", "reception"].includes(role.key)) {
+  if (["gp", "nurse", "pharmacist", "clinician", "consultant"].includes(role.key))
+    role.permissions.push("careteam.view", "admissions.view");
+  if (["gp", "clinician"].includes(role.key)) role.permissions.push("referrals.create");
+  if (["gp", "nurse", "pharmacist", "clinician", "consultant", "reception"].includes(role.key)) {
     role.permissions.push("visits.view");
     if (role.permissions.includes("registry.create")) role.permissions.push("visits.manage");
     if (role.permissions.includes("notes.create")) {
@@ -192,7 +222,11 @@ export async function upgradeVisitRoles(tx) {
     "SELECT id,template_key,clinical_scope,permissions FROM workspace_roles",
   );
   for (const role of existing) {
-    if (!["gp", "nurse", "pharmacist", "clinician", "reception"].includes(role.template_key))
+    if (
+      !["gp", "nurse", "pharmacist", "clinician", "consultant", "reception"].includes(
+        role.template_key,
+      )
+    )
       continue;
     const permissions = new Set(JSON.parse(role.permissions));
     if (permissions.has("registry.view")) permissions.add("visits.view");
@@ -228,6 +262,28 @@ export async function createDefaultRoles(tx, organization) {
       ],
     );
 }
+export const permissionDependencies = {
+  "careteam.view": "registry.view",
+  "registry.create": "registry.view",
+  "visits.view": "registry.view",
+  "visits.manage": "visits.view",
+  "records.view": "registry.view",
+  "visits.document": "records.view",
+  "observations.create": "records.view",
+  "followups.manage": "records.view",
+  "profile.edit": "records.view",
+  "notes.create": "records.view",
+  "notes.edit": "records.view",
+  "notes.sign": "records.view",
+  "notes.amend": "records.view",
+  "referrals.create": "records.view",
+  "referrals.respond": "records.view",
+  "audit.manage": "audit.view",
+  "roles.manage": "workspace.view",
+  "staff.manage": "workspace.view",
+  "branches.manage": "workspace.view",
+  "areas.manage": "workspace.view",
+};
 export async function resolveMembership(tx, membership, user) {
   const roles = await tx.all(
     "SELECT r.* FROM membership_roles mr JOIN workspace_roles r ON r.id=mr.role_id WHERE mr.membership_id=? AND r.organization_id=? AND r.active=1 ORDER BY r.name",
@@ -255,6 +311,35 @@ export async function resolveMembership(tx, membership, user) {
     if (user.provider_support_verified && membership.access_expires_at && !expired)
       permissions.add("workspace.view");
   }
+  const denied = new Set(JSON.parse(membership.denied_permissions || "[]"));
+  for (const key of denied) permissions.delete(key);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [key, required] of Object.entries(permissionDependencies))
+      if (permissions.has(key) && !permissions.has(required)) {
+        permissions.delete(key);
+        changed = true;
+      }
+  }
+  if (!membership.consultant_verified) permissions.delete("referrals.respond");
+  user.consultantVerified = !!membership.consultant_verified;
+  user.deniedPermissions = [...denied];
+  user.careAreaRestricted = !!membership.care_area_restricted;
+  const areaIds = JSON.parse(membership.care_area_ids || "[]");
+  user.careAreaIds = areaIds.length
+    ? (
+        await tx.all(
+          `SELECT id FROM care_areas WHERE organization_id=? AND active=1 AND id IN (${areaIds.map(() => "?").join(",")}) AND (CAST(? AS TEXT) IS NULL OR branch_id=?)`,
+          [
+            user.organization_id,
+            ...areaIds,
+            membership.branch_id ?? null,
+            membership.branch_id ?? null,
+          ],
+        )
+      ).map((a) => a.id)
+    : [];
   user.permissions = !membership.active || expired ? [] : [...permissions];
   user.jobRoles = roles.map((r) => ({ id: r.id, name: r.name, clinical_scope: r.clinical_scope }));
   user.clinicalScopes = support || expired ? [] : [...new Set(scopes)];
@@ -285,7 +370,7 @@ export async function upgradeCareResponsibilities(tx) {
     const permission =
       r.template_key === "administrator"
         ? "careteam.manage"
-        : ["gp", "nurse", "pharmacist", "clinician"].includes(r.template_key)
+        : ["gp", "nurse", "pharmacist", "clinician", "consultant"].includes(r.template_key)
           ? "careteam.view"
           : null;
     const permissions = JSON.parse(r.permissions);
