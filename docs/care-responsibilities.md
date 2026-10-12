@@ -25,3 +25,13 @@ Lists return bounded pages with explicit load-more controls; history shows the l
 Run `npm test`, `npm run typecheck` and `npm run build`. Dedicated checks exercise current consultant eligibility, administrator versus clinician authority, tenant/branch/patient tampering, named-only/readonly denial, other-GP care without replacing the lead or visit assignee, source ownership, stale/concurrent changes, retries, one active lead, and immutable history. Use synthetic fixtures only.
 
 Apply migration 012 and restricted runtime grants before deploying the API, then deploy the frontend and verify the canonical app. Rollback must preserve consultant and care history; do not delete signed or audit data. Deployment evidence is recorded after verification completes.
+
+### Verified release — 12 October 2026
+
+Feature commit `2a8340c5f1359d04539f2ed3da2270dd17d0b2ca` is pushed and deployed at `https://health-pass-psi.vercel.app/`. The canonical alias points to READY Vercel deployment `dpl_6a7udxZjAGq5XCMebHZhbSDX6ndb`. Neon API deployment 13 completed, and migration 012 is applied with restricted runtime privileges and immutable event triggers.
+
+The full suite passed 102 checks on SQLite/embedded PostgreSQL plus function/proxy checks. The final five responsibility cases also passed against a separate PostgreSQL 17 server with pooled connections; scoped patient-row locking, retry/version conflict and facility-wide uniqueness were exercised. Disposable test databases and the container were removed. TypeScript, production build and the new-component lint passed.
+
+Local browser testing completed the synthetic child scenario: an administrator assigned a reviewed paediatrician, a different GP signed their own care while remaining the visit assignee, the overall lead stayed unchanged, and the chart displayed that consultant. Mobile ward updates, patient visibility, refresh, ending/history and preserved source authorship passed with no page errors or overflow.
+
+Hosted tests used synthetic metadata only: administrator assignment/retry, independent GP visit ownership, no administrator clinical access, mobile patient/team and clinician chart visibility, current-access revocation without silent duty transfer, immutable history on ending and canonical refresh. No hosted clinical notes, observations, tasks or real emails were created. Successful covering-GP clinical documentation was tested locally, not claimed as a hosted clinical workflow. Synthetic visit metadata was cancelled after verification.
