@@ -53,7 +53,7 @@ flowchart LR
   G --> X[Other facilities or professionals]
 ```
 
-The diagram is the **RECOMMENDED target relationship model**. Patient-issued facility registration and explicit clinical handoffs are implemented. Named-professional whole-category sharing and one-level delegation are implemented. Claiming old facility-created charts, primary facilities, proxies and line-level protection remain planned.
+The diagram is the **RECOMMENDED target relationship model**. Patient-issued facility registration and explicit clinical handoffs are implemented. Named-professional whole-category sharing and one-level delegation are implemented. New facility profiles support invitation claiming, existing-account registration requests and primary-facility decisions; reviewed claiming of historical unrelated charts, proxies and line-level protection remain planned.
 
 **RECOMMENDED authorisation rule:** allow an action only when the account/session is valid, the facility membership and branch context permit it, the action is granted, applicable professional credentials cover the discipline, and the patient/record relationship permits the requested information. Apply these checks on the server before returning data. A hidden button is not an access boundary.
 
@@ -157,3 +157,5 @@ Before real-patient use, resolve the remaining identity/access, clinical review,
 - [Current decisions and implementation](foundation.md), [accounts/workspaces](account-workspaces.md), [role rules](workspace-roles.md).
 - HealthPass inspected sources: `server/api.mjs`, `server/roles.mjs`, `server/workspaces.mjs`, `server/db.mjs`, migrations 001–006, `src/components/healthpass/`, `src/lib/healthpass-types.ts`.
 - RxLedger snapshot: `docs/SKILL_LIBRARY.md`, its workflow/UI/mobile/data/industry modules, `docs/APP_BLUEPRINT.md`, `docs/RXLEDGER_ECOSYSTEM_MODULES.md`, `docs/PLATFORM_ADMIN_PORTAL.md`, `src/components/AuthViews.tsx`, `server/_shared.ts`, `server/branch-scope.ts`, `src/navigation.ts` and `src/platform/contracts.ts`. Documentation claims were treated separately from source evidence and live verification.
+
+The owner-approved registration and primary-care contract is recorded in [patient-onboarding.md](patient-onboarding.md). Email delivery requires a configured sender; the adapter and queue alone do not mean invitations have been delivered.

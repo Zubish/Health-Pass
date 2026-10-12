@@ -4,6 +4,7 @@ import { careApi } from "@/lib/healthpass-client";
 import type { Me } from "@/lib/healthpass-types";
 import { Auth, Mfa, type AccountMode } from "@/components/healthpass/auth";
 import { Mark } from "@/components/healthpass/primitives";
+import { PatientActivation } from "@/components/healthpass/patient-activation";
 import { CareWorkspace } from "@/components/healthpass/care-workspace";
 export const Route = createFileRoute("/workspace")({
   validateSearch: (
@@ -15,10 +16,19 @@ export const Route = createFileRoute("/workspace")({
     visit?: string;
     branch?: string;
     setup?: boolean;
+    claim?: string;
   } => ({
-    tab: ["overview", "workspace", "patients", "sharing", "audit", "today", "visits"].includes(
-      String(search.tab),
-    )
+    claim: typeof search.claim === "string" ? search.claim : undefined,
+    tab: [
+      "relationships",
+      "overview",
+      "workspace",
+      "patients",
+      "sharing",
+      "audit",
+      "today",
+      "visits",
+    ].includes(String(search.tab))
       ? String(search.tab)
       : undefined,
     patient: typeof search.patient === "string" ? search.patient : undefined,
@@ -35,7 +45,7 @@ export const Route = createFileRoute("/workspace")({
   head: () => ({ meta: [{ title: "HealthPass · Care workspace" }] }),
 });
 function Workspace() {
-  const { mode, setup } = Route.useSearch();
+  const { mode, setup, claim } = Route.useSearch();
   const navigate = Route.useNavigate();
   const [me, setMe] = useState<Me | null>(null),
     [loading, setLoading] = useState(true),
@@ -108,6 +118,21 @@ function Workspace() {
   useEffect(() => {
     void refresh();
   }, []);
+  if (claim)
+    return (
+      <PatientActivation
+        claimId={claim}
+        onSuccess={async () => {
+          window.history.replaceState(null, "", window.location.pathname + "?tab=relationships");
+          await navigate({ search: { tab: "relationships" }, replace: true });
+          await refresh();
+        }}
+        onSignIn={() => {
+          window.history.replaceState(null, "", window.location.pathname);
+          void navigate({ search: {}, replace: true });
+        }}
+      />
+    );
   if (loading)
     return (
       <main className="hp-auth">

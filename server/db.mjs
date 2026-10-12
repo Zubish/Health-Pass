@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { upgradeVisitRoles } from "./roles.mjs";
+import { upgradeVisitRoles, upgradePrimaryRoles } from "./roles.mjs";
 
 export async function openDatabase(config = process.env, dependencies = {}) {
   let engine, pool;
@@ -92,9 +92,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   };
   if (config.NODE_ENV === "production" && config.HEALTHPASS_RUN_MIGRATIONS !== "1") {
     await db.transaction(async (tx) => {
-      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='010'")))
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='011'")))
         throw new Error(
-          "Apply schema migrations 001 through 010 using the migration identity before starting the API.",
+          "Apply schema migrations 001 through 011 using the migration identity before starting the API.",
         );
     });
     return db;
@@ -177,6 +177,7 @@ export async function openDatabase(config = process.env, dependencies = {}) {
     ["008", "008-care-visits.sql"],
     ["009", "009-professional-access.sql"],
     ["010", "010-care-handoffs.sql"],
+    ["011", "011-patient-onboarding.sql"],
   ]) {
     await db.transaction(async (tx) => {
       if (!(await tx.get("SELECT version FROM schema_migrations WHERE version=?", [version]))) {
@@ -196,6 +197,7 @@ export async function openDatabase(config = process.env, dependencies = {}) {
             }
           }
         }
+        if (version === "011") await upgradePrimaryRoles(tx);
         await tx.run("INSERT INTO schema_migrations(version) VALUES (?)", [version]);
       }
     });

@@ -1,5 +1,7 @@
 import { hasPermission, resolveMembership } from "./roles.mjs";
 import { workspaceRoutes } from "./workspaces.mjs";
+import { handlePatientOnboarding, patientForEmail } from "./patient-onboarding.mjs";
+import { deliverPatientEmails } from "./patient-email.mjs";
 import { handlePatientLinking } from "./patient-linking.mjs";
 import { handleVisits, validateEncounterVisit } from "./visits.mjs";
 import { handleCareHandoffs, participatingVisitIds, visitParticipation } from "./care-handoffs.mjs";
@@ -204,7 +206,17 @@ export function createApi(db, config = process.env) {
       ));
     if ((!local || !branchLocal) && !grant)
       fail(403, "No active care relationship or sharing grant.");
-    return { patient, consent: grant?.id ?? null, accessPolicy: legacyPolicy };
+    const preferences = await tx.all(
+      "SELECT include_profile FROM patient_relationship_preferences WHERE patient_id=? AND organization_id=? AND (CAST(? AS TEXT) IS NULL OR branch_id=?)",
+      [patientId, actor.organization_id, actor.branch_id ?? null, actor.branch_id ?? null],
+    );
+    const includeProfile =
+      !!grant || !preferences.length || preferences.some((row) => row.include_profile === 1);
+    return {
+      patient,
+      consent: grant?.id ?? null,
+      accessPolicy: { ...legacyPolicy, includeProfile, canEditProfile: includeProfile },
+    };
   }
   const requireContributionScope = (policy, scope) => {
     if (!policy.contributionScopes.includes(scope))
@@ -270,6 +282,27 @@ export function createApi(db, config = process.env) {
               : "synthetic-development",
         database: db.engine,
       };
+    if (path === "/auth/patient-claim")
+      return handlePatientOnboarding(tx, {
+        actor,
+        path,
+        method,
+        body,
+        searchParams: new URL(request.url).searchParams,
+        permit,
+        strong,
+        fail,
+        text,
+        emailValue,
+        patientInput,
+        audit,
+        correlation,
+        limit,
+        config,
+        makeSession,
+        cookie,
+        outputHeaders,
+      });
     if (path === "/auth/login" && method === "POST") {
       const email = emailValue(body.email);
       limit(`login:${body.workspace_code ?? body.account_type ?? "legacy"}:${email}`);
@@ -318,6 +351,11 @@ export function createApi(db, config = process.env) {
         )
       )
         fail(409, "Unable to create this account. Try signing in or contact support.");
+      if (await patientForEmail(tx, email))
+        fail(
+          409,
+          "This email already has a patient account or facility registration. Sign in or use your activation invitation.",
+        );
       const patientId = randomUUID(),
         userId = randomUUID();
       await tx.run(
@@ -331,6 +369,15 @@ export function createApi(db, config = process.env) {
           now(),
         ],
       );
+      const reserved = await tx.get(
+        "INSERT INTO patient_addresses(email,patient_id,created_at) VALUES (?,?,?) ON CONFLICT(email) DO NOTHING RETURNING email",
+        [email, patientId, now()],
+      );
+      if (!reserved)
+        fail(
+          409,
+          "This email already has a patient account or facility registration. Use its activation invitation.",
+        );
       await tx.run("INSERT INTO users(id,email,name,password_hash,patient_id) VALUES (?,?,?,?,?)", [
         userId,
         email,
@@ -338,6 +385,7 @@ export function createApi(db, config = process.env) {
         passwordHash(password),
         patientId,
       ]);
+      await tx.run("UPDATE patient_addresses SET claimed_by=? WHERE email=?", [userId, email]);
       const user = await tx.get("SELECT * FROM users WHERE id=?", [userId]);
       outputHeaders.set("set-cookie", cookie(await makeSession(tx, user)));
       await audit(
@@ -368,7 +416,15 @@ export function createApi(db, config = process.env) {
       audit,
       correlation,
       limit,
+      emailValue,
+      patientInput,
+      config,
+      makeSession,
+      cookie,
+      outputHeaders,
     };
+    const onboardingResult = await handlePatientOnboarding(tx, context);
+    if (onboardingResult !== undefined) return onboardingResult;
     const linkingResult = await handlePatientLinking(tx, context);
     if (linkingResult !== undefined) return linkingResult;
     const sharingResult = await handleProfessionalAccess(tx, context);
@@ -502,44 +558,16 @@ export function createApi(db, config = process.env) {
         for (const patient of named) if (!ids.has(patient.id)) rows.push(patient);
         rows.sort((a, b) => a.name.localeCompare(b.name));
       }
+      if (hasPermission(actor, "registry.create")) {
+        const origins = await tx.all(
+          "SELECT r.patient_id,a.claimed_by FROM patient_origins r LEFT JOIN patient_addresses a ON a.patient_id=r.patient_id WHERE r.organization_id=? AND (CAST(? AS TEXT) IS NULL OR r.branch_id=?)",
+          [actor.organization_id, actor.branch_id ?? null, actor.branch_id ?? null],
+        );
+        const activatable = new Set(origins.filter((r) => !r.claimed_by).map((r) => r.patient_id));
+        for (const row of rows) row.can_activate = activatable.has(row.id);
+      }
       await audit(tx, actor, "registry.list", "allow", null, null, correlation);
       return { patients: rows };
-    }
-    if (path === "/patients" && method === "POST") {
-      permit(actor, "registry.create");
-      const data = patientInput(body);
-      const id = randomUUID();
-      // No automatic demographic matching/merge; every uncertain identity remains separate.
-      await tx.run(
-        "INSERT INTO patients(id,healthpass_id,name,dob,phone,created_at) VALUES (?,?,?,?,?,?)",
-        [
-          id,
-          `HP-${randomBytes(6).toString("hex").toUpperCase()}`,
-          data.name,
-          data.dob,
-          data.phone,
-          now(),
-        ],
-      );
-      await tx.run(
-        "INSERT INTO patient_links(patient_id,organization_id,created_at) VALUES (?,?,?)",
-        [id, actor.organization_id, now()],
-      );
-      const branchId =
-        actor.branch_id ??
-        (
-          await tx.get(
-            "SELECT id FROM branches WHERE organization_id=? AND active=1 ORDER BY id LIMIT 1",
-            [actor.organization_id],
-          )
-        )?.id;
-      if (branchId)
-        await tx.run("INSERT INTO branch_patient_links(branch_id,patient_id) VALUES (?,?)", [
-          branchId,
-          id,
-        ]);
-      await audit(tx, actor, "registry.register", "allow", id, id, correlation);
-      return { id };
     }
     let match = path.match(/^\/patients\/([^/]+)$/);
     if (match && method === "GET") {
@@ -624,22 +652,23 @@ export function createApi(db, config = process.env) {
             hasPermission(actor, "records.view"),
         });
       }
-      const releasedPatient = !accessPolicy.restricted
-        ? patient
-        : {
-            id: patient.id,
-            healthpass_id: patient.healthpass_id,
-            name: patient.name,
-            dob: patient.dob,
-            created_at: patient.created_at,
-            ...(accessPolicy.includeProfile
-              ? {
-                  allergy_status: patient.allergy_status,
-                  allergies: patient.allergies,
-                  emergency_contact: patient.emergency_contact,
-                }
-              : {}),
-          };
+      const releasedPatient =
+        !accessPolicy.restricted && accessPolicy.includeProfile
+          ? patient
+          : {
+              id: patient.id,
+              healthpass_id: patient.healthpass_id,
+              name: patient.name,
+              dob: patient.dob,
+              created_at: patient.created_at,
+              ...(accessPolicy.includeProfile
+                ? {
+                    allergy_status: patient.allergy_status,
+                    allergies: patient.allergies,
+                    emergency_contact: patient.emergency_contact,
+                  }
+                : {}),
+            };
       await audit(
         tx,
         actor,
@@ -1029,6 +1058,7 @@ export function createApi(db, config = process.env) {
         actor = await session(tx, request);
         return dispatch(tx, request, path, request.method, body, actor, correlation, headers);
       });
+      if (request.method !== "GET") await deliverPatientEmails(db, config).catch(() => {});
       return new Response(JSON.stringify(result), { status: 200, headers });
     } catch (error) {
       const status = error.status ?? 500;

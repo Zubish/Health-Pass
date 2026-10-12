@@ -1,4 +1,9 @@
 export const permissionCatalog = [
+  {
+    key: "primary.manage",
+    label: "Accept or decline primary care relationships",
+    category: "operational",
+  },
   { key: "registry.view", label: "View patient registry", category: "operational" },
   { key: "registry.create", label: "Register patients", category: "operational" },
   { key: "visits.view", label: "View arrival queue", category: "operational" },
@@ -30,6 +35,7 @@ export const roleTemplates = [
     description: "Manage staff, roles and branches; no clinical access.",
     clinical_scope: null,
     permissions: [
+      "primary.manage",
       "workspace.view",
       "branches.manage",
       "staff.manage",
@@ -246,4 +252,17 @@ export async function resolveMembership(tx, membership, user) {
 }
 export function hasPermission(actor, key) {
   return actor?.permissions?.includes(key) ?? false;
+}
+
+export async function upgradePrimaryRoles(tx) {
+  for (const row of await tx.all(
+    "SELECT id,permissions FROM workspace_roles WHERE template_key='administrator'",
+  )) {
+    const permissions = JSON.parse(row.permissions);
+    if (!permissions.includes("primary.manage"))
+      await tx.run("UPDATE workspace_roles SET permissions=? WHERE id=?", [
+        JSON.stringify([...permissions, "primary.manage"]),
+        row.id,
+      ]);
+  }
 }

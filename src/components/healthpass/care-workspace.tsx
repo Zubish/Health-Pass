@@ -25,6 +25,8 @@ import type { Me, Patient, Encounter, AccessScope } from "@/lib/healthpass-types
 import { Mark, Stat, PatientRow, Empty, Modal } from "./primitives";
 import { NoteEditor, EncounterCard } from "./encounters";
 import { PatientLinking, FacilityLinking } from "./patient-linking";
+import { CareRelationships, PatientRelationshipNotice } from "./care-relationships";
+import { FacilityRegistration, FacilityActivation } from "./facility-registration";
 import { Visits } from "./visits";
 import { PatientProfessionalAccess, ProfessionalAccess } from "./professional-access";
 export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promise<void> }) {
@@ -51,6 +53,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
     [register, setRegister] = useState(false),
+    [activationPatient, setActivationPatient] = useState<string | null>(null),
     [linkExisting, setLinkExisting] = useState(false),
     [noteVisit, setNoteVisit] = useState<{ id: string; patient_id: string } | null>(null),
     [noteRequestKey, setNoteRequestKey] = useState(""),
@@ -70,6 +73,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
         ["overview", "My health", LayoutDashboard],
         ["patients", "My record", FileHeart],
         ["sharing", "Sharing", ShieldCheck],
+        ["relationships", "Care relationships", Users],
         ["audit", "Access history", History],
       ] as const)
     : ([
@@ -77,6 +81,9 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
         ["overview", "Overview", LayoutDashboard],
         ...(can("workspace.view") ? [["workspace", "Workspace & branches", Users] as const] : []),
         ...(canRegistry ? [["patients", "Patient registry", Users] as const] : []),
+        ...(canRegister || can("primary.manage")
+          ? [["relationships", "Care relationships", ShieldCheck] as const]
+          : []),
         ...(can("audit.view") ? [["audit", "Activity & audit", History] as const] : []),
       ] as const);
   async function loadRegistry() {
@@ -232,6 +239,9 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           </span>
         </header>
         <main className="hp-content">
+          {isPatient && tab !== "relationships" && (
+            <PatientRelationshipNotice key={tab} onOpen={() => setTab("relationships")} />
+          )}
           {health === "synthetic-development" && (
             <div className="hp-demo-banner">Development workspace · use synthetic records only</div>
           )}
@@ -456,11 +466,22 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                   <span>{filtered.length} records</span>
                 </div>
                 {filtered.map((p) => (
-                  <PatientRow
-                    key={p.id}
-                    patient={p}
-                    onClick={canChart ? () => void loadChart(p.id) : undefined}
-                  />
+                  <div key={p.id}>
+                    <PatientRow
+                      patient={p}
+                      onClick={canChart ? () => void loadChart(p.id) : undefined}
+                    />
+                    {canRegister && p.can_activate && (
+                      <div className="hp-padded">
+                        <button
+                          className="hp-button secondary"
+                          onClick={() => setActivationPatient(p.id)}
+                        >
+                          Patient account invitation · {p.name}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ))}
                 {!filtered.length && (
                   <Empty
@@ -837,48 +858,31 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
             </span>
           )}
           {register && (
-            <Modal title="Register a patient" onClose={() => setRegister(false)}>
-              {error && (
-                <p className="hp-error" role="alert">
-                  {error}
-                </p>
-              )}
-              <p className="hp-muted">
-                Create a separate identity. Do not guess a date of birth or merge records based on a
-                shared phone.
-              </p>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const data = Object.fromEntries(new FormData(e.currentTarget));
-                  void act(async () => {
-                    const result = await careApi("/patients", "POST", data);
-                    await loadRegistry();
-                    setRegister(false);
-                    setTab("patients");
-                    if (canChart) await loadChart(result.id);
-                  }, "Patient registered with a new HealthPass ID.");
-                }}
-              >
-                <label>
-                  Full name
-                  <input name="name" required maxLength={160} />
-                </label>
-                <label>
-                  Date of birth <small>Optional</small>
-                  <input type="date" name="dob" max={new Date().toISOString().slice(0, 10)} />
-                </label>
-                <label>
-                  Contact phone <small>Optional; may be shared</small>
-                  <input name="phone" type="tel" maxLength={40} />
-                </label>
-                <button className="hp-button primary" disabled={busy}>
-                  Register patient
-                  <ArrowRight size={16} />
-                </button>
-              </form>
-            </Modal>
+            <FacilityRegistration
+              me={me}
+              onClose={() => setRegister(false)}
+              onExisting={() => {
+                setRegister(false);
+                setTab("relationships");
+              }}
+              onRegistered={(id, message) => {
+                setRegister(false);
+                setNotice(message);
+                void loadRegistry();
+                setTab("patients");
+              }}
+            />
           )}
+          {activationPatient && (
+            <FacilityActivation
+              patientId={activationPatient}
+              onClose={() => {
+                setActivationPatient(null);
+                void loadRegistry();
+              }}
+            />
+          )}
+          {tab === "relationships" && <CareRelationships me={me} />}
           {linkExisting && (
             <FacilityLinking
               onClose={() => setLinkExisting(false)}

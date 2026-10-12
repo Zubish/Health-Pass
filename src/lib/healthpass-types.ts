@@ -15,6 +15,7 @@ export type Me = {
   mfaEnrolled: boolean;
 };
 export type Patient = {
+  can_activate?: boolean;
   id: string;
   healthpass_id: string;
   name: string;

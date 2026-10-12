@@ -13,6 +13,7 @@ export async function careApi<T = any>(path: string, method = "GET", body?: unkn
     ![
       "/auth/login",
       "/auth/register",
+      "/auth/patient-claim",
       "/auth/facility-register",
       "/auth/workspace-register",
     ].includes(path)

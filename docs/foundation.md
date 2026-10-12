@@ -162,3 +162,9 @@ These are implementation boundaries for this slice, not a claim that primary-fac
 ## Implemented explicit care handoff — 12 October 2026
 
 [Care handoffs](care-handoffs.md) add a request/review/accept lifecycle within one facility/branch. The outgoing assigned professional signs their own source note and stays responsible until the permitted recipient accepts. Current patient grants and reviewed roles determine both source viewing and new contribution; handoff does not expand sharing. Past participants retain permitted signed history and their own correction/task responsibility, with drafts private and new visit care reserved for the current assignee. Completion requires that assignee's own signed note. Pending or expired requests must be explicitly resolved before completion; cancellation closes requests while preserving care and correction history. Migration 010 records the lifecycle and guarded transitions.
+
+## Facility registration and primary care decision — 2026-10-12
+
+The owner approved [patient-onboarding.md](patient-onboarding.md): unique patient email identities, facility-created provisional profiles and verified invitation claiming, private existing-account registration requests, optional profile-context sharing, and primary-facility acceptance/decline except for the first registering facility. This supersedes earlier descriptions of primary care as entirely planned. Primary designation does not create clinical authority. Independent professional facility identities remain unchanged. Proxies and emergency release remain later work.
+
+Migration 011 and the email-delivery adapter are part of this slice. The hosted API has no configured patient email sender; the app must state that an invitation has not been sent and permit a fresh resend when delivery is connected. Do not describe independent legacy/self-signup emails as verified or historical unrelated charts as claimable.

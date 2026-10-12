@@ -1,0 +1,16 @@
+-- Email uniqueness belongs to the patient identity, not facility professional accounts.
+CREATE TABLE patient_addresses (email TEXT PRIMARY KEY, patient_id TEXT UNIQUE NOT NULL REFERENCES patients(id), claimed_by TEXT REFERENCES users(id), verified_at TEXT, created_at TEXT NOT NULL);
+INSERT INTO patient_addresses(email,patient_id,claimed_by,created_at) SELECT LOWER(COALESCE(u.login_email,u.email)),u.patient_id,u.id,p.created_at FROM users u JOIN patients p ON p.id=u.patient_id WHERE u.account_scope='patient';
+CREATE UNIQUE INDEX patient_account_identity ON users(patient_id) WHERE patient_id IS NOT NULL;
+CREATE TABLE patient_origins (patient_id TEXT PRIMARY KEY REFERENCES patients(id), organization_id TEXT NOT NULL REFERENCES organizations(id), branch_id TEXT NOT NULL REFERENCES branches(id), registered_by TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL, request_key TEXT UNIQUE, request_payload_hash TEXT);
+CREATE TABLE patient_claims (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL REFERENCES patients(id), email TEXT NOT NULL REFERENCES patient_addresses(email), token_hash TEXT UNIQUE NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, consumed_at TEXT, revoked_at TEXT);
+CREATE INDEX patient_claim_pending ON patient_claims(patient_id,expires_at);
+CREATE TABLE patient_email_outbox (id TEXT PRIMARY KEY REFERENCES patient_claims(id), encrypted_payload TEXT NOT NULL, created_at TEXT NOT NULL, sent_at TEXT, attempts INTEGER NOT NULL DEFAULT 0, retry_after TEXT, lease_until TEXT, last_error TEXT);
+CREATE TABLE facility_access_requests (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL REFERENCES patients(id), organization_id TEXT NOT NULL REFERENCES organizations(id), branch_id TEXT NOT NULL REFERENCES branches(id), requested_by TEXT NOT NULL REFERENCES users(id), purpose TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','declined','withdrawn')), pending_key TEXT UNIQUE, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, resolved_at TEXT);
+CREATE INDEX facility_request_patient ON facility_access_requests(patient_id,created_at);
+CREATE INDEX facility_request_workspace ON facility_access_requests(organization_id,branch_id,created_at);
+CREATE TABLE primary_care (patient_id TEXT PRIMARY KEY REFERENCES patients(id), organization_id TEXT REFERENCES organizations(id), source TEXT NOT NULL CHECK(source IN ('first_registration','accepted_request')), changed_at TEXT NOT NULL);
+CREATE TABLE primary_care_requests (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL REFERENCES patients(id), organization_id TEXT NOT NULL REFERENCES organizations(id), status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','declined','withdrawn')), pending_key TEXT UNIQUE, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, resolved_at TEXT, resolved_by TEXT REFERENCES users(id));
+CREATE INDEX primary_request_workspace ON primary_care_requests(organization_id,created_at);
+
+CREATE TABLE patient_relationship_preferences (patient_id TEXT NOT NULL REFERENCES patients(id), organization_id TEXT NOT NULL REFERENCES organizations(id), branch_id TEXT NOT NULL REFERENCES branches(id), include_profile INTEGER NOT NULL DEFAULT 0 CHECK(include_profile IN (0,1)), changed_at TEXT NOT NULL, PRIMARY KEY(patient_id,organization_id,branch_id));

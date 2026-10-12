@@ -16,7 +16,8 @@
     "test": "node tests/run.mjs",
     "typecheck": "tsc --noEmit",
     "migrate": "node --env-file-if-exists=.env server/migrate.mjs",
-    "provision": "node --env-file-if-exists=.env server/provision.mjs"
+    "provision": "node --env-file-if-exists=.env server/provision.mjs",
+    "deliver-patient-emails": "node --env-file-if-exists=.env server/deliver-patient-emails.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

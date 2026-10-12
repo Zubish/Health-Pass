@@ -2631,3 +2631,47 @@ button.hp-patient-row:hover {
   cursor: pointer;
   font-weight: 600;
 }
+
+/* Registration and consent controls keep each checkbox with its own text on mobile. */
+.hp-check-row {
+  display: flex !important;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 16px 0;
+}
+.hp-check-row input[type="checkbox"] {
+  width: 20px !important;
+  height: 20px;
+  min-height: 20px;
+  flex: 0 0 20px;
+  margin: 2px 0 0;
+}
+.hp-check-row span {
+  min-width: 0;
+  line-height: 1.6;
+}
+.hp-relationship-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 24px;
+  align-items: start;
+}
+.hp-relationship-grid form {
+  margin-top: 20px;
+}
+.hp-relationship-row {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.hp-relationship-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+.hp-relationship-actions .hp-check-row {
+  flex-basis: 100%;
+}
+.hp-relationship-actions button {
+  min-height: 44px;
+}

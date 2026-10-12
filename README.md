@@ -18,3 +18,5 @@ Use synthetic data only until the hosting, clinical and privacy pilot requiremen
 Patient-directed sharing: [named-professional access and delegation](docs/named-access.md).
 
 Clinical continuity: [explicit handoff and preserved care ownership](docs/care-handoffs.md).
+
+Facility registration, activation invitations, existing-account requests and primary care: [working contract](docs/patient-onboarding.md). Patient email delivery needs a private configured sender; the interface shows unconfigured delivery honestly.
