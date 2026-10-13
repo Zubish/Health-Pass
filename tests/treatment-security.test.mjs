@@ -608,3 +608,24 @@ test("patient category sharing immediately controls medication reads and nursing
     await f.db.close();
   }
 });
+test("durable sign-in attempt limits cannot be bypassed by workspace code letter case", async () => {
+  const f = await fixture();
+  try {
+    const client = await extraClient(f, "unknown@synthetic.invalid");
+    for (let n = 0; n < 11; n++) {
+      const r = await client("/auth/login", "POST", {
+        email: "unknown@synthetic.invalid",
+        password: "synthetic-invalid-password",
+        account_type: "professional",
+        workspace_code: n % 2 ? "hp-org-lagos" : "HP-ORG-LAGOS",
+      });
+      assert.equal(r.status, n < 10 ? 401 : 429);
+    }
+    const row = await f.db.transaction((tx) =>
+      tx.get("SELECT COUNT(*) AS count FROM signin_attempt_limits WHERE attempt_count>10"),
+    );
+    assert.equal(Number(row.count), 1);
+  } finally {
+    await f.db.close();
+  }
+});

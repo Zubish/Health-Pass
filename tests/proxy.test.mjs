@@ -107,3 +107,31 @@ test("combined function-host cookies are delivered as separate session and devic
     await close(origin);
   }
 });
+test("a separate trusted device-cookie header preserves both cookies without exposing the internal header", async () => {
+  const token = "a".repeat(64);
+  const origin = createServer((req, res) => {
+    res.writeHead(200, {
+      "content-type": "application/json",
+      "set-cookie": "hp_session=synthetic-session; HttpOnly; Path=/",
+      "x-healthpass-device-cookie": `hp_device=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000; Secure`,
+    });
+    res.end("{}");
+  });
+  const port = await listen(origin);
+  try {
+    const response = await fetchHealthpassOrigin(
+      new Request("http://proxy.example/auth/login"),
+      new URL("http://127.0.0.1:" + port + "/auth/login"),
+      new Headers(),
+    );
+    assert.equal(response.headers.getSetCookie().length, 2);
+    assert.equal(response.headers.has("x-healthpass-device-cookie"), false);
+    assert.equal(
+      response.headers.getSetCookie()[0],
+      "hp_session=synthetic-session; HttpOnly; Path=/",
+    );
+    assert.ok(response.headers.getSetCookie()[1].includes("hp_device=" + token));
+  } finally {
+    await close(origin);
+  }
+});

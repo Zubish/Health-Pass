@@ -84,8 +84,8 @@ export async function recordSignin(tx, request, headers, secure, sessionToken) {
       now(),
     ],
   );
-  headers.append(
-    "set-cookie",
+  headers.set(
+    "x-healthpass-device-cookie",
     `hp_device=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${secure ? "; Secure" : ""}`,
   );
 }

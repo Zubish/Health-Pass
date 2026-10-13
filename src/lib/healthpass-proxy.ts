@@ -20,6 +20,15 @@ export async function fetchHealthpassOrigin(
   const cookies = response.headers
     .getSetCookie()
     .flatMap((value) => value.split(/,\s*(?=hp_(?:session|device)=)/));
+  const deviceCookie = response.headers.get("x-healthpass-device-cookie");
+  outgoing.delete("x-healthpass-device-cookie");
+  if (
+    deviceCookie &&
+    /^hp_device=[a-f0-9]{64}; HttpOnly; SameSite=Strict; Path=\/; Max-Age=2592000(?:; Secure)?$/.test(
+      deviceCookie,
+    )
+  )
+    cookies.push(deviceCookie);
   outgoing.delete("set-cookie");
   for (const cookie of cookies) outgoing.append("set-cookie", cookie);
 

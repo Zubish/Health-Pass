@@ -368,7 +368,11 @@ export function createApi(db, config = process.env) {
       });
     if (path === "/auth/login" && method === "POST") {
       const email = emailValue(body.email);
-      limit(`login:${body.workspace_code ?? body.account_type ?? "legacy"}:${email}`);
+      limit(
+        `login:${String(body.workspace_code ?? body.account_type ?? "legacy")
+          .trim()
+          .toUpperCase()}:${email}`,
+      );
       const password = text(body.password, "password", 256, true);
       let user;
       if (body.account_type === "professional" || body.workspace_code) {
@@ -1148,7 +1152,9 @@ export function createApi(db, config = process.env) {
       submittedBody = body;
       if (path === "/auth/login" && request.method === "POST") {
         const attemptKey = hash(
-          String(body.workspace_code ?? body.account_type ?? "legacy") +
+          String(body.workspace_code ?? body.account_type ?? "legacy")
+            .trim()
+            .toUpperCase() +
             ":" +
             String(body.email ?? "")
               .trim()
