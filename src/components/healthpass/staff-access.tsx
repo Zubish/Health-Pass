@@ -1,6 +1,6 @@
 import { IndividualAccess, type CareArea } from "./individual-access";
 import { useState } from "react";
-import { scopeNames, type JobRole, type Permission } from "./role-management";
+import { scopeNames, type JobRole, type Permission } from "@/lib/healthpass-role-types";
 export type StaffMember = {
   id: string;
   user_id: string;
@@ -94,8 +94,12 @@ export function StaffAccess({
                     onChange={(e) => {
                       const checked = e.target.checked;
                       setSelected((previous) => {
-                        if (!checked) return previous.filter((id) => id !== role.id);
-                        if (role.template_key === "zed-support") return [role.id];
+                        if (!checked) {
+                          return previous.filter((id) => id !== role.id);
+                        }
+                        if (role.template_key === "zed-support") {
+                          return [role.id];
+                        }
                         return [
                           ...previous.filter(
                             (id) => roles.find((r) => r.id === id)?.template_key !== "zed-support",

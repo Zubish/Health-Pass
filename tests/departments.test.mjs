@@ -49,7 +49,9 @@ async function fixture(t) {
           ...(body ? { body: JSON.stringify(body) } : {}),
         }),
       );
-      if (r.headers.get("set-cookie")) cookie = r.headers.get("set-cookie").split(";")[0];
+      if (r.headers.get("set-cookie")) {
+        cookie = r.headers.get("set-cookie").split(";")[0];
+      }
       return { status: r.status, data: await r.json() };
     };
     assert.equal(
@@ -64,7 +66,9 @@ async function fixture(t) {
       ).status,
       200,
     );
-    if (workspace) assert.equal((await clients[id]("/auth/mfa/skip", "POST", {})).status, 200);
+    if (workspace) {
+      assert.equal((await clients[id]("/auth/mfa/skip", "POST", {})).status, 200);
+    }
   }
   const ok = async (promise) => {
     const r = await promise;
@@ -273,8 +277,8 @@ test("decline and cancellation require reasons and do not erase requests", async
 });
 
 test("radiographers hand completed examinations to reporting professionals without gaining signing permission", async (t) => {
-  const f = await fixture(t),
-    { id } = await f.order("radiology");
+  const f = await fixture(t);
+  const { id } = await f.order("radiology");
   await f.ok(f.act(f.radiographer, id, "accept"));
   await f.ok(f.act(f.radiographer, id, "start", { reference: "Synthetic examination" }));
   await f.ok(f.act(f.radiographer, id, "complete", { reason: "Synthetic acquisition complete" }));

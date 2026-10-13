@@ -18,20 +18,25 @@ async function currentProfessional(tx, userId, organizationId) {
     "SELECT * FROM users WHERE id=? AND active=1 AND verified=1 AND patient_id IS NULL",
     [userId],
   );
-  if (!user) return null;
+  if (!user) {
+    return null;
+  }
   const member = await tx.get(
     "SELECT * FROM memberships WHERE user_id=? AND organization_id=? AND active=1",
     [userId, organizationId],
   );
-  if (!member) return null;
+  if (!member) {
+    return null;
+  }
   if (
     member.branch_id &&
     !(await tx.get("SELECT id FROM branches WHERE id=? AND organization_id=? AND active=1", [
       member.branch_id,
       organizationId,
     ]))
-  )
+  ) {
     return null;
+  }
   user.organization_id = organizationId;
   user.branch_id = member.branch_id ?? null;
   await resolveMembership(tx, member, user);
@@ -41,13 +46,16 @@ async function currentProfessional(tx, userId, organizationId) {
     !user.clinicalScopes.length ||
     user.accessExpired ||
     user.supportAccess
-  )
+  ) {
     return null;
+  }
   return user;
 }
 
 async function effectiveGrant(tx, grant) {
-  if (grant.revoked_at || grant.expires_at <= now()) return null;
+  if (grant.revoked_at || grant.expires_at <= now()) {
+    return null;
+  }
   const recipient = await currentProfessional(
     tx,
     grant.recipient_user_id,
@@ -57,8 +65,9 @@ async function effectiveGrant(tx, grant) {
     !recipient ||
     !branchMatches(recipient, grant) ||
     !(await careAreaAllowsPatient(tx, recipient, grant.patient_id))
-  )
+  ) {
     return null;
+  }
   const scopes = scopesOf(grant);
   let contributionScopes = grant.can_contribute
     ? scopes.filter((s) => recipient.clinicalScopes.includes(s))
@@ -71,8 +80,9 @@ async function effectiveGrant(tx, grant) {
       parent.patient_id !== grant.patient_id ||
       parent.recipient_user_id !== grant.grantor_id ||
       !parent.allow_delegation
-    )
+    ) {
       return null;
+    }
     const authority = await effectiveGrant(tx, parent);
     if (
       !authority ||
@@ -82,8 +92,9 @@ async function effectiveGrant(tx, grant) {
       grant.expires_at > parent.expires_at ||
       (grant.recipient_organization_id !== parent.recipient_organization_id &&
         !parent.allow_external_delegation)
-    )
+    ) {
       return null;
+    }
     contributionScopes = contributionScopes.filter((s) => authority.contributionScopes.includes(s));
   }
   return {
@@ -110,7 +121,9 @@ export async function resolveProfessionalAccess(tx, actor, patientId) {
   const effective = [];
   for (const row of rows) {
     const result = await effectiveGrant(tx, row);
-    if (result) effective.push(result);
+    if (result) {
+      effective.push(result);
+    }
   }
   return {
     restricted,
@@ -129,8 +142,9 @@ export async function listProfessionalPatients(tx, actor) {
     !actor?.organization_id ||
     !hasPermission(actor, "registry.view") ||
     !hasPermission(actor, "records.view")
-  )
+  ) {
     return [];
+  }
   const rows = await tx.all(
     `SELECT DISTINCT p.id,p.healthpass_id,p.name,p.dob,p.created_at FROM patients p
      JOIN professional_grants g ON g.patient_id=p.id WHERE g.recipient_user_id=? AND g.recipient_organization_id=?
@@ -138,8 +152,11 @@ export async function listProfessionalPatients(tx, actor) {
     [actor.id, actor.organization_id, now()],
   );
   const patients = [];
-  for (const row of rows)
-    if ((await resolveProfessionalAccess(tx, actor, row.id)).grants.length) patients.push(row);
+  for (const row of rows) {
+    if ((await resolveProfessionalAccess(tx, actor, row.id)).grants.length) {
+      patients.push(row);
+    }
+  }
   return patients;
 }
 
@@ -200,12 +217,14 @@ export async function handleProfessionalAccess(tx, context) {
     audit,
     correlation,
   } = context;
-  if (path !== "/professional-access" && !path.startsWith("/professional-access/"))
+  if (path !== "/professional-access" && !path.startsWith("/professional-access/")) {
     return undefined;
+  }
   strong(actor);
   const patientOnly = () => {
-    if (!actor.patient_id || actor.organization_id)
+    if (!actor.patient_id || actor.organization_id) {
       fail(403, "Use your patient account to choose professionals.");
+    }
   };
   const patientForQuery = () =>
     actor.patient_id ?? text(searchParams.get("patient_id"), "patient", 100, true);
@@ -221,8 +240,9 @@ export async function handleProfessionalAccess(tx, context) {
       !grant.allow_delegation ||
       (patientId && grant.patient_id !== patientId) ||
       !(await effectiveGrant(tx, grant))
-    )
+    ) {
       fail(403, "No active authority to delegate this patient's access.");
+    }
     return grant;
   };
   const inputFor = (delegated) => {
@@ -239,28 +259,38 @@ export async function handleProfessionalAccess(tx, context) {
         ? []
         : ["allow_delegation", "allow_external_delegation", "acknowledge_restriction"]),
     ]);
-    if (Object.keys(body).some((key) => !allowed.has(key))) fail(400, "Unsupported grant field.");
+    if (Object.keys(body).some((key) => !allowed.has(key))) {
+      fail(400, "Unsupported grant field.");
+    }
     if (
       !Array.isArray(body.scopes) ||
       !body.scopes.length ||
       body.scopes.length > 3 ||
       body.scopes.some((s) => !categories.includes(s)) ||
       new Set(body.scopes).size !== body.scopes.length
-    )
+    ) {
       fail(400, "Choose valid, distinct clinical note categories.");
+    }
     for (const key of [
       "include_profile",
       "can_contribute",
       ...(delegated ? [] : ["allow_delegation", "allow_external_delegation"]),
-    ])
-      if (typeof body[key] !== "boolean") fail(400, "Choose each grant permission explicitly.");
-    if (!delegated && body.acknowledge_restriction !== true)
+    ]) {
+      if (typeof body[key] !== "boolean") {
+        fail(400, "Choose each grant permission explicitly.");
+      }
+    }
+    if (!delegated && body.acknowledge_restriction !== true) {
       fail(400, "Confirm that only selected professionals will retain future clinical access.");
-    if (!delegated && body.allow_external_delegation && !body.allow_delegation)
+    }
+    if (!delegated && body.allow_external_delegation && !body.allow_delegation) {
       fail(400, "External delegation requires delegation permission.");
-    const expiry = text(body.expires_at, "expiry", 40, true),
-      expiryTime = Date.parse(expiry);
-    if (!Number.isFinite(expiryTime)) fail(400, "Choose a valid expiry.");
+    }
+    const expiry = text(body.expires_at, "expiry", 40, true);
+    const expiryTime = Date.parse(expiry);
+    if (!Number.isFinite(expiryTime)) {
+      fail(400, "Choose a valid expiry.");
+    }
     return {
       recipient_user_id: text(body.recipient_user_id, "professional", 100, true),
       recipient_organization_id: text(body.recipient_organization_id, "facility", 100, true),
@@ -285,28 +315,32 @@ export async function handleProfessionalAccess(tx, context) {
       [actor.id, input.client_request_id],
     );
     if (existing) {
-      if (existing.request_payload !== payload)
+      if (existing.request_payload !== payload) {
         fail(409, "This request ID was already used for a different grant.");
+      }
       return { id: existing.id, ...(parent ? {} : { restricted: true }) };
     }
     if (
       Date.parse(input.expires_at) <= Date.now() ||
       Date.parse(input.expires_at) > Date.now() + 90 * 86400000
-    )
+    ) {
       fail(400, "Choose a future expiry within 90 days.");
+    }
     const recipient = await currentProfessional(
       tx,
       input.recipient_user_id,
       input.recipient_organization_id,
     );
-    if (!recipient)
+    if (!recipient) {
       fail(400, "Choose a currently approved clinical professional in that facility.");
+    }
     if (parent) {
       if (
         input.recipient_user_id === actor.id &&
         input.recipient_organization_id === actor.organization_id
-      )
+      ) {
         fail(400, "Choose another professional to delegate to.");
+      }
       if (
         input.scopes.some((s) => !scopesOf(parent).includes(s)) ||
         (input.include_profile && !parent.include_profile) ||
@@ -314,8 +348,9 @@ export async function handleProfessionalAccess(tx, context) {
         input.expires_at > parent.expires_at ||
         (input.recipient_organization_id !== parent.recipient_organization_id &&
           !parent.allow_external_delegation)
-      )
+      ) {
         fail(403, "Delegation must remain within the patient's granted scope and expiry.");
+      }
     }
     const id = randomUUID();
     const inserted = await tx.get(
@@ -346,15 +381,17 @@ export async function handleProfessionalAccess(tx, context) {
         "SELECT id,request_payload FROM professional_grants WHERE grantor_id=? AND client_request_id=?",
         [actor.id, input.client_request_id],
       );
-      if (!raced || raced.request_payload !== payload)
+      if (!raced || raced.request_payload !== payload) {
         fail(409, "This request ID was already used for a different grant.");
+      }
       return { id: raced.id, ...(parent ? {} : { restricted: true }) };
     }
-    if (!parent)
+    if (!parent) {
       await tx.run(
         "INSERT INTO patient_access_settings(patient_id,restricted,updated_at) VALUES (?,1,?) ON CONFLICT(patient_id) DO UPDATE SET restricted=1,updated_at=excluded.updated_at",
         [patientId, now()],
       );
+    }
     await audit(
       tx,
       actor,
@@ -380,25 +417,29 @@ export async function handleProfessionalAccess(tx, context) {
   if (path === "/professional-access" && method === "GET") {
     const patientId = patientForQuery();
     let rows;
-    if (actor.patient_id)
+    if (actor.patient_id) {
       rows = await tx.all(
         `${joined} WHERE g.patient_id=? ORDER BY g.created_at DESC,g.id LIMIT 100`,
         [patientId],
       );
-    else {
+    } else {
       permit(actor, "records.view");
       rows = await tx.all(
         `${joined} WHERE g.patient_id=? AND ((g.recipient_user_id=? AND g.recipient_organization_id=?) OR (g.grantor_id=? AND g.parent_id IS NOT NULL)) ORDER BY g.created_at DESC,g.id LIMIT 100`,
         [patientId, actor.id, actor.organization_id, actor.id],
       );
-      if (!rows.length) fail(403, "No professional sharing relationship for this patient.");
+      if (!rows.length) {
+        fail(403, "No professional sharing relationship for this patient.");
+      }
     }
     const settings = await tx.get(
       "SELECT restricted FROM patient_access_settings WHERE patient_id=?",
       [patientId],
     );
     const grants = [];
-    for (const row of rows) grants.push(await displayGrant(tx, row, actor));
+    for (const row of rows) {
+      grants.push(await displayGrant(tx, row, actor));
+    }
     return { restricted: !!settings?.restricted, grants };
   }
   if (path === "/professional-access/options" && method === "GET") {
@@ -407,7 +448,9 @@ export async function handleProfessionalAccess(tx, context) {
     const facility = await tx.get("SELECT id,name FROM organizations WHERE workspace_code=?", [
       code,
     ]);
-    if (!facility) fail(404, "Facility unavailable. Check its workspace code.");
+    if (!facility) {
+      fail(404, "Facility unavailable. Check its workspace code.");
+    }
     if (!actor.patient_id) {
       permit(actor, "records.view");
       const roots = await tx.all(
@@ -415,13 +458,17 @@ export async function handleProfessionalAccess(tx, context) {
         [patientId, actor.id, actor.organization_id, now()],
       );
       let eligible = false;
-      for (const root of roots)
+      for (const root of roots) {
         if (
           (facility.id === root.recipient_organization_id || root.allow_external_delegation) &&
           (await effectiveGrant(tx, root))
-        )
+        ) {
           eligible = true;
-      if (!eligible) fail(403, "No active authority to choose delegates at that facility.");
+        }
+      }
+      if (!eligible) {
+        fail(403, "No active authority to choose delegates at that facility.");
+      }
     }
     const search = text(searchParams.get("search") ?? "", "professional name", 160);
     const pattern = "%" + search.toLowerCase().replace(/[\\%_]/g, "\\$&") + "%";
@@ -434,9 +481,12 @@ export async function handleProfessionalAccess(tx, context) {
     const professionals = [];
     for (const row of members) {
       const current = await currentProfessional(tx, row.id, facility.id);
-      if (current && (actor.patient_id || row.id !== actor.id))
+      if (current && (actor.patient_id || row.id !== actor.id)) {
         professionals.push({ ...row, clinicalScopes: current.clinicalScopes });
-      if (professionals.length >= 50) break;
+      }
+      if (professionals.length >= 50) {
+        break;
+      }
     }
     return { facility, professionals };
   }
@@ -455,13 +505,14 @@ export async function handleProfessionalAccess(tx, context) {
     const patientOwns = actor.patient_id && actor.patient_id === grant?.patient_id;
     const delegatedOwns =
       actor.organization_id && grant?.parent_id && grant.grantor_id === actor.id;
-    if (!grant || (!patientOwns && !delegatedOwns))
+    if (!grant || (!patientOwns && !delegatedOwns)) {
       fail(404, "Professional access grant unavailable.");
+    }
     const changed = await tx.get(
       "UPDATE professional_grants SET revoked_at=? WHERE id=? AND revoked_at IS NULL RETURNING id",
       [now(), grant.id],
     );
-    if (changed)
+    if (changed) {
       await audit(
         tx,
         actor,
@@ -471,6 +522,7 @@ export async function handleProfessionalAccess(tx, context) {
         grant.id,
         correlation,
       );
+    }
     return { revoked: true };
   }
   return undefined;

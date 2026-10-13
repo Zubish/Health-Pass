@@ -25,7 +25,9 @@ const server = createServer(async (req, res) => {
     const response = await api(request);
     const headers = Object.fromEntries(response.headers);
     const cookies = response.headers.getSetCookie();
-    if (cookies.length) headers["set-cookie"] = cookies;
+    if (cookies.length) {
+      headers["set-cookie"] = cookies;
+    }
     res.writeHead(response.status, headers);
     Readable.fromWeb(response.body).pipe(res);
   } catch {

@@ -27,10 +27,13 @@ export async function fetchHealthpassOrigin(
     /^hp_device=[a-f0-9]{64}; HttpOnly; SameSite=Strict; Path=\/; Max-Age=2592000(?:; Secure)?$/.test(
       deviceCookie,
     )
-  )
+  ) {
     cookies.push(deviceCookie);
+  }
   outgoing.delete("set-cookie");
-  for (const cookie of cookies) outgoing.append("set-cookie", cookie);
+  for (const cookie of cookies) {
+    outgoing.append("set-cookie", cookie);
+  }
 
   outgoing.delete("content-encoding");
   outgoing.delete("content-length");

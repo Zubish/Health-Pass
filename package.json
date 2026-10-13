@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write .",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"server/**/*.mjs\" \"tests/**/*.mjs\" \"*.{js,ts,json}\"",
     "api": "node --env-file-if-exists=.env server/index.mjs",
     "verify-support": "node --env-file-if-exists=.env server/verify-support.mjs",
     "seed": "node --env-file-if-exists=.env server/seed.mjs",
@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit",
     "migrate": "node --env-file-if-exists=.env server/migrate.mjs",
     "provision": "node --env-file-if-exists=.env server/provision.mjs",
-    "deliver-patient-emails": "node --env-file-if-exists=.env server/deliver-patient-emails.mjs"
+    "deliver-patient-emails": "node --env-file-if-exists=.env server/deliver-patient-emails.mjs",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"server/**/*.mjs\" \"tests/**/*.mjs\" \"*.{js,ts,json}\""
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

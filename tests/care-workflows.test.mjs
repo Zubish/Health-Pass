@@ -39,15 +39,18 @@ async function fixture() {
         }),
       );
       const updated = response.headers.get("set-cookie");
-      if (updated) cookie = updated.split(";")[0];
+      if (updated) {
+        cookie = updated.split(";")[0];
+      }
       return { status: response.status, data: await response.json() };
     };
   }
   async function login(email) {
     const request = client();
     assert.equal((await request("/auth/login", "POST", { email, password })).status, 200);
-    if (email !== "patient@healthpass.test")
+    if (email !== "patient@healthpass.test") {
       assert.equal((await request("/auth/mfa/skip", "POST", {})).status, 200);
+    }
     return request;
   }
   async function checkIn(request, overrides = {}) {
@@ -406,12 +409,13 @@ test("outpatient queue keeps operational data separate, scopes assignments and r
       "observations",
       "followUps",
       "phone",
-    ])
+    ]) {
       assert.equal(
         queue.data.visits[0][key],
         undefined,
         `${key} must not leak into operational queue`,
       );
+    }
     const detail = await reception(`/visits/${created.data.id}`);
     assert.equal(detail.status, 200);
     assert.equal(detail.data.clinicalAllowed, false);

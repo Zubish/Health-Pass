@@ -1,28 +1,10 @@
 import { useState } from "react";
-export type JobRole = {
-  id: string;
-  name: string;
-  description: string;
-  template_key: string | null;
-  clinical_scope: string | null;
-  permissions: string[];
-  active: number;
-};
-export type Permission = { key: string; label: string; category: string };
-export type RoleTemplate = {
-  key: string;
-  name: string;
-  description: string;
-  clinical_scope: string | null;
-  permissions: string[];
-};
-export const scopeNames: Record<string, string> = {
-  general: "General practice",
-  nursing: "Nursing / midwifery",
-  medication: "Medication review",
-  laboratory: "Laboratory",
-  radiology: "Radiology",
-};
+import {
+  scopeNames,
+  type JobRole,
+  type Permission,
+  type RoleTemplate,
+} from "@/lib/healthpass-role-types";
 export function RoleManagement({
   roles,
   catalog,
@@ -36,13 +18,13 @@ export function RoleManagement({
   busy: boolean;
   save: (path: string, method: "POST" | "PATCH", values: unknown) => Promise<boolean>;
 }) {
-  const [editing, setEditing] = useState<JobRole | null>(null),
-    [name, setName] = useState(""),
-    [description, setDescription] = useState(""),
-    [template, setTemplate] = useState(""),
-    [scope, setScope] = useState("general"),
-    [permissions, setPermissions] = useState<string[]>([]),
-    [active, setActive] = useState(true);
+  const [editing, setEditing] = useState<JobRole | null>(null);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [template, setTemplate] = useState("");
+  const [scope, setScope] = useState("general");
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [active, setActive] = useState(true);
   const clinical = permissions.some((key) =>
     catalog.some((p) => p.key === key && p.category === "clinical"),
   );
@@ -98,11 +80,12 @@ export function RoleManagement({
         let changed = true;
         while (changed) {
           changed = false;
-          for (const value of previous)
+          for (const value of previous) {
             if (removed.has(dependencies[value]) && !removed.has(value)) {
               removed.add(value);
               changed = true;
             }
+          }
         }
         return previous.filter((value) => !removed.has(value));
       }
@@ -168,7 +151,9 @@ export function RoleManagement({
               active,
             },
           ).then((success) => {
-            if (success) choose();
+            if (success) {
+              choose();
+            }
           });
         }}
       >

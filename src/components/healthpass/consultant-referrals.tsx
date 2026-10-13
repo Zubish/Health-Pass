@@ -26,27 +26,27 @@ type Choices = {
   consultants: { id: string; name: string }[];
 };
 export function ConsultantReferrals({ me }: { me: Me }) {
-  const patient = me.role === "patient",
-    canCreate = me.permissions?.includes("referrals.create") ?? false,
-    canRespond = me.permissions?.includes("referrals.respond") ?? false;
-  const [rows, setRows] = useState<Referral[]>([]),
-    [patients, setPatients] = useState<Patient[]>([]),
-    [selectedPatient, setSelectedPatient] = useState(""),
-    [choices, setChoices] = useState<Choices>({ sources: [], consultants: [] }),
-    [modal, setModal] = useState<{
-      type: "new" | "accept" | "decline" | "withdraw" | "complete" | "cancel" | "reschedule";
-      row?: Referral;
-    } | null>(null),
-    [schedule, setSchedule] = useState(false),
-    [requestId, setRequestId] = useState(""),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [loading, setLoading] = useState(true),
-    [sources, setSources] = useState<
-      Record<string, { source: Record<string, string>; version: number }>
-    >({}),
-    [responseNotes, setResponseNotes] = useState<{ id: string; complaint: string }[]>([]);
+  const patient = me.role === "patient";
+  const canCreate = me.permissions?.includes("referrals.create") ?? false;
+  const canRespond = me.permissions?.includes("referrals.respond") ?? false;
+  const [rows, setRows] = useState<Referral[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState("");
+  const [choices, setChoices] = useState<Choices>({ sources: [], consultants: [] });
+  const [modal, setModal] = useState<{
+    type: "new" | "accept" | "decline" | "withdraw" | "complete" | "cancel" | "reschedule";
+    row?: Referral;
+  } | null>(null);
+  const [schedule, setSchedule] = useState(false);
+  const [requestId, setRequestId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sources, setSources] = useState<
+    Record<string, { source: Record<string, string>; version: number }>
+  >({});
+  const [responseNotes, setResponseNotes] = useState<{ id: string; complaint: string }[]>([]);
   const refresh = useCallback(async () => {
     const [list, directory] = await Promise.all([
       careApi("/consultant-referrals"),
@@ -62,14 +62,20 @@ export function ConsultantReferrals({ me }: { me: Me }) {
   }, [refresh]);
   useEffect(() => {
     setChoices({ sources: [], consultants: [] });
-    if (!selectedPatient) return;
+    if (!selectedPatient) {
+      return;
+    }
     let current = true;
     void careApi(`/consultant-referrals/options?patient_id=${encodeURIComponent(selectedPatient)}`)
       .then((v) => {
-        if (current) setChoices(v);
+        if (current) {
+          setChoices(v);
+        }
       })
       .catch((e) => {
-        if (current) setError(e.message);
+        if (current) {
+          setError(e.message);
+        }
       });
     return () => {
       current = false;
@@ -98,7 +104,9 @@ export function ConsultantReferrals({ me }: { me: Me }) {
     setModal({ type, row });
     setSchedule(type === "reschedule");
     setRequestId(crypto.randomUUID());
-    if (type === "new") setSelectedPatient("");
+    if (type === "new") {
+      setSelectedPatient("");
+    }
     if (type === "complete" && row) {
       setResponseNotes([]);
       void careApi(`/patients/${row.patient_id}`)
@@ -309,7 +317,9 @@ export function ConsultantReferrals({ me }: { me: Me }) {
             }[modal.type]
           }
           onClose={() => {
-            if (!busy) setModal(null);
+            if (!busy) {
+              setModal(null);
+            }
           }}
         >
           {error && (
@@ -356,9 +366,9 @@ export function ConsultantReferrals({ me }: { me: Me }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 const f = Object.fromEntries(new FormData(e.currentTarget));
-                if (modal.type === "new")
+                if (modal.type === "new") {
                   void change("/consultant-referrals", { ...f, client_request_id: requestId });
-                else if (modal.row)
+                } else if (modal.row) {
                   void change(`/consultant-referrals/${modal.row.id}/${modal.type}`, {
                     ...f,
                     version: modal.row.version,
@@ -369,6 +379,7 @@ export function ConsultantReferrals({ me }: { me: Me }) {
                         }
                       : {}),
                   });
+                }
               }}
             >
               {modal.type === "new" && (

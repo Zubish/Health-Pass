@@ -39,12 +39,14 @@ export async function handlePatientLinking(tx, context) {
     correlation,
     limit,
   } = context;
-  if (path !== "/patient-link-options" && !path.startsWith("/patient-link-invitations"))
+  if (path !== "/patient-link-options" && !path.startsWith("/patient-link-invitations")) {
     return undefined;
+  }
   strong(actor);
   const patientOnly = () => {
-    if (!actor.patient_id || actor.organization_id)
+    if (!actor.patient_id || actor.organization_id) {
       fail(403, "Use your patient account to manage registration invitations.");
+    }
   };
   const unavailable = () =>
     fail(404, "Registration invitation unavailable. Check the code with the patient.");
@@ -54,14 +56,18 @@ export async function handlePatientLinking(tx, context) {
       "SELECT id,name,workspace_code FROM organizations WHERE workspace_code=?",
       [workspaceCode],
     );
-    if (!facility) fail(404, "Facility unavailable. Check its workspace code.");
+    if (!facility) {
+      fail(404, "Facility unavailable. Check its workspace code.");
+    }
     return facility;
   };
   const invitationForStaff = async () => {
     permit(actor, "registry.create");
     limit(`patient-link:${actor.id}`, 30);
     const code = text(body.code, "registration code", 100, true).toUpperCase();
-    if (!/^HP-LINK-[A-F0-9]{64}$/.test(code)) unavailable();
+    if (!/^HP-LINK-[A-F0-9]{64}$/.test(code)) {
+      unavailable();
+    }
     const invitation = await tx.get(`${joinedInvitation} WHERE i.code_hash=?`, [hash(code)]);
     if (
       !invitation ||
@@ -69,15 +75,18 @@ export async function handlePatientLinking(tx, context) {
       !invitation.branch_active ||
       invitation.organization_id !== actor.organization_id ||
       (actor.branch_id && invitation.branch_id !== actor.branch_id)
-    )
+    ) {
       unavailable();
+    }
     return invitation;
   };
   const reviewFor = async (invitation) => {
     const patient = await tx.get("SELECT id,healthpass_id,name,dob FROM patients WHERE id=?", [
       invitation.patient_id,
     ]);
-    if (!patient) unavailable();
+    if (!patient) {
+      unavailable();
+    }
     const registered = await tx.get(
       `SELECT p.patient_id FROM patient_links p JOIN branch_patient_links b ON b.patient_id=p.patient_id
        WHERE p.patient_id=? AND p.organization_id=? AND b.branch_id=?`,
@@ -130,26 +139,30 @@ export async function handlePatientLinking(tx, context) {
   }
   if (path === "/patient-link-invitations" && method === "POST") {
     patientOnly();
-    if (body.acknowledge_registration !== true)
+    if (body.acknowledge_registration !== true) {
       fail(400, "Confirm this registration and its facility care-access explanation.");
+    }
     const facility = await facilityForCode(body.workspace_code);
     const branchId = text(body.branch_id, "branch", 100, true);
     const branch = await tx.get(
       "SELECT id,name FROM branches WHERE id=? AND organization_id=? AND active=1",
       [branchId, facility.id],
     );
-    if (!branch) fail(400, "Choose an active branch of the selected facility.");
+    if (!branch) {
+      fail(400, "Choose an active branch of the selected facility.");
+    }
     limit(`patient-link-issue:${actor.id}`, 20);
     const pending = await tx.get(
       "SELECT COUNT(*) AS total FROM patient_link_invitations WHERE patient_id=? AND revoked_at IS NULL AND redeemed_at IS NULL AND expires_at>?",
       [actor.patient_id, now()],
     );
-    if (Number(pending.total) >= 5)
+    if (Number(pending.total) >= 5) {
       fail(409, "Revoke an unused invitation before creating another.");
-    const id = randomUUID(),
-      code = `HP-LINK-${randomBytes(32).toString("hex").toUpperCase()}`;
-    const createdAt = now(),
-      expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    }
+    const id = randomUUID();
+    const code = `HP-LINK-${randomBytes(32).toString("hex").toUpperCase()}`;
+    const createdAt = now();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     await tx.run(
       `INSERT INTO patient_link_invitations(id,patient_id,grantor_id,organization_id,branch_id,code_hash,created_at,expires_at)
        VALUES (?,?,?,?,?,?,?,?)`,
@@ -189,15 +202,20 @@ export async function handlePatientLinking(tx, context) {
       "SELECT * FROM patient_link_invitations WHERE id=? AND patient_id=?",
       [revoke[1], actor.patient_id],
     );
-    if (!invitation) unavailable();
-    if (invitation.redeemed_at)
+    if (!invitation) {
+      unavailable();
+    }
+    if (invitation.redeemed_at) {
       fail(409, "This invitation was already used. Revoking it cannot undo a care registration.");
+    }
     if (!invitation.revoked_at) {
       const updated = await tx.get(
         "UPDATE patient_link_invitations SET revoked_at=? WHERE id=? AND redeemed_at IS NULL AND revoked_at IS NULL RETURNING id",
         [now(), invitation.id],
       );
-      if (!updated) fail(409, "The invitation changed. Refresh before trying again.");
+      if (!updated) {
+        fail(409, "The invitation changed. Refresh before trying again.");
+      }
       await audit(
         tx,
         actor,
@@ -211,8 +229,8 @@ export async function handlePatientLinking(tx, context) {
     return { revoked: true };
   }
   if (path === "/patient-link-invitations/review" && method === "POST") {
-    const invitation = await invitationForStaff(),
-      review = await reviewFor(invitation);
+    const invitation = await invitationForStaff();
+    const review = await reviewFor(invitation);
     await audit(
       tx,
       actor,
@@ -225,22 +243,26 @@ export async function handlePatientLinking(tx, context) {
     return review;
   }
   if (path === "/patient-link-invitations/redeem" && method === "POST") {
-    const invitation = await invitationForStaff(),
-      review = await reviewFor(invitation);
-    if (body.identity_confirmed !== true)
+    const invitation = await invitationForStaff();
+    const review = await reviewFor(invitation);
+    if (body.identity_confirmed !== true) {
       fail(400, "Confirm you checked the patient's identity with them.");
+    }
     const reference = text(body.review_reference, "identity review reference", 500, true);
-    if (review.possible_duplicates.length && body.duplicate_reviewed !== true)
+    if (review.possible_duplicates.length && body.duplicate_reviewed !== true) {
       fail(
         409,
         "Review the possible existing records. Registration never merges these identities.",
       );
+    }
     const redeemed = await tx.get(
       `UPDATE patient_link_invitations SET redeemed_at=?,redeemed_by=?,review_reference=?
        WHERE id=? AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at>? RETURNING id`,
       [now(), actor.id, reference, invitation.id, now()],
     );
-    if (!redeemed) unavailable();
+    if (!redeemed) {
+      unavailable();
+    }
     await tx.run(
       "INSERT INTO patient_links(patient_id,organization_id,created_at) VALUES (?,?,?) ON CONFLICT(patient_id,organization_id) DO NOTHING",
       [invitation.patient_id, invitation.organization_id, now()],

@@ -34,11 +34,12 @@ export function Auth({
       ? "professional"
       : "patient",
   );
-  const [workspaceCode, setWorkspaceCode] = useState(""),
-    [confirmedWorkspace, setConfirmedWorkspace] = useState<{ code: string; name: string } | null>(
-      null,
-    ),
-    [checkingWorkspace, setCheckingWorkspace] = useState(false);
+  const [workspaceCode, setWorkspaceCode] = useState("");
+  const [confirmedWorkspace, setConfirmedWorkspace] = useState<{
+    code: string;
+    name: string;
+  } | null>(null);
+  const [checkingWorkspace, setCheckingWorkspace] = useState(false);
   const workspaceCheck = useRef(0);
   const [rememberWorkspace, setRememberWorkspace] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -47,7 +48,9 @@ export function Auth({
     const code =
       initialWorkspace ||
       (initialMode === "professional-signin" ? saved?.workspaceCode : undefined);
-    if (!code) return;
+    if (!code) {
+      return;
+    }
     setWorkspaceCode(code.trim().toUpperCase());
     setRememberWorkspace(saved?.workspaceCode === code.trim().toUpperCase());
     setRestoring(true);
@@ -59,25 +62,30 @@ export function Auth({
       { workspace_code: code },
     )
       .then(({ workspace }) => {
-        if (!cancelled && attempt === workspaceCheck.current)
+        if (!cancelled && attempt === workspaceCheck.current) {
           setConfirmedWorkspace({ code: workspace.workspace_code, name: workspace.name });
+        }
       })
       .catch((e: Error) => {
-        if (!cancelled && attempt === workspaceCheck.current) setError(e.message);
+        if (!cancelled && attempt === workspaceCheck.current) {
+          setError(e.message);
+        }
       })
       .finally(() => {
-        if (!cancelled && attempt === workspaceCheck.current) setRestoring(false);
+        if (!cancelled && attempt === workspaceCheck.current) {
+          setRestoring(false);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [initialWorkspace, initialMode]);
-  const [firstAccess, setFirstAccess] = useState(!!initialSetup),
-    [error, setError] = useState(serviceError),
-    [busy, setBusy] = useState(false);
-  const choosing = view === "register",
-    patientCreate = view === "patient",
-    facilityCreate = view === "facility";
+  const [firstAccess, setFirstAccess] = useState(!!initialSetup);
+  const [error, setError] = useState(serviceError);
+  const [busy, setBusy] = useState(false);
+  const choosing = view === "register";
+  const patientCreate = view === "patient";
+  const facilityCreate = view === "facility";
   const staffSetup = view === "professional" || (view === "professional-signin" && firstAccess);
   const signin = !choosing && !patientCreate && !facilityCreate && !staffSetup;
   const needsWorkspace = staffSetup || (signin && accountType === "professional");
@@ -105,15 +113,20 @@ export function Auth({
         "POST",
         { workspace_code: workspaceCode },
       );
-      if (attempt === workspaceCheck.current)
+      if (attempt === workspaceCheck.current) {
         setConfirmedWorkspace({
           code: result.workspace.workspace_code,
           name: result.workspace.name,
         });
+      }
     } catch (e) {
-      if (attempt === workspaceCheck.current) setError((e as Error).message);
+      if (attempt === workspaceCheck.current) {
+        setError((e as Error).message);
+      }
     } finally {
-      if (attempt === workspaceCheck.current) setCheckingWorkspace(false);
+      if (attempt === workspaceCheck.current) {
+        setCheckingWorkspace(false);
+      }
     }
   }
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -505,11 +518,11 @@ export function Auth({
   );
 }
 export function Mfa({ me, onSuccess }: { me: Me; onSuccess: () => Promise<void> }) {
-  const [secret, setSecret] = useState(""),
-    [dontShowAgain, setDontShowAgain] = useState(false),
-    [code, setCode] = useState(""),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+  const [secret, setSecret] = useState("");
+  const [dontShowAgain, setDontShowAgain] = useState(false);
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   async function setup() {
     setBusy(true);
     setError("");

@@ -6,10 +6,10 @@ import { seed } from "../server/seed.mjs";
 import { revealSecret } from "../server/security.mjs";
 import { deliverPatientEmails } from "../server/patient-email.mjs";
 
-const password = "synthetic-onboarding-password",
-  key = "ab".repeat(32),
-  branch = "main-org-lagos",
-  otherBranch = "main-org-ibadan";
+const password = "synthetic-onboarding-password";
+const key = "ab".repeat(32);
+const branch = "main-org-lagos";
+const otherBranch = "main-org-ibadan";
 async function fixture() {
   const db = await openTestDatabase();
   await seed(db, password);
@@ -32,22 +32,25 @@ async function fixture() {
         }),
       );
       const set = response.headers.get("set-cookie");
-      if (set) cookie = set.split(";")[0];
+      if (set) {
+        cookie = set.split(";")[0];
+      }
       return { status: response.status, data: await response.json() };
     };
   }
   async function login(email) {
     const call = client();
     assert.equal((await call("/auth/login", "POST", { email, password })).status, 200);
-    if (email !== "patient@healthpass.test")
+    if (email !== "patient@healthpass.test") {
       assert.equal((await call("/auth/mfa/skip", "POST", {})).status, 200);
+    }
     return call;
   }
-  const reception = await login("reception@healthpass.test"),
-    doctor = await login("doctor@healthpass.test"),
-    partner = await login("ibadan@healthpass.test"),
-    admin = await login("admin@healthpass.test"),
-    patient = await login("patient@healthpass.test");
+  const reception = await login("reception@healthpass.test");
+  const doctor = await login("doctor@healthpass.test");
+  const partner = await login("ibadan@healthpass.test");
+  const admin = await login("admin@healthpass.test");
+  const patient = await login("patient@healthpass.test");
   async function register(
     email = "new-provisional@synthetic.invalid",
     call = reception,
@@ -70,8 +73,8 @@ async function fixture() {
       ),
     );
     assert.ok(row);
-    const message = JSON.parse(revealSecret(row.encrypted_payload, key)),
-      url = new URL(message.url);
+    const message = JSON.parse(revealSecret(row.encrypted_payload, key));
+    const url = new URL(message.url);
     return {
       claim_id: row.id,
       token: new URLSearchParams(url.hash.slice(1)).get("claim-token"),
@@ -205,8 +208,8 @@ test("facility provisional activation claims exactly its own identity and retain
 test("activation resend, expiry, wrong tokens and scope checks cannot claim old charts or merge duplicate addresses", async () => {
   const f = await fixture();
   try {
-    const registered = await f.register(),
-      original = await f.invitation(registered.id);
+    const registered = await f.register();
+    const original = await f.invitation(registered.id);
     reject(
       await f.client()("/auth/patient-claim", "POST", {
         claim_id: original.claim_id,
@@ -287,8 +290,8 @@ test("activation resend, expiry, wrong tokens and scope checks cannot claim old 
 test("patient email reservations and concurrent claims preserve one identity while professional credentials remain independent", async () => {
   const f = await fixture();
   try {
-    const professional = f.client(),
-      email = "same-professional-patient@synthetic.invalid";
+    const professional = f.client();
+    const email = "same-professional-patient@synthetic.invalid";
     assert.equal(
       (
         await professional("/auth/workspace-register", "POST", {
@@ -302,8 +305,8 @@ test("patient email reservations and concurrent claims preserve one identity whi
       ).status,
       200,
     );
-    const registered = await f.register(email),
-      invite = await f.invitation(registered.id);
+    const registered = await f.register(email);
+    const invite = await f.invitation(registered.id);
     const attempts = await Promise.all([f.claim(invite), f.claim(invite)]);
     assert.equal(attempts.filter((result) => result.status === 200).length, 1);
     assert.ok(attempts.some((result) => [400, 409].includes(result.status)));
@@ -420,20 +423,21 @@ test("existing-email facility requests stay private, require patient approval an
   const f = await fixture();
   try {
     const sourceId = await f.signed();
-    const known = await f.accessRequest(),
-      unknown = await f.accessRequest(f.partner, "absent@synthetic.invalid");
+    const known = await f.accessRequest();
+    const unknown = await f.accessRequest(f.partner, "absent@synthetic.invalid");
     assert.equal(known.status, 200);
     assert.deepEqual(known.data, unknown.data);
     assert.equal(known.data.patient_id, undefined);
     const staffList = await f.partner("/facility-access-requests");
     assert.equal(staffList.status, 200);
     assert.equal(staffList.data.requests.length, 1);
-    for (const field of ["patient_id", "patient_name", "email", "dob", "phone"])
+    for (const field of ["patient_id", "patient_name", "email", "dob", "phone"]) {
       assert.equal(
         Object.hasOwn(staffList.data.requests[0], field),
         false,
         "pre-approval facility metadata omits " + field,
       );
+    }
     const activity = (await f.partner("/audit")).data.audits.filter(
       (row) => row.action === "patient.facility_access_requested",
     );
@@ -444,8 +448,8 @@ test("existing-email facility requests stay private, require patient approval an
       "the audit endpoint must not reveal the existing patient's opaque ID before approval",
     );
     assert.equal((await f.partner("/patients/patient-ade")).status, 403);
-    const requests = (await f.patient("/facility-access-requests")).data.requests,
-      id = requests[0].id;
+    const requests = (await f.patient("/facility-access-requests")).data.requests;
+    const id = requests[0].id;
     assert.equal(requests.length, 1);
     const other = f.client();
     assert.equal(
@@ -481,12 +485,13 @@ test("existing-email facility requests stay private, require patient approval an
     const chart = await f.partner("/patients/patient-ade");
     assert.equal(chart.status, 200);
     assert.deepEqual(chart.data.encounters, []);
-    for (const field of ["allergies", "allergy_status", "emergency_contact", "phone"])
+    for (const field of ["allergies", "allergy_status", "emergency_contact", "phone"]) {
       assert.equal(
         Object.hasOwn(chart.data.patient, field),
         false,
         "default registration approval does not expose prior clinical profile " + field,
       );
+    }
     assert.ok(!JSON.stringify(chart.data).includes("Penicillin"));
     assert.equal(
       (
@@ -777,8 +782,8 @@ test("primary designation and facility acceptance never grant clinical access an
         [member.id],
       );
     });
-    const registered = await f.register("primary-choice@synthetic.invalid"),
-      claimed = await f.claim(await f.invitation(registered.id));
+    const registered = await f.register("primary-choice@synthetic.invalid");
+    const claimed = await f.claim(await f.invitation(registered.id));
     assert.equal(claimed.status, 200);
     const person = claimed.call;
     assert.equal((await person("/primary-care")).data.primary, null);
@@ -885,8 +890,8 @@ test("primary designation and facility acceptance never grant clinical access an
 test("email delivery uses encrypted durable metadata, controlled retries and a lease to prevent duplicate sends", async () => {
   const f = await fixture();
   try {
-    const registered = await f.register("delivery-only@synthetic.invalid"),
-      invite = await f.invitation(registered.id);
+    const registered = await f.register("delivery-only@synthetic.invalid");
+    const invite = await f.invitation(registered.id);
     const ready = {
       ...f.config,
       RESEND_API_KEY: "synthetic-provider-key",
@@ -917,7 +922,8 @@ test("email delivery uses encrypted durable metadata, controlled retries and a l
         invite.claim_id,
       ]),
     );
-    let release, entered;
+    let release;
+    let entered;
     const started = new Promise((resolve) => (entered = resolve));
     const gate = new Promise((resolve) => (release = resolve));
     const first = deliverPatientEmails(f.db, ready, async () => {
@@ -947,8 +953,8 @@ test("email delivery uses encrypted durable metadata, controlled retries and a l
 test("signup races and primary relationship transitions recheck current authority without duplicate ownership or restored access", async () => {
   const f = await fixture();
   try {
-    const email = "signup-race@synthetic.invalid",
-      newPatient = f.client();
+    const email = "signup-race@synthetic.invalid";
+    const newPatient = f.client();
     const results = await Promise.all([
       newPatient("/auth/register", "POST", {
         name: "Synthetic simultaneous self-signup",
@@ -1006,8 +1012,8 @@ test("signup races and primary relationship transitions recheck current authorit
         (row) => row.status === "pending",
       );
       assert.ok(pending);
-      const approve = () => f.partner(`/primary-care/requests/${pending.id}/accept`, "POST", {}),
-        clear = () => f.patient("/primary-care/clear", "POST", {});
+      const approve = () => f.partner(`/primary-care/requests/${pending.id}/accept`, "POST", {});
+      const clear = () => f.patient("/primary-care/clear", "POST", {});
       const outcomes = await Promise.all(clearFirst ? [clear(), approve()] : [approve(), clear()]);
       assert.ok(outcomes.every((result) => [200, 409].includes(result.status)));
       assert.equal(

@@ -39,13 +39,16 @@ const fail = (status, message) => {
   throw new ApiError(status, message);
 };
 const text = (value, field, max = 6000, required = false) => {
-  if (typeof value !== "string" || value.length > max || (required && !value.trim()))
+  if (typeof value !== "string" || value.length > max || (required && !value.trim())) {
     fail(400, `Invalid ${field}.`);
+  }
   return value.trim();
 };
 const emailValue = (value) => {
   const email = text(value, "email", 254, true).toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, "Enter a valid email.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    fail(400, "Enter a valid email.");
+  }
   return email;
 };
 const patientInput = (input) => {
@@ -57,8 +60,9 @@ const patientInput = (input) => {
       Number.isNaN(Date.parse(dob)) ||
       new Date(dob).toISOString().slice(0, 10) !== dob ||
       dob > now().slice(0, 10))
-  )
+  ) {
     fail(400, "Enter a valid date of birth; leave blank if unknown.");
+  }
   return { name, dob, phone: input.phone ? text(input.phone, "phone", 40) : null };
 };
 const noteInput = (input) =>
@@ -79,12 +83,14 @@ export function createApi(db, config = process.env) {
   if (
     config.NODE_ENV === "production" &&
     (!config.PUBLIC_APP_ORIGIN?.startsWith("https://") || !config.DATABASE_URL)
-  )
+  ) {
     throw new Error("Production requires HTTPS PUBLIC_APP_ORIGIN and DATABASE_URL.");
+  }
   const secure = config.NODE_ENV === "production";
   const secretKey = config.HEALTHPASS_AUTH_KEY;
-  if ((secure && !secretKey) || (secretKey && !/^[a-f0-9]{64}$/i.test(secretKey)))
+  if ((secure && !secretKey) || (secretKey && !/^[a-f0-9]{64}$/i.test(secretKey))) {
     throw new Error("Configure HEALTHPASS_AUTH_KEY as a server-only 32-byte hex encryption key.");
+  }
   const attempts = new Map();
   function limit(key, maximum = 10) {
     const time = Date.now();
@@ -92,9 +98,16 @@ export function createApi(db, config = process.env) {
     const value = entry && entry.until > time ? entry : { count: 0, until: time + 600000 };
     value.count++;
     attempts.set(key, value);
-    if (attempts.size > 10000)
-      for (const [k, v] of attempts) if (v.until < time) attempts.delete(k);
-    if (value.count > maximum) fail(429, "Too many attempts. Try again in ten minutes.");
+    if (attempts.size > 10000) {
+      for (const [k, v] of attempts) {
+        if (v.until < time) {
+          attempts.delete(k);
+        }
+      }
+    }
+    if (value.count > maximum) {
+      fail(429, "Too many attempts. Try again in ten minutes.");
+    }
   }
   const cookie = (token, age = 2592000) =>
     `hp_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${secure ? "; Secure" : ""}`;
@@ -128,7 +141,9 @@ export function createApi(db, config = process.env) {
   }
   async function session(tx, request) {
     const token = request.headers.get("cookie")?.match(/(?:^|;\s*)hp_session=([a-f0-9]+)/)?.[1];
-    if (!token) return null;
+    if (!token) {
+      return null;
+    }
     const user = await tx.get(
       "SELECT u.*, s.id AS session_id,s.organization_id,s.mfa_verified,s.mfa_skipped,s.created_at AS session_created FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND s.last_seen_at>? AND u.active=1 AND (u.eight_hour_limit=0 OR s.created_at>?)",
       [
@@ -138,42 +153,55 @@ export function createApi(db, config = process.env) {
         new Date(Date.now() - 28800000).toISOString(),
       ],
     );
-    if (!user) return null;
+    if (!user) {
+      return null;
+    }
     await tx.run("UPDATE sessions SET last_seen_at=? WHERE id=?", [now(), user.session_id]);
     if (user.organization_id) {
       const membership = await tx.get(
         "SELECT * FROM memberships WHERE user_id=? AND organization_id=?",
         [user.id, user.organization_id],
       );
-      if (!membership) fail(403, "Your facility membership is unavailable.");
+      if (!membership) {
+        fail(403, "Your facility membership is unavailable.");
+      }
       await resolveMembership(tx, membership, user);
       user.pendingMembership = !membership.active || !user.verified;
       user.authenticatorPromptDismissed = !!membership.authenticator_prompt_dismissed;
       user.branch_id = membership.branch_id;
       user.role = membership.role;
-    } else user.role = "patient";
+    } else {
+      user.role = "patient";
+    }
     return user;
   }
   const authenticated = (actor) => {
-    if (!actor) fail(401, "Sign in to continue.");
+    if (!actor) {
+      fail(401, "Sign in to continue.");
+    }
   };
   const strong = (actor) => {
     authenticated(actor);
-    if (actor.accessExpired)
+    if (actor.accessExpired) {
       fail(403, "Your workspace access has expired. Contact its administrator.");
-    if (actor.pendingMembership)
+    }
+    if (actor.pendingMembership) {
       fail(403, "Your facility access is awaiting administrator approval.");
+    }
     if (
       actor.organization_id &&
       !actor.mfa_verified &&
       !actor.mfa_skipped &&
       !actor.authenticatorPromptDismissed
-    )
+    ) {
       fail(403, "Verify with your authenticator or choose Continue.");
+    }
   };
   const permit = (actor, key) => {
     strong(actor);
-    if (!hasPermission(actor, key)) fail(403, "Your workspace roles do not permit this action.");
+    if (!hasPermission(actor, key)) {
+      fail(403, "Your workspace roles do not permit this action.");
+    }
   };
   async function access(
     tx,
@@ -182,9 +210,13 @@ export function createApi(db, config = process.env) {
     write = false,
     { checkSession = true, assignmentCheck = false } = {},
   ) {
-    if (checkSession) strong(actor);
+    if (checkSession) {
+      strong(actor);
+    }
     const patient = await tx.get("SELECT * FROM patients WHERE id=?", [patientId]);
-    if (!patient) fail(404, "Patient unavailable.");
+    if (!patient) {
+      fail(404, "Patient unavailable.");
+    }
     const legacyPolicy = {
       restricted: false,
       scopes: ["general", "nursing", "medication", "laboratory", "radiology"],
@@ -203,11 +235,15 @@ export function createApi(db, config = process.env) {
       legacyPolicy.includeProfile = false;
       legacyPolicy.canEditProfile = false;
     }
-    if (actor.patient_id === patientId && !write)
+    if (actor.patient_id === patientId && !write) {
       return { patient, consent: null, accessPolicy: legacyPolicy };
-    if (!hasPermission(actor, "records.view")) fail(403, "Clinical access is not permitted.");
-    if (!(await careAreaAllowsPatient(tx, actor, patientId)))
+    }
+    if (!hasPermission(actor, "records.view")) {
+      fail(403, "Clinical access is not permitted.");
+    }
+    if (!(await careAreaAllowsPatient(tx, actor, patientId))) {
       fail(403, "This patient is outside your assigned department or ward scope.");
+    }
     let episodeScopes = null;
     const admission = await tx.get(
       "SELECT id FROM care_admissions WHERE patient_id=? AND organization_id=? AND status='active'",
@@ -230,11 +266,12 @@ export function createApi(db, config = process.env) {
           ...(lead ? ["general"] : []),
         ]),
       ];
-      if (write && !actor.clinicalScopes.some((scope) => episodeScopes.includes(scope)))
+      if (write && !actor.clinicalScopes.some((scope) => episodeScopes.includes(scope))) {
         fail(
           403,
           "Your current inpatient care-team assignment does not permit this care category.",
         );
+      }
       legacyPolicy.contributionScopes = legacyPolicy.contributionScopes.filter((scope) =>
         episodeScopes.includes(scope),
       );
@@ -250,13 +287,15 @@ export function createApi(db, config = process.env) {
       policy.canEditProfile = policy.canEditProfile && policy.canContribute;
     }
     if (policy.restricted) {
-      if (!policy.grants.length)
+      if (!policy.grants.length) {
         fail(
           403,
           "This patient permits only selected professionals. Ask them to grant you access.",
         );
-      if (write && (!policy.canContribute || !policy.contributionScopes.length))
+      }
+      if (write && (!policy.canContribute || !policy.contributionScopes.length)) {
         fail(403, "Your patient sharing grant permits reading only.");
+      }
       return { patient, consent: null, accessPolicy: policy };
     }
     const local = await tx.get(
@@ -273,8 +312,9 @@ export function createApi(db, config = process.env) {
         "SELECT patient_id FROM branch_patient_links WHERE patient_id=? AND branch_id=?",
         [patientId, actor.branch_id],
       ));
-    if ((!local || !branchLocal) && !grant)
+    if ((!local || !branchLocal) && !grant) {
       fail(403, "No active care relationship or sharing grant.");
+    }
     const preferences = await tx.all(
       "SELECT include_profile FROM patient_relationship_preferences WHERE patient_id=? AND organization_id=? AND (CAST(? AS TEXT) IS NULL OR branch_id=?)",
       [patientId, actor.organization_id, actor.branch_id ?? null, actor.branch_id ?? null],
@@ -292,8 +332,9 @@ export function createApi(db, config = process.env) {
     };
   }
   const requireContributionScope = (policy, scope) => {
-    if (!policy.contributionScopes.includes(scope))
+    if (!policy.contributionScopes.includes(scope)) {
       fail(403, "The patient has not permitted you to contribute this record category.");
+    }
   };
   const accessAudit = (policy) =>
     policy.restricted
@@ -328,12 +369,14 @@ export function createApi(db, config = process.env) {
         "SELECT name,workspace_code FROM organizations WHERE workspace_code=?",
         [code],
       );
-      if (!organization)
+      if (!organization) {
         fail(400, "Workspace not found. Check the code with your facility administrator.");
+      }
       return { workspace: organization };
     }
-    if (path === "/auth/facility-register" || path === "/auth/workspace-register")
+    if (path === "/auth/facility-register" || path === "/auth/workspace-register") {
       limit("workspace-registration", 30);
+    }
     const workspaceResult = await workspace(
       tx,
       path,
@@ -343,8 +386,10 @@ export function createApi(db, config = process.env) {
       correlation,
       outputHeaders,
     );
-    if (workspaceResult !== undefined) return workspaceResult;
-    if (path === "/health" && method === "GET")
+    if (workspaceResult !== undefined) {
+      return workspaceResult;
+    }
+    if (path === "/health" && method === "GET") {
       return {
         status: "ok",
         mode:
@@ -355,7 +400,8 @@ export function createApi(db, config = process.env) {
               : "synthetic-development",
         database: db.engine,
       };
-    if (path === "/auth/patient-claim")
+    }
+    if (path === "/auth/patient-claim") {
       return handlePatientOnboarding(tx, {
         actor,
         path,
@@ -376,6 +422,7 @@ export function createApi(db, config = process.env) {
         cookie,
         outputHeaders,
       });
+    }
     if (path === "/auth/login" && method === "POST") {
       const email = emailValue(body.email);
       limit(
@@ -408,9 +455,12 @@ export function createApi(db, config = process.env) {
         password,
         user?.password_hash ?? passwordHash("constant-unknown-password"),
       );
-      if (!user || !valid) fail(401, "Email or password is incorrect.");
-      if (!user.patient_id && !user.verified && !user.workspace_auth)
+      if (!user || !valid) {
+        fail(401, "Email or password is incorrect.");
+      }
+      if (!user.patient_id && !user.verified && !user.workspace_auth) {
         fail(403, "Professional verification is pending.");
+      }
       outputHeaders.set("set-cookie", cookie(await makeSession(tx, user)));
       await audit(tx, user, "auth.login", "allow", user.patient_id, null, correlation);
       return { signedIn: true };
@@ -419,22 +469,26 @@ export function createApi(db, config = process.env) {
       limit("registration", 30);
       const email = emailValue(body.email);
       const password = text(body.password, "password", 256, true);
-      if (password.length < 12) fail(400, "Use a password of at least 12 characters.");
+      if (password.length < 12) {
+        fail(400, "Use a password of at least 12 characters.");
+      }
       const data = patientInput(body);
       if (
         await tx.get(
           "SELECT id FROM users WHERE COALESCE(login_email,email)=? AND account_scope='patient'",
           [email],
         )
-      )
+      ) {
         fail(409, "Unable to create this account. Try signing in or contact support.");
-      if (await patientForEmail(tx, email))
+      }
+      if (await patientForEmail(tx, email)) {
         fail(
           409,
           "This email already has a patient account or facility registration. Sign in or use your activation invitation.",
         );
-      const patientId = randomUUID(),
-        userId = randomUUID();
+      }
+      const patientId = randomUUID();
+      const userId = randomUUID();
       await tx.run(
         "INSERT INTO patients(id,healthpass_id,name,dob,phone,created_at) VALUES (?,?,?,?,?,?)",
         [
@@ -450,11 +504,12 @@ export function createApi(db, config = process.env) {
         "INSERT INTO patient_addresses(email,patient_id,created_at) VALUES (?,?,?) ON CONFLICT(email) DO NOTHING RETURNING email",
         [email, patientId, now()],
       );
-      if (!reserved)
+      if (!reserved) {
         fail(
           409,
           "This email already has a patient account or facility registration. Use its activation invitation.",
         );
+      }
       await tx.run("INSERT INTO users(id,email,name,password_hash,patient_id) VALUES (?,?,?,?,?)", [
         userId,
         email,
@@ -503,27 +558,49 @@ export function createApi(db, config = process.env) {
       outputHeaders,
     };
     const securityResult = await handleAccountSecurity(tx, context);
-    if (securityResult !== undefined) return securityResult;
+    if (securityResult !== undefined) {
+      return securityResult;
+    }
     const departmentResult = await handleDepartments(tx, context);
-    if (departmentResult !== undefined) return departmentResult;
+    if (departmentResult !== undefined) {
+      return departmentResult;
+    }
     const treatmentResult = await handleTreatment(tx, context);
-    if (treatmentResult !== undefined) return treatmentResult;
+    if (treatmentResult !== undefined) {
+      return treatmentResult;
+    }
     const operationsResult = await handleCareOperations(tx, context);
-    if (operationsResult !== undefined) return operationsResult;
+    if (operationsResult !== undefined) {
+      return operationsResult;
+    }
     const referralsResult = await handleConsultantReferrals(tx, context);
-    if (referralsResult !== undefined) return referralsResult;
+    if (referralsResult !== undefined) {
+      return referralsResult;
+    }
     const responsibilityResult = await handleCareResponsibilities(tx, context);
-    if (responsibilityResult !== undefined) return responsibilityResult;
+    if (responsibilityResult !== undefined) {
+      return responsibilityResult;
+    }
     const onboardingResult = await handlePatientOnboarding(tx, context);
-    if (onboardingResult !== undefined) return onboardingResult;
+    if (onboardingResult !== undefined) {
+      return onboardingResult;
+    }
     const linkingResult = await handlePatientLinking(tx, context);
-    if (linkingResult !== undefined) return linkingResult;
+    if (linkingResult !== undefined) {
+      return linkingResult;
+    }
     const sharingResult = await handleProfessionalAccess(tx, context);
-    if (sharingResult !== undefined) return sharingResult;
+    if (sharingResult !== undefined) {
+      return sharingResult;
+    }
     const handoffResult = await handleCareHandoffs(tx, context);
-    if (handoffResult !== undefined) return handoffResult;
+    if (handoffResult !== undefined) {
+      return handoffResult;
+    }
     const visitResult = await handleVisits(tx, context);
-    if (visitResult !== undefined) return visitResult;
+    if (visitResult !== undefined) {
+      return visitResult;
+    }
     if (path === "/auth/me" && method === "GET") {
       const org = actor.organization_id
         ? await tx.get("SELECT * FROM organizations WHERE id=?", [actor.organization_id])
@@ -568,11 +645,15 @@ export function createApi(db, config = process.env) {
       return { signedOut: true };
     }
     if (path === "/auth/mfa/skip" && method === "POST") {
-      if (!actor.organization_id) fail(400, "Authenticator choice is for professional workspaces.");
-      if (actor.pendingMembership)
+      if (!actor.organization_id) {
+        fail(400, "Authenticator choice is for professional workspaces.");
+      }
+      if (actor.pendingMembership) {
         fail(403, "Your facility access is awaiting administrator approval.");
-      if (actor.accessExpired)
+      }
+      if (actor.accessExpired) {
         fail(403, "Your workspace access has expired. Contact its administrator.");
+      }
       if (body.dont_show_again === true) {
         await tx.run(
           "UPDATE memberships SET authenticator_prompt_dismissed=1 WHERE user_id=? AND organization_id=?",
@@ -594,8 +675,9 @@ export function createApi(db, config = process.env) {
       return { skipped: true };
     }
     if (path === "/auth/mfa/setup" && method === "POST") {
-      if (!actor.organization_id || actor.totp_secret)
+      if (!actor.organization_id || actor.totp_secret) {
         fail(409, "Authenticator setup unavailable.");
+      }
       const secret = newTotpSecret();
       await tx.run("UPDATE users SET pending_totp=? WHERE id=?", [
         protectSecret(secret, secretKey),
@@ -608,39 +690,46 @@ export function createApi(db, config = process.env) {
     }
     if (path === "/auth/mfa/verify" && method === "POST") {
       limit(`mfa:${actor.id}`);
-      const secret = revealSecret(actor.totp_secret ?? actor.pending_totp, secretKey),
-        code = String(body.code ?? "");
-      if (!secret || !verifyTotp(secret, code)) fail(401, "Authenticator code is incorrect.");
+      const secret = revealSecret(actor.totp_secret ?? actor.pending_totp, secretKey);
+      const code = String(body.code ?? "");
+      if (!secret || !verifyTotp(secret, code)) {
+        fail(401, "Authenticator code is incorrect.");
+      }
       const step = [-1, 0, 1]
         .map((delta) => Math.floor(Date.now() / 30000) + delta)
         .find((value) => totp(secret, value * 30000) === code);
-      if (actor.last_totp_step && step <= Number(actor.last_totp_step))
+      if (actor.last_totp_step && step <= Number(actor.last_totp_step)) {
         fail(401, "This code was already used. Wait for the next authenticator code.");
+      }
       const updated = await tx.run(
         "UPDATE users SET last_totp_step=? WHERE id=? AND (last_totp_step IS NULL OR CAST(last_totp_step AS BIGINT) < ?)",
         [String(step), actor.id, step],
       );
-      if ((updated.rowCount ?? updated.changes) !== 1)
+      if ((updated.rowCount ?? updated.changes) !== 1) {
         fail(401, "This code was already used. Wait for the next authenticator code.");
-      if (!actor.totp_secret)
+      }
+      if (!actor.totp_secret) {
         await tx.run("UPDATE users SET totp_secret=pending_totp,pending_totp=NULL WHERE id=?", [
           actor.id,
         ]);
+      }
       await tx.run("UPDATE sessions SET mfa_verified=1 WHERE id=?", [actor.session_id]);
       await audit(tx, actor, "auth.mfa_verified", "allow", null, null, correlation);
       return { verified: true };
     }
     strong(actor);
-    if (path === "/organizations" && method === "GET")
+    if (path === "/organizations" && method === "GET") {
       return { organizations: await tx.all("SELECT id,name FROM organizations ORDER BY name") };
+    }
     if (path === "/patients" && method === "GET") {
-      if (actor.patient_id)
+      if (actor.patient_id) {
         return {
           patients: await tx.all(
             "SELECT id,healthpass_id,name,dob,created_at FROM patients WHERE id=?",
             [actor.patient_id],
           ),
         };
+      }
       permit(actor, "registry.view");
       const areaPredicate = careAreaPatientPredicate(actor);
       const rows = await tx.all(
@@ -661,7 +750,11 @@ export function createApi(db, config = process.env) {
       if (hasPermission(actor, "records.view")) {
         const named = await listProfessionalPatients(tx, actor);
         const ids = new Set(rows.map((p) => p.id));
-        for (const patient of named) if (!ids.has(patient.id)) rows.push(patient);
+        for (const patient of named) {
+          if (!ids.has(patient.id)) {
+            rows.push(patient);
+          }
+        }
         rows.sort((a, b) => a.name.localeCompare(b.name));
       }
       if (hasPermission(actor, "registry.create")) {
@@ -670,7 +763,9 @@ export function createApi(db, config = process.env) {
           [actor.organization_id, actor.branch_id ?? null, actor.branch_id ?? null],
         );
         const activatable = new Set(origins.filter((r) => !r.claimed_by).map((r) => r.patient_id));
-        for (const row of rows) row.can_activate = activatable.has(row.id);
+        for (const row of rows) {
+          row.can_activate = activatable.has(row.id);
+        }
       }
       await audit(tx, actor, "registry.list", "allow", null, null, correlation);
       return { patients: rows };
@@ -803,13 +898,16 @@ export function createApi(db, config = process.env) {
     if (match && method === "PATCH") {
       const { patient, consent, accessPolicy } = await access(tx, actor, match[1], true);
       permit(actor, "profile.edit");
-      if (!accessPolicy.canEditProfile)
+      if (!accessPolicy.canEditProfile) {
         fail(403, "The patient has not shared their clinical profile.");
-      if (!["unknown", "reviewed", "none-known"].includes(body.allergy_status))
+      }
+      if (!["unknown", "reviewed", "none-known"].includes(body.allergy_status)) {
         fail(400, "Choose an allergy verification status.");
+      }
       const allergies = text(body.allergies ?? "", "allergies");
-      if (body.allergy_status === "reviewed" && !allergies)
+      if (body.allergy_status === "reviewed" && !allergies) {
         fail(400, "Record the reviewed allergy details.");
+      }
       await tx.run(
         "UPDATE patients SET allergy_status=?,allergies=?,emergency_contact=? WHERE id=?",
         [
@@ -835,8 +933,9 @@ export function createApi(db, config = process.env) {
     if (path === "/encounters" && method === "POST") {
       permit(actor, "notes.create");
       const kind = body.note_kind ?? actor.clinicalScopes[0];
-      if (!actor.clinicalScopes.includes(kind))
+      if (!actor.clinicalScopes.includes(kind)) {
         fail(403, "Your reviewed clinical scope does not cover this note type.");
+      }
       const { patient, consent, accessPolicy } = await access(
         tx,
         actor,
@@ -844,9 +943,9 @@ export function createApi(db, config = process.env) {
         true,
       );
       requireContributionScope(accessPolicy, kind);
-      const note = noteInput(body),
-        id = randomUUID(),
-        date = now();
+      const note = noteInput(body);
+      const id = randomUUID();
+      const date = now();
       const visit = body.visit_id
         ? await validateEncounterVisit(tx, context, body.visit_id, patient.id)
         : null;
@@ -861,11 +960,12 @@ export function createApi(db, config = process.env) {
         ...note,
       });
       const replayDraft = (existing) => {
-        if (existing.create_request_payload !== requestPayload)
+        if (existing.create_request_payload !== requestPayload) {
           fail(
             409,
             "This request was already used for different note content. Reload the chart before continuing.",
           );
+        }
         return { id: existing.id, version: existing.version };
       };
       if (requestKey) {
@@ -873,7 +973,9 @@ export function createApi(db, config = process.env) {
           "SELECT id,version,create_request_payload FROM encounters WHERE author_id=? AND client_request_id=?",
           [actor.id, requestKey],
         );
-        if (existing) return replayDraft(existing);
+        if (existing) {
+          return replayDraft(existing);
+        }
       }
       // A partner clinician creates their own record; they do not rewrite the source facility's note.
       const inserted = await tx.get(
@@ -922,32 +1024,41 @@ export function createApi(db, config = process.env) {
         match[2] === "sign" ? "notes.sign" : match[2] === "amend" ? "notes.amend" : "notes.edit",
       );
       const encounter = await tx.get("SELECT * FROM encounters WHERE id=?", [match[1]]);
-      if (!encounter) fail(404, "Encounter unavailable.");
-      if (encounter.author_id !== actor.id || !actor.clinicalScopes.includes(encounter.note_kind))
+      if (!encounter) {
+        fail(404, "Encounter unavailable.");
+      }
+      if (encounter.author_id !== actor.id || !actor.clinicalScopes.includes(encounter.note_kind)) {
         fail(403, "You can only change your own notes within your reviewed clinical scope.");
-      if (encounter.visit_id)
+      }
+      if (encounter.visit_id) {
         await validateEncounterVisit(tx, context, encounter.visit_id, encounter.patient_id, {
           allowCompleted: match[2] === "amend",
         });
+      }
       const { consent, accessPolicy } = await access(tx, actor, encounter.patient_id, true);
       requireContributionScope(accessPolicy, encounter.note_kind ?? "general");
       if (
         encounter.organization_id !== actor.organization_id ||
         (actor.branch_id && encounter.branch_id !== actor.branch_id)
-      )
+      ) {
         fail(403, "You cannot change another facility's record.");
-      if (!Number.isInteger(body.version) || body.version !== encounter.version)
+      }
+      if (!Number.isInteger(body.version) || body.version !== encounter.version) {
         fail(409, "This record changed. Reload the chart before saving.");
+      }
       const operation = match[2];
       if (method === "PATCH" && !operation) {
-        if (encounter.status !== "draft") fail(409, "Signed notes require a versioned amendment.");
+        if (encounter.status !== "draft") {
+          fail(409, "Signed notes require a versioned amendment.");
+        }
         const note = noteInput(body);
         const result = await tx.run(
           "UPDATE encounters SET complaint=?,history=?,findings=?,assessment=?,plan=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status='draft'",
           [...Object.values(note), now(), encounter.id, body.version],
         );
-        if ((result.rowCount ?? result.changes) !== 1)
+        if ((result.rowCount ?? result.changes) !== 1) {
           fail(409, "This record changed. Reload before saving.");
+        }
         await audit(
           tx,
           actor,
@@ -961,33 +1072,39 @@ export function createApi(db, config = process.env) {
         );
         return { version: body.version + 1 };
       }
-      if (method !== "POST" || !operation) fail(405, "Method not allowed.");
-      if (operation === "sign" && encounter.status !== "draft")
+      if (method !== "POST" || !operation) {
+        fail(405, "Method not allowed.");
+      }
+      if (operation === "sign" && encounter.status !== "draft") {
         fail(409, "This encounter is already signed.");
-      if (operation === "amend" && encounter.status === "draft")
+      }
+      if (operation === "amend" && encounter.status === "draft") {
         fail(409, "Sign the initial note before amending.");
+      }
       const note =
         operation === "amend" || body.complaint !== undefined
           ? noteInput(body)
           : noteInput(encounter);
-      if (!note.assessment || !note.plan)
+      if (!note.assessment || !note.plan) {
         fail(400, "Assessment and plan are required before signing.");
+      }
       if (
         operation === "sign" &&
         !hasPermission(actor, "notes.edit") &&
         Object.keys(note).some((key) => note[key] !== encounter[key])
-      )
+      ) {
         fail(403, "Signing permission does not grant permission to edit the draft.");
+      }
       const reason =
         operation === "amend" ? text(body.reason, "amendment reason", 1000, true) : null;
       const previous = await tx.get(
         "SELECT id FROM note_versions WHERE encounter_id=? ORDER BY version DESC LIMIT 1",
         [encounter.id],
       );
-      const version = encounter.version + 1,
-        signedAt = now(),
-        payload = JSON.stringify(note),
-        noteId = randomUUID();
+      const version = encounter.version + 1;
+      const signedAt = now();
+      const payload = JSON.stringify(note);
+      const noteId = randomUUID();
       const result = await tx.run(
         "UPDATE encounters SET complaint=?,history=?,findings=?,assessment=?,plan=?,status=?,version=?,updated_at=? WHERE id=? AND version=?",
         [
@@ -999,8 +1116,9 @@ export function createApi(db, config = process.env) {
           body.version,
         ],
       );
-      if ((result.rowCount ?? result.changes) !== 1)
+      if ((result.rowCount ?? result.changes) !== 1) {
         fail(409, "This record changed. Reload before signing.");
+      }
       // Hash binds the retained note, author and time; it is an integrity digest, not a PKI signature.
       await tx.run(
         "INSERT INTO note_versions(id,encounter_id,version,author_id,payload,signature_hash,signed_at,amendment_reason,previous_id) VALUES (?,?,?,?,?,?,?,?,?)",
@@ -1040,7 +1158,9 @@ export function createApi(db, config = process.env) {
       return { version };
     }
     if (path === "/consents" && method === "GET") {
-      if (!actor.patient_id) fail(403, "Use a patient account to manage sharing.");
+      if (!actor.patient_id) {
+        fail(403, "Use a patient account to manage sharing.");
+      }
       return {
         restricted: !!(await tx.get(
           "SELECT patient_id FROM patient_access_settings WHERE patient_id=? AND restricted=1",
@@ -1053,29 +1173,34 @@ export function createApi(db, config = process.env) {
       };
     }
     if (path === "/consents" && method === "POST") {
-      if (!actor.patient_id) fail(403, "Only the patient can grant this sharing scope.");
+      if (!actor.patient_id) {
+        fail(403, "Only the patient can grant this sharing scope.");
+      }
       if (
         await tx.get(
           "SELECT patient_id FROM patient_access_settings WHERE patient_id=? AND restricted=1",
           [actor.patient_id],
         )
-      )
+      ) {
         fail(
           403,
           "You use only selected professionals. Create a named-professional grant instead.",
         );
-      const recipient = text(body.recipient_id, "recipient", 100, true),
-        purpose = text(body.purpose, "purpose", 500, true);
-      if (!(await tx.get("SELECT id FROM organizations WHERE id=?", [recipient])))
+      }
+      const recipient = text(body.recipient_id, "recipient", 100, true);
+      const purpose = text(body.purpose, "purpose", 500, true);
+      if (!(await tx.get("SELECT id FROM organizations WHERE id=?", [recipient]))) {
         fail(400, "Recipient unavailable.");
-      const expiry = text(body.expires_at, "expiry", 40, true),
-        timestamp = Date.parse(expiry);
+      }
+      const expiry = text(body.expires_at, "expiry", 40, true);
+      const timestamp = Date.parse(expiry);
       if (
         !Number.isFinite(timestamp) ||
         timestamp <= Date.now() ||
         timestamp > Date.now() + 90 * 86400000
-      )
+      ) {
         fail(400, "Sharing must expire within 90 days.");
+      }
       const id = randomUUID();
       await tx.run(
         "INSERT INTO consents(id,patient_id,recipient_id,grantor_id,purpose,expires_at,created_at) VALUES (?,?,?,?,?,?,?)",
@@ -1098,7 +1223,9 @@ export function createApi(db, config = process.env) {
         match[1],
         actor.patient_id ?? "",
       ]);
-      if (!grant) fail(403, "Sharing grant unavailable.");
+      if (!grant) {
+        fail(403, "Sharing grant unavailable.");
+      }
       await tx.run("UPDATE consents SET revoked_at=? WHERE id=?", [now(), grant.id]);
       await audit(
         tx,
@@ -1113,7 +1240,9 @@ export function createApi(db, config = process.env) {
       return { revoked: true };
     }
     if (path === "/audit" && method === "GET") {
-      if (!actor.patient_id) permit(actor, "audit.view");
+      if (!actor.patient_id) {
+        permit(actor, "audit.view");
+      }
       const rows = actor.patient_id
         ? await tx.all(
             "SELECT a.*,u.name AS actor_name,o.name AS organization_name FROM audits a LEFT JOIN users u ON u.id=a.actor_id LEFT JOIN organizations o ON o.id=a.organization_id WHERE a.patient_id=? ORDER BY a.created_at DESC LIMIT 100",
@@ -1133,33 +1262,41 @@ export function createApi(db, config = process.env) {
     fail(404, "Endpoint unavailable.");
   }
   return async (request) => {
-    const url = new URL(request.url),
-      path = url.pathname.replace(/^\/api\/healthpass/, "") || "/";
-    const correlation = randomUUID(),
-      headers = new Headers({
-        "content-type": "application/json",
-        "cache-control": "no-store",
-        "x-content-type-options": "nosniff",
-        "x-correlation-id": correlation,
-      });
+    const url = new URL(request.url);
+    const path = url.pathname.replace(/^\/api\/healthpass/, "") || "/";
+    const correlation = randomUUID();
+    const headers = new Headers({
+      "content-type": "application/json",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "x-correlation-id": correlation,
+    });
     let actor = null;
     let submittedBody = null;
     try {
-      if (!["GET", "POST", "PATCH"].includes(request.method)) fail(405, "Method not allowed.");
+      if (!["GET", "POST", "PATCH"].includes(request.method)) {
+        fail(405, "Method not allowed.");
+      }
       let body = {};
       if (request.method !== "GET") {
-        if (request.headers.get("origin") !== origin) fail(403, "Request origin is not permitted.");
-        if (!request.headers.get("content-type")?.includes("application/json"))
+        if (request.headers.get("origin") !== origin) {
+          fail(403, "Request origin is not permitted.");
+        }
+        if (!request.headers.get("content-type")?.includes("application/json")) {
           fail(415, "Use application/json.");
+        }
         const raw = await request.text();
-        if (raw.length > 40000) fail(413, "Request too large.");
+        if (raw.length > 40000) {
+          fail(413, "Request too large.");
+        }
         try {
           body = JSON.parse(raw);
         } catch {
           fail(400, "Invalid JSON.");
         }
-        if (!body || typeof body !== "object" || Array.isArray(body))
+        if (!body || typeof body !== "object" || Array.isArray(body)) {
           fail(400, "Invalid request body.");
+        }
       }
       submittedBody = body;
       if (path === "/auth/login" && request.method === "POST") {
@@ -1181,7 +1318,9 @@ export function createApi(db, config = process.env) {
             await tx.get("SELECT attempt_count FROM signin_attempt_limits WHERE id=?", [attemptKey])
           ).attempt_count;
         });
-        if (count > 10) fail(429, "Too many attempts. Try again in ten minutes.");
+        if (count > 10) {
+          fail(429, "Too many attempts. Try again in ten minutes.");
+        }
       }
       const result = await db.transaction(async (tx) => {
         actor = await session(tx, request);
@@ -1196,8 +1335,9 @@ export function createApi(db, config = process.env) {
           headers,
         );
         const sessionToken = headers.get("set-cookie")?.match(/^hp_session=([a-f0-9]+)/)?.[1];
-        if (sessionToken && path.startsWith("/auth/"))
+        if (sessionToken && path.startsWith("/auth/")) {
           await recordSignin(tx, request, headers, secure, sessionToken);
+        }
         if (request.method !== "GET") {
           const current = actor?.id
             ? actor
@@ -1206,7 +1346,7 @@ export function createApi(db, config = process.env) {
                   hash(sessionToken),
                 ])
               : null;
-          if (current)
+          if (current) {
             await tx.run(
               "INSERT INTO account_activity(id,user_id,action,created_at) VALUES (?,?,?,?)",
               [
@@ -1219,14 +1359,17 @@ export function createApi(db, config = process.env) {
                 now(),
               ],
             );
+          }
         }
         return result;
       });
-      if (request.method !== "GET") await deliverPatientEmails(db, config).catch(() => {});
+      if (request.method !== "GET") {
+        await deliverPatientEmails(db, config).catch(() => {});
+      }
       return new Response(JSON.stringify(result), { status: 200, headers });
     } catch (error) {
       const status = error.status ?? 500;
-      if (path === "/auth/login" && status === 401 && submittedBody?.email)
+      if (path === "/auth/login" && status === 401 && submittedBody?.email) {
         await db
           .transaction(async (tx) => {
             const email = String(submittedBody.email).trim().toLowerCase();
@@ -1257,13 +1400,16 @@ export function createApi(db, config = process.env) {
             }
           })
           .catch(() => {});
+      }
       // Failed transaction rolls back. Persist denial separately, without submitted clinical content.
-      if (status === 401 || status === 403)
+      if (status === 401 || status === 403) {
         await db
           .transaction((tx) => audit(tx, actor, "access.denied", "deny", null, null, correlation))
           .catch(() => {});
-      if (status === 500)
+      }
+      if (status === 500) {
         console.error("HealthPass request failed", correlation, error.code ?? error.name);
+      }
       headers.delete("set-cookie");
       return new Response(
         JSON.stringify({

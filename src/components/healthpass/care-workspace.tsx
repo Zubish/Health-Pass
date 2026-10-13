@@ -7,7 +7,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { CareResponsibilities, PatientResponsibleConsultant } from "./care-responsibilities";
 import { WorkspaceShell } from "./workspace-navigation";
 import { WorkspaceSettings } from "./workspace-settings";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -27,7 +27,7 @@ import {
 import { careApi } from "@/lib/healthpass-client";
 import { date } from "@/lib/healthpass-types";
 import type { Me, Patient, Encounter, AccessScope } from "@/lib/healthpass-types";
-import { Mark, Stat, PatientRow, Empty, Modal } from "./primitives";
+import { Stat, PatientRow, Empty, Modal } from "./primitives";
 import { NoteEditor, EncounterCard } from "./encounters";
 import { PatientLinking, FacilityLinking } from "./patient-linking";
 import { CareRelationships, PatientRelationshipNotice } from "./care-relationships";
@@ -41,56 +41,62 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
   const tab =
     search.tab ?? (can("workspace.view") ? "workspace" : can("visits.view") ? "today" : "overview");
   const selected = search.patient ?? null;
-  const setTab = (next: string) => {
-    void navigate({ search: { tab: next } });
-  };
-  const setSelected = (id: string | null) => {
-    void navigate({ search: { tab: "patients", patient: id ?? undefined } });
-  };
-  const [patients, setPatients] = useState<Patient[]>([]),
-    [chart, setChart] = useState<{
-      patient: Patient;
-      encounters: Encounter[];
-      accessScope: AccessScope;
-    } | null>(null),
-    [query, setQuery] = useState(""),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [busy, setBusy] = useState(false),
-    [register, setRegister] = useState(false),
-    [activationPatient, setActivationPatient] = useState<string | null>(null),
-    [linkExisting, setLinkExisting] = useState(false),
-    [noteVisit, setNoteVisit] = useState<{ id: string; patient_id: string } | null>(null),
-    [noteRequestKey, setNoteRequestKey] = useState(""),
-    [editing, setEditing] = useState<Encounter | "new" | null>(null),
-    [profile, setProfile] = useState(false),
-    [audit, setAudit] = useState<
-      {
-        id: string;
-        action: string;
-        correlation_id: string;
-        actor_name: string | null;
-        organization_name: string | null;
-        decision: string;
-        created_at: string;
-      }[]
-    >([]),
-    [consents, setConsents] = useState<
-      {
-        id: string;
-        recipient_name: string;
-        purpose: string;
-        expires_at: string;
-        revoked_at: string | null;
-      }[]
-    >([]),
-    [accessRestricted, setAccessRestricted] = useState<boolean | null>(null),
-    [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]),
-    [health, setHealth] = useState("");
-  const isPatient = me.role === "patient",
-    canRegister = can("registry.create"),
-    canRegistry = can("registry.view") || isPatient,
-    canChart = can("records.view") || isPatient;
+  const setTab = useCallback(
+    (next: string) => {
+      void navigate({ search: { tab: next } });
+    },
+    [navigate],
+  );
+  const setSelected = useCallback(
+    (id: string | null) => {
+      void navigate({ search: { tab: "patients", patient: id ?? undefined } });
+    },
+    [navigate],
+  );
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [chart, setChart] = useState<{
+    patient: Patient;
+    encounters: Encounter[];
+    accessScope: AccessScope;
+  } | null>(null);
+  const [query, setQuery] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [register, setRegister] = useState(false);
+  const [activationPatient, setActivationPatient] = useState<string | null>(null);
+  const [linkExisting, setLinkExisting] = useState(false);
+  const [noteVisit, setNoteVisit] = useState<{ id: string; patient_id: string } | null>(null);
+  const [noteRequestKey, setNoteRequestKey] = useState("");
+  const [editing, setEditing] = useState<Encounter | "new" | null>(null);
+  const [profile, setProfile] = useState(false);
+  const [audit, setAudit] = useState<
+    {
+      id: string;
+      action: string;
+      correlation_id: string;
+      actor_name: string | null;
+      organization_name: string | null;
+      decision: string;
+      created_at: string;
+    }[]
+  >([]);
+  const [consents, setConsents] = useState<
+    {
+      id: string;
+      recipient_name: string;
+      purpose: string;
+      expires_at: string;
+      revoked_at: string | null;
+    }[]
+  >([]);
+  const [accessRestricted, setAccessRestricted] = useState<boolean | null>(null);
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
+  const [health, setHealth] = useState("");
+  const isPatient = me.role === "patient";
+  const canRegister = can("registry.create");
+  const canRegistry = can("registry.view") || isPatient;
+  const canChart = can("records.view") || isPatient;
   const nav = isPatient
     ? ([
         ["overview", "My health", LayoutDashboard],
@@ -133,73 +139,95 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
         ...(can("audit.view") ? [["audit", "Activity & audit", History] as const] : []),
         ["security", "Session management", ShieldCheck],
       ] as const);
-  async function loadRegistry() {
+  const loadRegistry = useCallback(async () => {
     if (canRegistry) {
       const data = await careApi("/patients");
       setPatients(data.patients);
     }
-  }
-  async function loadChart(id: string) {
-    setBusy(true);
-    setError("");
-    try {
-      setChart(await careApi(`/patients/${id}`));
-      if (selected !== id) setSelected(id);
-    } catch (e) {
-      setChart(null);
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function loadTab(next: string) {
-    setError("");
-    if (tab !== next) setTab(next);
-    try {
-      if (next === "audit") setAudit((await careApi("/audit")).audits);
-      if (next === "sharing") {
-        const [sharing, facilities] = await Promise.all([
-          careApi("/consents"),
-          careApi("/organizations"),
-        ]);
-        setConsents(sharing.consents);
-        setAccessRestricted((current) => current === true || sharing.restricted);
-        setOrganizations(facilities.organizations);
+  }, [canRegistry]);
+  const loadChart = useCallback(
+    async (id: string) => {
+      setBusy(true);
+      setError("");
+      try {
+        setChart(await careApi(`/patients/${id}`));
+        if (selected !== id) {
+          setSelected(id);
+        }
+      } catch (e) {
+        setChart(null);
+        setError((e as Error).message);
+      } finally {
+        setBusy(false);
       }
-      if (next === "patients" && isPatient && me.user.patient_id)
-        await loadChart(me.user.patient_id);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
+    },
+    [selected, setSelected],
+  );
+  const loadTab = useCallback(
+    async (next: string) => {
+      setError("");
+      if (tab !== next) {
+        setTab(next);
+      }
+      try {
+        if (next === "audit") {
+          setAudit((await careApi("/audit")).audits);
+        }
+        if (next === "sharing") {
+          const [sharing, facilities] = await Promise.all([
+            careApi("/consents"),
+            careApi("/organizations"),
+          ]);
+          setConsents(sharing.consents);
+          setAccessRestricted((current) => current === true || sharing.restricted);
+          setOrganizations(facilities.organizations);
+        }
+        if (next === "patients" && isPatient && me.user.patient_id) {
+          await loadChart(me.user.patient_id);
+        }
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    },
+    [tab, setTab, isPatient, me.user.patient_id, loadChart],
+  );
   useEffect(() => {
     void careApi("/health")
       .then((data) => setHealth(data.mode))
       .catch(() => {});
   }, []);
   useEffect(() => {
-    if (tab === "patients" || tab === "overview")
+    if (tab === "patients" || tab === "overview") {
       void loadRegistry().catch((e) => setError(e.message));
-  }, [tab]);
+    }
+  }, [tab, loadRegistry]);
   useEffect(() => {
     setChart(null);
     setEditing(null);
-    if (selected && canChart) void loadChart(selected);
-    else void loadTab(tab);
-  }, [tab, selected]);
+    if (selected && canChart) {
+      void loadChart(selected);
+    } else {
+      void loadTab(tab);
+    }
+  }, [tab, selected, canChart, loadChart, loadTab]);
   useEffect(() => {
-    if (noteVisit && chart?.patient.id === noteVisit.patient_id) setEditing("new");
+    if (noteVisit && chart?.patient.id === noteVisit.patient_id) {
+      setEditing("new");
+    }
   }, [noteVisit, chart?.patient.id]);
   useEffect(() => {
-    if (editing === "new") setNoteRequestKey(crypto.randomUUID());
+    if (editing === "new") {
+      setNoteRequestKey(crypto.randomUUID());
+    }
   }, [editing]);
+  const cannotAccessCurrentPage =
+    (!nav.some(([id]) => id === tab) && !(tab === "visits" && can("visits.view"))) ||
+    Boolean(selected && !canChart);
   useEffect(() => {
-    if (
-      (!nav.some(([id]) => id === tab) && !(tab === "visits" && can("visits.view"))) ||
-      (selected && !canChart)
-    )
+    if (cannotAccessCurrentPage) {
       void navigate({ search: { tab: "overview" }, replace: true });
-  }, [me.permissions?.join(","), tab, selected]);
+    }
+  }, [cannotAccessCurrentPage, navigate]);
   async function act(action: () => Promise<void>, message: string) {
     setBusy(true);
     setError("");
@@ -884,7 +912,9 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
               setLinkExisting(false);
               void loadRegistry();
               setTab("patients");
-              if (canChart) setSelected(id);
+              if (canChart) {
+                setSelected(id);
+              }
             }}
           />
         )}
@@ -915,22 +945,23 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                       ...note,
                     });
                   } else {
-                    if (operation === "save")
+                    if (operation === "save") {
                       await careApi(`/encounters/${editing.id}`, "PATCH", {
                         version: editing.version,
                         ...note,
                       });
-                    else if (operation === "sign") {
+                    } else if (operation === "sign") {
                       await careApi(`/encounters/${editing.id}/sign`, "POST", {
                         version: editing.version,
                         ...note,
                       });
-                    } else
+                    } else {
                       await careApi(`/encounters/${editing.id}/amend`, "POST", {
                         version: editing.version,
                         ...note,
                         reason,
                       });
+                    }
                   }
                   await loadChart(chart.patient.id);
                   setEditing(null);

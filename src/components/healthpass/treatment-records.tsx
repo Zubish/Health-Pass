@@ -97,22 +97,22 @@ export function TreatmentRecords({
   patientId: string;
   accessScope: AccessScope;
 }) {
-  const [data, setData] = useState<Data | null>(null),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [busy, setBusy] = useState(false),
-    [modal, setModal] = useState<{
-      type: "admit" | "discharge" | "prescribe" | "observe" | "administer" | "stop";
-      order?: Order;
-      request: string;
-    } | null>(null),
-    [outcome, setOutcome] = useState("given"),
-    [prn, setPrn] = useState(false),
-    [episode, setEpisode] = useState(""),
-    [metric, setMetric] = useState("temperature");
-  const patient = me.role === "patient",
-    can = (key: string) =>
-      !patient && !!accessScope.canContribute && !!me.permissions?.includes(key);
+  const [data, setData] = useState<Data | null>(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [modal, setModal] = useState<{
+    type: "admit" | "discharge" | "prescribe" | "observe" | "administer" | "stop";
+    order?: Order;
+    request: string;
+  } | null>(null);
+  const [outcome, setOutcome] = useState("given");
+  const [prn, setPrn] = useState(false);
+  const [episode, setEpisode] = useState("");
+  const [metric, setMetric] = useState("temperature");
+  const patient = me.role === "patient";
+  const can = (key: string) =>
+    !patient && !!accessScope.canContribute && !!me.permissions?.includes(key);
   const load = useCallback(
     async () => setData(await careApi<Data>(`/treatment/patients/${patientId}`)),
     [patientId],
@@ -129,27 +129,37 @@ export function TreatmentRecords({
   }
   const active = data?.episodes.filter((e) => e.status === "active") || [];
   function slots(order: Order) {
-    if (!order.interval_hours) return [];
-    const step = order.interval_hours * 3600000,
-      start = Date.parse(order.starts_at),
-      end = Math.min(Date.now() + 300000, Date.parse(order.ends_at) - 1),
-      first = Math.max(0, Math.ceil((end - 48 * 3600000 - start) / step));
+    if (!order.interval_hours) {
+      return [];
+    }
+    const step = order.interval_hours * 3600000;
+    const start = Date.parse(order.starts_at);
+    const end = Math.min(Date.now() + 300000, Date.parse(order.ends_at) - 1);
+    const first = Math.max(0, Math.ceil((end - 48 * 3600000 - start) / step));
     const result: string[] = [];
     for (let n = first; n <= Math.floor((end - start) / step) && result.length < 200; n++) {
       const due = new Date(start + n * step).toISOString();
-      if (!order.administrations.some((a) => a.due_at === due)) result.push(due);
+      if (!order.administrations.some((a) => a.due_at === due)) {
+        result.push(due);
+      }
     }
     return result.reverse();
   }
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!modal) return;
-    const f = new FormData(e.currentTarget),
-      fields = Object.fromEntries(f),
-      body: Record<string, unknown> = { ...fields, client_request_id: modal.request };
-    for (const key of ["decided_at", "starts_at", "ends_at", "observed_at", "administered_at"])
-      if (!fields[key]) delete body[key];
-      else body[key] = new Date(String(fields[key])).toISOString();
+    if (!modal) {
+      return;
+    }
+    const f = new FormData(e.currentTarget);
+    const fields = Object.fromEntries(f);
+    const body: Record<string, unknown> = { ...fields, client_request_id: modal.request };
+    for (const key of ["decided_at", "starts_at", "ends_at", "observed_at", "administered_at"]) {
+      if (!fields[key]) {
+        delete body[key];
+      } else {
+        body[key] = new Date(String(fields[key])).toISOString();
+      }
+    }
     let path = "";
     if (["admit", "discharge"].includes(modal.type)) {
       path = "decisions";
@@ -195,8 +205,8 @@ export function TreatmentRecords({
     .slice(0, 30)
     .reverse();
   const range = points.map((o) => o.values[metric]);
-  const lo = Math.min(...range),
-    hi = Math.max(...range);
+  const lo = Math.min(...range);
+  const hi = Math.max(...range);
   return (
     <section className="hp-panel hp-treatment">
       <div className="hp-section-heading">
@@ -429,7 +439,9 @@ export function TreatmentRecords({
             }[modal.type]
           }
           onClose={() => {
-            if (!busy) setModal(null);
+            if (!busy) {
+              setModal(null);
+            }
           }}
         >
           {error && (

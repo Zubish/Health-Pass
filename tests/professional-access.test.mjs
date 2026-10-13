@@ -52,23 +52,26 @@ async function fixture() {
         }),
       );
       const updated = response.headers.get("set-cookie");
-      if (updated) cookie = updated.split(";")[0];
+      if (updated) {
+        cookie = updated.split(";")[0];
+      }
       return { status: response.status, data: await response.json() };
     };
   }
   async function login(email) {
     const request = client();
     assert.equal((await request("/auth/login", "POST", { email, password })).status, 200);
-    if (email !== "patient@healthpass.test")
+    if (email !== "patient@healthpass.test") {
       assert.equal((await request("/auth/mfa/skip", "POST", {})).status, 200);
+    }
     return request;
   }
-  const patient = await login("patient@healthpass.test"),
-    doctor = await login("doctor@healthpass.test"),
-    partner = await login("ibadan@healthpass.test"),
-    colleague = await login("colleague@synthetic.invalid"),
-    nurse = await login("nurse@synthetic.invalid"),
-    reception = await login("reception@healthpass.test");
+  const patient = await login("patient@healthpass.test");
+  const doctor = await login("doctor@healthpass.test");
+  const partner = await login("ibadan@healthpass.test");
+  const colleague = await login("colleague@synthetic.invalid");
+  const nurse = await login("nurse@synthetic.invalid");
+  const reception = await login("reception@healthpass.test");
   async function grant(recipient = "doctor-lagos", overrides = {}) {
     const body = {
       recipient_user_id: recipient,
@@ -219,12 +222,13 @@ test("named reads filter complete signed payloads by category and omit clinical 
       chart.data.encounters.map((e) => e.id),
       [nursing],
     );
-    for (const key of ["phone", "sex", "allergy_status", "allergies", "emergency_contact"])
+    for (const key of ["phone", "sex", "allergy_status", "allergies", "emergency_contact"]) {
       assert.equal(
         Object.hasOwn(chart.data.patient, key),
         false,
         key + " must be omitted without profile scope",
       );
+    }
     assert.ok(!JSON.stringify(chart.data).includes("Synthetic permitted general note"));
     assert.ok(!JSON.stringify(chart.data).includes("Synthetic private draft marker"));
     for (const encounter of chart.data.encounters) {
@@ -272,8 +276,8 @@ test("named reads filter complete signed payloads by category and omit clinical 
 test("read-only named grants deny all clinical writes even for note authors and assigned professionals", async () => {
   const f = await fixture();
   try {
-    const signed = await f.signed(f.doctor),
-      visitId = await f.visit();
+    const signed = await f.signed(f.doctor);
+    const visitId = await f.visit();
     const draft = await f.doctor("/encounters", "POST", {
       patient_id: "patient-ade",
       visit_id: visitId,
@@ -366,11 +370,11 @@ test("read-only named grants deny all clinical writes even for note authors and 
 test("one-level delegation is narrower, patient-visible and controlled for other facilities", async () => {
   const f = await fixture();
   try {
-    const general = await f.signed(f.doctor),
-      nursing = await f.signed(f.nurse, {
-        note_kind: "nursing",
-        complaint: "Synthetic shared nursing care",
-      });
+    const general = await f.signed(f.doctor);
+    const nursing = await f.signed(f.nurse, {
+      note_kind: "nursing",
+      complaint: "Synthetic shared nursing care",
+    });
     const root = await f.grant("doctor-lagos", {
       scopes: ["general", "nursing"],
       can_contribute: true,
@@ -709,11 +713,12 @@ test("visit details obey named read scopes while assigned clinical actions requi
     const visitId = await f.visit();
     const legacyIds = [randomUUID(), randomUUID()];
     await f.db.transaction(async (tx) => {
-      for (const id of legacyIds)
+      for (const id of legacyIds) {
         await tx.run(
           "INSERT INTO visit_followups(id,visit_id,author_id,request_payload,title,due_at,status,created_at,updated_at) VALUES (?,?,'doctor-lagos','legacy-unknown-payload','Synthetic unclassified historical task marker',?,'open',?,?)",
           [id, visitId, expiry(), new Date().toISOString(), new Date().toISOString()],
         );
+      }
     });
     const legacyView = await f.doctor(`/visits/${visitId}`);
     assert.equal(legacyView.data.followUps.length, 2);

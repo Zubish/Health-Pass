@@ -78,10 +78,14 @@ function useAccess(patientId?: string) {
         }
       })
       .catch((e) => {
-        if (current) setError(e.message);
+        if (current) {
+          setError(e.message);
+        }
       })
       .finally(() => {
-        if (current) setLoading(false);
+        if (current) {
+          setLoading(false);
+        }
       });
     return () => {
       current = false;
@@ -94,7 +98,9 @@ export function PatientProfessionalAccess({
 }: { onChanged?: (restricted: boolean) => void } = {}) {
   const { data, error, setError, loading, ready, reload } = useAccess();
   useEffect(() => {
-    if (ready) onChanged?.(data.restricted);
+    if (ready) {
+      onChanged?.(data.restricted);
+    }
   }, [ready, data.restricted, onChanged]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -105,8 +111,9 @@ export function PatientProfessionalAccess({
           ? "Revoke this professional’s future access? Existing care records remain saved."
           : "Revoke this professional and any delegated access? Existing care records remain saved; facility access will not be restored.",
       )
-    )
+    ) {
       return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -191,7 +198,7 @@ export function PatientProfessionalAccess({
               );
               try {
                 await reload();
-              } catch (e) {
+              } catch {
                 setError(
                   "Access was saved, but history could not be refreshed. Use Refresh access to check it.",
                 );
@@ -227,8 +234,9 @@ export function ProfessionalAccess({
       !window.confirm(
         "Revoke this delegated professional’s future access? Existing care records remain saved.",
       )
-    )
+    ) {
       return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -321,7 +329,7 @@ export function ProfessionalAccess({
               setNotice("Delegated access saved within the patient’s limits.");
               try {
                 await changed();
-              } catch (e) {
+              } catch {
                 setError(
                   "Access was saved, but history could not be refreshed. Use Refresh access to check it.",
                 );
@@ -431,8 +439,12 @@ function GrantForm({
     setRecipient("");
     try {
       const query = new URLSearchParams({ workspace_code: workspaceCode.trim() });
-      if (professionalName.trim()) query.set("search", professionalName.trim());
-      if (patientId) query.set("patient_id", patientId);
+      if (professionalName.trim()) {
+        query.set("search", professionalName.trim());
+      }
+      if (patientId) {
+        query.set("patient_id", patientId);
+      }
       setOptions(await careApi(`/professional-access/options?${query}`));
     } catch (e) {
       setError((e as Error).message);
@@ -441,7 +453,9 @@ function GrantForm({
     }
   }
   async function save() {
-    if (!options) return;
+    if (!options) {
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -462,7 +476,7 @@ function GrantForm({
         days,
       };
       const payload = JSON.stringify(fields);
-      if (!attempt.current || attempt.current.payload !== payload)
+      if (!attempt.current || attempt.current.payload !== payload) {
         attempt.current = {
           id: crypto.randomUUID(),
           payload,
@@ -470,6 +484,7 @@ function GrantForm({
             Math.min(Date.now() + Number(days) * 86400000, maxExpiry),
           ).toISOString(),
         };
+      }
       const { days: unused, ...body } = fields;
       void unused;
       await careApi(
@@ -620,7 +635,9 @@ function GrantForm({
                 disabled={busy}
                 onChange={(value) => {
                   setDelegation(value);
-                  if (!value) setExternal(false);
+                  if (!value) {
+                    setExternal(false);
+                  }
                 }}
               >
                 Allow this professional to share the same or narrower access with another reviewed

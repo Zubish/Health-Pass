@@ -236,16 +236,22 @@ roleTemplates.push({
   permissions: [...roleTemplates.find((r) => r.key === "gp").permissions, "referrals.respond"],
 });
 for (const role of roleTemplates) {
-  if (["gp", "nurse", "pharmacist", "clinician", "consultant"].includes(role.key))
+  if (["gp", "nurse", "pharmacist", "clinician", "consultant"].includes(role.key)) {
     role.permissions.push("careteam.view", "admissions.view");
-  if (["gp", "clinician"].includes(role.key)) role.permissions.push("referrals.create");
+  }
+  if (["gp", "clinician"].includes(role.key)) {
+    role.permissions.push("referrals.create");
+  }
   if (["gp", "nurse", "pharmacist", "clinician", "consultant", "reception"].includes(role.key)) {
     role.permissions.push("visits.view");
-    if (role.permissions.includes("registry.create")) role.permissions.push("visits.manage");
+    if (role.permissions.includes("registry.create")) {
+      role.permissions.push("visits.manage");
+    }
     if (role.permissions.includes("notes.create")) {
       role.permissions.push("visits.document", "followups.manage");
-      if (["general", "nursing"].includes(role.clinical_scope))
+      if (["general", "nursing"].includes(role.clinical_scope)) {
         role.permissions.push("observations.create");
+      }
     }
   }
 }
@@ -258,16 +264,22 @@ export async function upgradeVisitRoles(tx) {
       !["gp", "nurse", "pharmacist", "clinician", "consultant", "reception"].includes(
         role.template_key,
       )
-    )
+    ) {
       continue;
+    }
     const permissions = new Set(JSON.parse(role.permissions));
-    if (permissions.has("registry.view")) permissions.add("visits.view");
-    if (permissions.has("registry.create")) permissions.add("visits.manage");
+    if (permissions.has("registry.view")) {
+      permissions.add("visits.view");
+    }
+    if (permissions.has("registry.create")) {
+      permissions.add("visits.manage");
+    }
     if (permissions.has("records.view") && permissions.has("notes.create")) {
       permissions.add("visits.document");
       permissions.add("followups.manage");
-      if (["general", "nursing"].includes(role.clinical_scope))
+      if (["general", "nursing"].includes(role.clinical_scope)) {
         permissions.add("observations.create");
+      }
     }
     await tx.run("UPDATE workspace_roles SET permissions=? WHERE id=?", [
       JSON.stringify([...permissions]),
@@ -304,22 +316,27 @@ roleTemplates.push({
   permissions: ["registry.view", "records.view", "audit.view", "radiology.work"],
 });
 for (const role of roleTemplates) {
-  if (["gp", "consultant", "clinician"].includes(role.key))
+  if (["gp", "consultant", "clinician"].includes(role.key)) {
     role.permissions.push("diagnostics.order");
-  if (role.key === "pharmacist") role.permissions.push("pharmacy.review", "pharmacy.fulfil");
+  }
+  if (role.key === "pharmacist") {
+    role.permissions.push("pharmacy.review", "pharmacy.fulfil");
+  }
 }
 export const clinicalPermissions = new Set(
   permissionCatalog.filter((p) => p.category === "clinical").map((p) => p.key),
 );
 for (const template of roleTemplates) {
-  if (["gp", "consultant", "clinician"].includes(template.key))
+  if (["gp", "consultant", "clinician"].includes(template.key)) {
     template.permissions.push("admissions.decide", "prescriptions.create", "ward.observations");
-  if (template.key === "nurse")
+  }
+  if (template.key === "nurse") {
     template.permissions.push("medication.administer", "ward.observations");
+  }
 }
 export const ownerPermissions = roleTemplates.find((r) => r.key === "administrator").permissions;
 export async function createDefaultRoles(tx, organization) {
-  for (const role of roleTemplates)
+  for (const role of roleTemplates) {
     await tx.run(
       "INSERT INTO workspace_roles(id,organization_id,name,description,template_key,clinical_scope,permissions) VALUES (?,?,?,?,?,?,?)",
       [
@@ -332,6 +349,7 @@ export async function createDefaultRoles(tx, organization) {
         JSON.stringify(role.permissions),
       ],
     );
+  }
 }
 export const permissionDependencies = {
   "diagnostics.order": "records.view",
@@ -385,28 +403,36 @@ export async function resolveMembership(tx, membership, user) {
   const expired =
     membership.access_expires_at && Date.parse(membership.access_expires_at) <= Date.now();
   const permissions = new Set(membership.is_owner ? ownerPermissions : []);
-  for (const role of roles)
+  for (const role of roles) {
     for (const key of JSON.parse(role.permissions)) {
-      if (!clinicalPermissions.has(key) || scopes.includes(role.clinical_scope))
+      if (!clinicalPermissions.has(key) || scopes.includes(role.clinical_scope)) {
         permissions.add(key);
+      }
     }
+  }
   if (support) {
     permissions.clear();
-    if (user.provider_support_verified && membership.access_expires_at && !expired)
+    if (user.provider_support_verified && membership.access_expires_at && !expired) {
       permissions.add("workspace.view");
+    }
   }
   const denied = new Set(JSON.parse(membership.denied_permissions || "[]"));
-  for (const key of denied) permissions.delete(key);
+  for (const key of denied) {
+    permissions.delete(key);
+  }
   let changed = true;
   while (changed) {
     changed = false;
-    for (const [key, required] of Object.entries(permissionDependencies))
+    for (const [key, required] of Object.entries(permissionDependencies)) {
       if (permissions.has(key) && !permissions.has(required)) {
         permissions.delete(key);
         changed = true;
       }
+    }
   }
-  if (!membership.consultant_verified) permissions.delete("referrals.respond");
+  if (!membership.consultant_verified) {
+    permissions.delete("referrals.respond");
+  }
   user.consultantVerified = !!membership.consultant_verified;
   user.deniedPermissions = [...denied];
   user.careAreaRestricted = !!membership.care_area_restricted;
@@ -441,11 +467,12 @@ export async function upgradePrimaryRoles(tx) {
     "SELECT id,permissions FROM workspace_roles WHERE template_key='administrator'",
   )) {
     const permissions = JSON.parse(row.permissions);
-    if (!permissions.includes("primary.manage"))
+    if (!permissions.includes("primary.manage")) {
       await tx.run("UPDATE workspace_roles SET permissions=? WHERE id=?", [
         JSON.stringify([...permissions, "primary.manage"]),
         row.id,
       ]);
+    }
   }
 }
 
@@ -458,10 +485,11 @@ export async function upgradeCareResponsibilities(tx) {
           ? "careteam.view"
           : null;
     const permissions = JSON.parse(r.permissions);
-    if (permission && !permissions.includes(permission))
+    if (permission && !permissions.includes(permission)) {
       await tx.run("UPDATE workspace_roles SET permissions=? WHERE id=?", [
         JSON.stringify([...permissions, permission]),
         r.id,
       ]);
+    }
   }
 }

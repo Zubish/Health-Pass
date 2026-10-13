@@ -22,11 +22,15 @@ const participantArgs = (actor) => [
   actor.id,
 ];
 export async function visitParticipation(tx, actor, visitId) {
-  if (!actor?.organization_id) return false;
+  if (!actor?.organization_id) {
+    return false;
+  }
   return !!(await tx.get(`${participantSql} AND v.id=?`, [...participantArgs(actor), visitId]));
 }
 export async function participatingVisitIds(tx, actor, patientId) {
-  if (!actor?.organization_id) return [];
+  if (!actor?.organization_id) {
+    return [];
+  }
   return (
     await tx.all(
       `${participantSql} AND v.patient_id=? ORDER BY v.checked_in_at DESC,v.id LIMIT 100`,
@@ -40,19 +44,24 @@ async function professional(tx, userId, visit) {
     "SELECT id,name,patient_id,verified,active,provider_support_verified FROM users WHERE id=? AND active=1 AND verified=1 AND patient_id IS NULL",
     [userId],
   );
-  if (!user) return null;
+  if (!user) {
+    return null;
+  }
   const member = await tx.get(
     "SELECT * FROM memberships WHERE user_id=? AND organization_id=? AND active=1",
     [userId, visit.organization_id],
   );
-  if (!member || (member.branch_id && member.branch_id !== visit.branch_id)) return null;
+  if (!member || (member.branch_id && member.branch_id !== visit.branch_id)) {
+    return null;
+  }
   if (
     !(await tx.get("SELECT id FROM branches WHERE id=? AND organization_id=? AND active=1", [
       visit.branch_id,
       visit.organization_id,
     ]))
-  )
+  ) {
     return null;
+  }
   user.organization_id = visit.organization_id;
   user.branch_id = member.branch_id ?? null;
   await resolveMembership(tx, member, user);
@@ -63,8 +72,9 @@ async function professional(tx, userId, visit) {
     !user.clinicalScopes.length ||
     user.accessExpired ||
     user.supportAccess
-  )
+  ) {
     return null;
+  }
   return user;
 }
 
@@ -85,15 +95,18 @@ export async function handleCareHandoffs(tx, context) {
   const route = path.match(
     /^\/visits\/([^/]+)\/handoffs(?:\/([^/]+)\/(accept|decline|withdraw))?$/,
   );
-  if (!route) return undefined;
+  if (!route) {
+    return undefined;
+  }
   strong(actor);
   permit(actor, "visits.view");
   let visit = await tx.get("SELECT * FROM care_visits WHERE id=? AND organization_id=?", [
     route[1],
     actor.organization_id,
   ]);
-  if (!visit || (actor.branch_id && actor.branch_id !== visit.branch_id))
+  if (!visit || (actor.branch_id && actor.branch_id !== visit.branch_id)) {
     fail(404, "Visit unavailable in this workspace and branch.");
+  }
   // All linked clinical mutations take this same lock before encounter/task locks.
   // Refresh after waiting: a concurrent acceptance may have changed the assignee/version.
   if (method === "POST") {
@@ -101,17 +114,23 @@ export async function handleCareHandoffs(tx, context) {
       "UPDATE care_visits SET version=version WHERE id=? AND organization_id=? RETURNING *",
       [visit.id, actor.organization_id],
     );
-    if (!visit || (actor.branch_id && actor.branch_id !== visit.branch_id))
+    if (!visit || (actor.branch_id && actor.branch_id !== visit.branch_id)) {
       fail(404, "Visit unavailable in this workspace and branch.");
+    }
   }
   const checkVersion = () => {
-    if (!Number.isInteger(body.version) || body.version < 1)
+    if (!Number.isInteger(body.version) || body.version < 1) {
       fail(400, "Use the current visit version.");
-    if (body.version !== visit.version) fail(409, "The visit changed. Refresh before continuing.");
+    }
+    if (body.version !== visit.version) {
+      fail(409, "The visit changed. Refresh before continuing.");
+    }
   };
   const authority = async (userId, sourceKind = null) => {
     const user = await professional(tx, userId, visit);
-    if (!user) return null;
+    if (!user) {
+      return null;
+    }
     try {
       const result = await careAuthority(tx, user, visit.patient_id, true);
       const policy = result?.accessPolicy ?? result;
@@ -123,11 +142,14 @@ export async function handleCareHandoffs(tx, context) {
         policy?.canContribute === false ||
         (sourceKind &&
           !(policy?.scopes ?? ["general", "nursing", "medication"]).includes(sourceKind))
-      )
+      ) {
         return null;
+      }
       return { user, policy, contributions };
     } catch (error) {
-      if (error.status === 403 || error.status === 404) return null;
+      if (error.status === 403 || error.status === 404) {
+        return null;
+      }
       throw error;
     }
   };
@@ -153,7 +175,9 @@ export async function handleCareHandoffs(tx, context) {
       "UPDATE care_visits SET assigned_user_id=?,version=version+1,updated_at=? WHERE id=? AND version=? RETURNING version",
       [assignee, now(), visit.id, visit.version],
     );
-    if (!row) fail(409, "The visit changed. Refresh before continuing.");
+    if (!row) {
+      fail(409, "The visit changed. Refresh before continuing.");
+    }
     return row.version;
   };
   const handoffs = await tx.all(
@@ -188,7 +212,7 @@ export async function handleCareHandoffs(tx, context) {
               note.note_kind,
             ),
           )
-        )
+        ) {
           professionals.push({
             id: eligible.user.id,
             name: eligible.user.name,
@@ -201,22 +225,25 @@ export async function handleCareHandoffs(tx, context) {
               )
               .map((note) => note.id),
           });
-        if (professionals.length >= 50) break;
+        }
+        if (professionals.length >= 50) {
+          break;
+        }
       }
     }
     const display = [];
     for (const row of handoffs) {
-      let canAccept = false,
-        canDecline = false,
-        canWithdraw = false,
-        reason = null;
+      let canAccept = false;
+      let canDecline = false;
+      let canWithdraw = false;
+      let reason = null;
       if (row.status === "pending") {
-        if (visit.status !== "in-progress" || visit.assigned_user_id !== row.from_user_id)
+        if (visit.status !== "in-progress" || visit.assigned_user_id !== row.from_user_id) {
           reason = "The visit responsibility changed.";
-        else if (actor.id === row.to_user_id || actor.id === row.from_user_id) {
+        } else if (actor.id === row.to_user_id || actor.id === row.from_user_id) {
           const source = await sourceFor(row.source_encounter_id, row.from_user_id);
-          const from = await authority(row.from_user_id, source?.note_kind),
-            to = await authority(row.to_user_id, source?.note_kind);
+          const from = await authority(row.from_user_id, source?.note_kind);
+          const to = await authority(row.to_user_id, source?.note_kind);
           const sourceUnchanged =
             source && source.version === row.source_version && !(await hasDraft(row.from_user_id));
           canWithdraw = actor.id === row.from_user_id;
@@ -227,12 +254,13 @@ export async function handleCareHandoffs(tx, context) {
             !!from &&
             sourceUnchanged &&
             from.contributions.includes(source.note_kind);
-          if (!live(row))
+          if (!live(row)) {
             reason = "This request expired. The sender may withdraw it or create a new request.";
-          else if (!from || !to)
+          } else if (!from || !to) {
             reason = "Current roles or patient sharing no longer permit this handoff.";
-          else if (!sourceUnchanged)
+          } else if (!sourceUnchanged) {
             reason = "The signed source changed or an outgoing draft remains unfinished.";
+          }
         }
       }
       display.push({
@@ -277,15 +305,17 @@ export async function handleCareHandoffs(tx, context) {
     const requestId = text(body.client_request_id, "request ID", 100, true);
     const toId = text(body.to_user_id, "receiving professional", 100, true);
     const sourceId = text(body.source_encounter_id, "signed source note", 100, true);
-    if (!Number.isInteger(body.version) || body.version < 1)
+    if (!Number.isInteger(body.version) || body.version < 1) {
       fail(400, "Use the current visit version.");
+    }
     if (
       Object.keys(body).some(
         (key) =>
           !["version", "client_request_id", "to_user_id", "source_encounter_id"].includes(key),
       )
-    )
+    ) {
       fail(400, "Unsupported handoff field.");
+    }
     const payload = JSON.stringify({
       version: body.version,
       to_user_id: toId,
@@ -296,31 +326,42 @@ export async function handleCareHandoffs(tx, context) {
       [visit.id, actor.id, requestId],
     );
     if (prior) {
-      if (prior.request_payload !== payload)
+      if (prior.request_payload !== payload) {
         fail(409, "This request ID was already used for a different handoff.");
-      if (!(await authority(actor.id))) fail(403, "Current clinical authority is required.");
+      }
+      if (!(await authority(actor.id))) {
+        fail(403, "Current clinical authority is required.");
+      }
       return { id: prior.id, version: visit.version };
     }
     checkVersion();
-    if (visit.status !== "in-progress" || visit.assigned_user_id !== actor.id)
+    if (visit.status !== "in-progress" || visit.assigned_user_id !== actor.id) {
       fail(403, "Only the currently assigned professional can hand off an in-progress visit.");
-    if (toId === actor.id) fail(400, "Choose another professional.");
+    }
+    if (toId === actor.id) {
+      fail(400, "Choose another professional.");
+    }
     const source = await sourceFor(sourceId, actor.id);
-    if (!source || (await hasDraft(actor.id)))
+    if (!source || (await hasDraft(actor.id))) {
       fail(409, "Sign your linked note and finish outgoing drafts before requesting handoff.");
-    const from = await authority(actor.id, source.note_kind),
-      to = await authority(toId, source.note_kind);
-    if (!from || !from.contributions.includes(source.note_kind) || !to)
+    }
+    const from = await authority(actor.id, source.note_kind);
+    const to = await authority(toId, source.note_kind);
+    if (!from || !from.contributions.includes(source.note_kind) || !to) {
       fail(403, "Current roles, branch or patient sharing do not permit this handoff.");
-    if (handoffs.some(live)) fail(409, "Resolve the pending handoff before requesting another.");
+    }
+    if (handoffs.some(live)) {
+      fail(409, "Resolve the pending handoff before requesting another.");
+    }
     await tx.run(
       "UPDATE visit_handoffs SET status='cancelled',pending_key=NULL,resolved_at=?,version=version+1 WHERE visit_id=? AND status='pending' AND expires_at<=?",
       [now(), visit.id, now()],
     );
-    for (const expired of handoffs.filter((h) => h.status === "pending" && !live(h)))
+    for (const expired of handoffs.filter((h) => h.status === "pending" && !live(h))) {
       await event("visit.handoff_expired", visit.assigned_user_id);
-    const version = await bumpVisit(),
-      id = randomUUID();
+    }
+    const version = await bumpVisit();
+    const id = randomUUID();
     const inserted = await tx.get(
       `INSERT INTO visit_handoffs(id,visit_id,organization_id,branch_id,from_user_id,to_user_id,source_encounter_id,source_version,pending_key,requested_visit_version,created_at,expires_at,client_request_id,request_payload)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING id`,
@@ -341,7 +382,9 @@ export async function handleCareHandoffs(tx, context) {
         payload,
       ],
     );
-    if (!inserted) fail(409, "The handoff changed. Refresh before continuing.");
+    if (!inserted) {
+      fail(409, "The handoff changed. Refresh before continuing.");
+    }
     await event("visit.handoff_requested", visit.assigned_user_id);
     return { id, version };
   }
@@ -350,20 +393,29 @@ export async function handleCareHandoffs(tx, context) {
       route[2],
       visit.id,
     ]);
-    if (!handoff) fail(404, "Handoff unavailable.");
+    if (!handoff) {
+      fail(404, "Handoff unavailable.");
+    }
     const action = route[3];
-    if (action === "accept") permit(actor, "visits.document");
+    if (action === "accept") {
+      permit(actor, "visits.document");
+    }
     if (
       (action === "withdraw" && actor.id !== handoff.from_user_id) ||
       (action !== "withdraw" && actor.id !== handoff.to_user_id)
-    )
+    ) {
       fail(403, "This handoff action belongs to its sender or recipient.");
-    if (Object.keys(body).some((key) => key !== "version"))
+    }
+    if (Object.keys(body).some((key) => key !== "version")) {
       fail(400, "Unsupported handoff action field.");
-    if (!Number.isInteger(body.version) || body.version < 1)
+    }
+    if (!Number.isInteger(body.version) || body.version < 1) {
       fail(400, "Use the current visit version.");
+    }
     if (action === "accept" && handoff.status === "accepted") {
-      if (!(await authority(actor.id))) fail(403, "Current clinical authority is required.");
+      if (!(await authority(actor.id))) {
+        fail(403, "Current clinical authority is required.");
+      }
       return { id: handoff.id, version: visit.version };
     }
     checkVersion();
@@ -371,29 +423,35 @@ export async function handleCareHandoffs(tx, context) {
       handoff.status !== "pending" ||
       visit.status !== "in-progress" ||
       visit.assigned_user_id !== handoff.from_user_id
-    )
+    ) {
       fail(409, "This handoff is no longer pending for the current visit.");
-    if (action !== "withdraw" && !live(handoff)) fail(409, "This handoff request expired.");
+    }
+    if (action !== "withdraw" && !live(handoff)) {
+      fail(409, "This handoff request expired.");
+    }
     const source = await sourceFor(handoff.source_encounter_id, handoff.from_user_id);
     if (action === "accept") {
       const actingAuthority = await authority(actor.id, source?.note_kind);
-      if (!actingAuthority)
+      if (!actingAuthority) {
         fail(403, "Current roles, branch or patient sharing do not permit this action.");
+      }
       const from = await authority(handoff.from_user_id, source?.note_kind);
       if (
         !source ||
         source.version !== handoff.source_version ||
         (await hasDraft(handoff.from_user_id))
-      )
+      ) {
         fail(
           409,
           "The signed source changed or outgoing drafts are unfinished. Request a new handoff.",
         );
-      if (!from || !from.contributions.includes(source.note_kind))
+      }
+      if (!from || !from.contributions.includes(source.note_kind)) {
         fail(
           403,
           "The outgoing professional no longer has current clinical contribution authority.",
         );
+      }
     }
     const assigned = action === "accept" ? handoff.to_user_id : visit.assigned_user_id;
     const version = await bumpVisit(assigned);
@@ -403,7 +461,9 @@ export async function handleCareHandoffs(tx, context) {
       "UPDATE visit_handoffs SET status=?,pending_key=NULL,resolved_at=?,version=version+1 WHERE id=? AND status='pending' AND version=? RETURNING id",
       [status, now(), handoff.id, handoff.version],
     );
-    if (!changed) fail(409, "This handoff changed. Refresh before continuing.");
+    if (!changed) {
+      fail(409, "This handoff changed. Refresh before continuing.");
+    }
     await event(
       `visit.handoff_${action === "withdraw" ? "withdrawn" : action === "accept" ? "accepted" : "declined"}`,
       assigned,

@@ -10,15 +10,15 @@ export function PatientActivation({
   onSuccess: () => Promise<void>;
   onSignIn: () => void;
 }) {
-  const [token, setToken] = useState(""),
-    [preview, setPreview] = useState<{
-      name: string;
-      email: string;
-      facility_name: string;
-      expires_at: string;
-    } | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+  const [token, setToken] = useState("");
+  const [preview, setPreview] = useState<{
+    name: string;
+    email: string;
+    facility_name: string;
+    expires_at: string;
+  } | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     const value = new URLSearchParams(window.location.hash.slice(1)).get("claim-token") ?? "";
     setToken(value);
@@ -31,10 +31,14 @@ export function PatientActivation({
     let current = true;
     void careApi("/auth/patient-claim", "POST", { claim_id: claimId, token: value, review: true })
       .then((data) => {
-        if (current) setPreview(data);
+        if (current) {
+          setPreview(data);
+        }
       })
       .catch((e) => {
-        if (current) setError(e.message);
+        if (current) {
+          setError(e.message);
+        }
       });
     return () => {
       current = false;

@@ -24,11 +24,11 @@ export function FacilityRegistration({
   onRegistered: (id: string, message: string) => void;
   onExisting: () => void;
 }) {
-  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [existing, setExisting] = useState(false),
-    [email, setEmail] = useState("");
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [existing, setExisting] = useState(false);
+  const [email, setEmail] = useState("");
   const retry = useRef<{ payload: string; id: string } | null>(null);
   useEffect(() => {
     void careApi("/patient-registration-options")
@@ -72,8 +72,9 @@ export function FacilityRegistration({
                 identity_confirmed: data.get("identity_confirmed") === "on",
               };
               const signature = JSON.stringify(payload);
-              if (!retry.current || retry.current.payload !== signature)
+              if (!retry.current || retry.current.payload !== signature) {
                 retry.current = { payload: signature, id: crypto.randomUUID() };
+              }
               const result = await careApi("/patients", "POST", {
                 ...payload,
                 client_request_id: retry.current.id,
@@ -154,13 +155,13 @@ export function FacilityActivation({
   onClose: () => void;
 }) {
   const [data, setData] = useState<{
-      email: string | null;
-      claimed: boolean;
-      delivery: string;
-    } | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [notice, setNotice] = useState("");
+    email: string | null;
+    claimed: boolean;
+    delivery: string;
+  } | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
   const refresh = useCallback(async () => {
     setData(await careApi(`/patient-activation?patient_id=${encodeURIComponent(patientId)}`));
   }, [patientId]);

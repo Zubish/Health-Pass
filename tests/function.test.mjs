@@ -40,7 +40,9 @@ test("concurrent function requests share startup and preserve the user session",
 test("a failed function cold start can retry without exposing its error", async () => {
   let initialized = 0;
   const handler = createFunctionHandler(config, async () => {
-    if (++initialized === 1) throw new Error("private database credential detail");
+    if (++initialized === 1) {
+      throw new Error("private database credential detail");
+    }
     return () => Response.json({ status: "ok" });
   });
   const failed = await handler(request());

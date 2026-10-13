@@ -24,7 +24,7 @@ export async function patientForEmail(tx, email) {
     ))
   );
 }
-export async function handlePatientOnboarding(tx, c) {
+export async function handlePatientOnboarding(tx, context) {
   const {
     actor,
     path,
@@ -44,7 +44,7 @@ export async function handlePatientOnboarding(tx, c) {
     makeSession,
     cookie,
     outputHeaders,
-  } = c;
+  } = context;
   const publicClaim = path === "/auth/patient-claim";
   const relevant =
     publicClaim ||
@@ -53,19 +53,25 @@ export async function handlePatientOnboarding(tx, c) {
     path.startsWith("/patient-activation") ||
     path.startsWith("/facility-access-requests") ||
     path.startsWith("/primary-care");
-  if (!relevant) return undefined;
+  if (!relevant) {
+    return undefined;
+  }
   const patientOnly = () => {
     strong(actor);
-    if (!actor.patient_id || actor.organization_id)
+    if (!actor.patient_id || actor.organization_id) {
       fail(403, "Use your patient account for this action.");
+    }
   };
   const staffOnly = () => {
     permit(actor, "registry.create");
-    if (actor.supportAccess) fail(403, "Support access does not include patient registration.");
+    if (actor.supportAccess) {
+      fail(403, "Support access does not include patient registration.");
+    }
   };
   const branchFor = async () => {
-    if (actor.branch_id && body.branch_id && body.branch_id !== actor.branch_id)
+    if (actor.branch_id && body.branch_id && body.branch_id !== actor.branch_id) {
       fail(403, "Choose your current workspace branch.");
+    }
     const available =
       !actor.branch_id && !body.branch_id
         ? await tx.all(
@@ -75,12 +81,16 @@ export async function handlePatientOnboarding(tx, c) {
         : [];
     const id =
       actor.branch_id ?? body.branch_id ?? (available.length === 1 ? available[0].id : null);
-    if (!id) fail(400, "Choose the branch where this patient receives care.");
+    if (!id) {
+      fail(400, "Choose the branch where this patient receives care.");
+    }
     const branch = await tx.get(
       "SELECT id,name FROM branches WHERE id=? AND organization_id=? AND active=1",
       [id, actor.organization_id],
     );
-    if (!branch) fail(400, "Choose an active branch of your facility.");
+    if (!branch) {
+      fail(400, "Choose an active branch of your facility.");
+    }
     return branch;
   };
   const requestView = (row) => requestMeta(row);
@@ -90,9 +100,9 @@ export async function handlePatientOnboarding(tx, c) {
       "UPDATE patient_claims SET revoked_at=? WHERE patient_id=? AND consumed_at IS NULL AND revoked_at IS NULL",
       [now(), patientId],
     );
-    const token = randomBytes(32).toString("hex"),
-      id = randomUUID(),
-      created = now();
+    const token = randomBytes(32).toString("hex");
+    const id = randomUUID();
+    const created = now();
     await tx.run(
       "INSERT INTO patient_claims(id,patient_id,email,token_hash,created_at,expires_at) VALUES (?,?,?,?,?,?)",
       [id, patientId, email, hash(token), created, expires(1)],
@@ -110,60 +120,75 @@ export async function handlePatientOnboarding(tx, c) {
   };
   if (publicClaim) {
     limit("patient-claim", 40);
-    if (method !== "POST") fail(405, "Use the activation form to verify this invitation.");
+    if (method !== "POST") {
+      fail(405, "Use the activation form to verify this invitation.");
+    }
     const token = text(body.token, "invitation", 64, true);
     const claim = await tx.get(
       "SELECT * FROM patient_claims WHERE token_hash=? AND id=? AND consumed_at IS NULL AND revoked_at IS NULL AND expires_at>?",
       [hash(token), text(body.claim_id, "invitation", 100, true), now()],
     );
-    if (!claim || !/^[a-f0-9]{64}$/.test(token))
+    if (!claim || !/^[a-f0-9]{64}$/.test(token)) {
       fail(
         400,
         "This invitation is invalid, expired or already used. Ask the registering facility for a new invitation.",
       );
+    }
     const address = await tx.get("SELECT * FROM patient_addresses WHERE email=? AND patient_id=?", [
       claim.email,
       claim.patient_id,
     ]);
-    if (!address || address.claimed_by)
+    if (!address || address.claimed_by) {
       fail(409, "This profile already has an account. Sign in instead.");
+    }
     const profile = await tx.get(
       `SELECT p.name,o.name AS facility_name,r.organization_id FROM patients p JOIN patient_origins r ON r.patient_id=p.id JOIN organizations o ON o.id=r.organization_id WHERE p.id=?`,
       [claim.patient_id],
     );
-    if (!profile) fail(400, "Invitation unavailable.");
-    if (body.review === true)
+    if (!profile) {
+      fail(400, "Invitation unavailable.");
+    }
+    if (body.review === true) {
       return {
         name: profile.name,
         email: claim.email,
         facility_name: profile.facility_name,
         expires_at: claim.expires_at,
       };
+    }
     const password = text(body.password, "password", 256, true);
-    if (password.length < 12) fail(400, "Use a password of at least 12 characters.");
-    if (body.confirm_registration !== true)
+    if (password.length < 12) {
+      fail(400, "Use a password of at least 12 characters.");
+    }
+    if (body.confirm_registration !== true) {
       fail(400, "Confirm you recognise this care registration.");
+    }
     const claimed = await tx.get(
       "UPDATE patient_claims SET consumed_at=? WHERE id=? AND consumed_at IS NULL AND revoked_at IS NULL AND expires_at>? RETURNING id",
       [now(), claim.id, now()],
     );
-    if (!claimed) fail(409, "This invitation changed. Reopen the invitation.");
+    if (!claimed) {
+      fail(409, "This invitation changed. Reopen the invitation.");
+    }
     const userId = randomUUID();
     const reserved = await tx.get(
       "UPDATE patient_addresses SET verified_at=? WHERE email=? AND patient_id=? AND claimed_by IS NULL RETURNING email",
       [now(), claim.email, claim.patient_id],
     );
-    if (!reserved) fail(409, "This profile already has an account. Sign in instead.");
+    if (!reserved) {
+      fail(409, "This profile already has an account. Sign in instead.");
+    }
     await tx.run(
       "INSERT INTO users(id,email,login_email,name,password_hash,patient_id,verified) VALUES (?,?,?,?,?,?,1)",
       [userId, claim.email, claim.email, profile.name, passwordHash(password), claim.patient_id],
     );
     await tx.run("UPDATE patient_addresses SET claimed_by=? WHERE email=?", [userId, claim.email]);
-    if (body.keep_primary === true)
+    if (body.keep_primary === true) {
       await tx.run(
         "INSERT INTO primary_care(patient_id,organization_id,source,changed_at) VALUES (?,?,'first_registration',?) ON CONFLICT(patient_id) DO NOTHING",
         [claim.patient_id, profile.organization_id, now()],
       );
+    }
     await tx.run(
       "UPDATE patient_claims SET revoked_at=? WHERE patient_id=? AND id<>? AND consumed_at IS NULL AND revoked_at IS NULL",
       [now(), claim.patient_id, claim.id],
@@ -196,22 +221,25 @@ export async function handlePatientOnboarding(tx, c) {
   if (path === "/patients" && method === "POST") {
     staffOnly();
     limit(`patient-register:${actor.id}`, 30);
-    const data = patientInput(body),
-      branch = await branchFor(),
-      email = body.email ? emailValue(body.email) : null;
+    const data = patientInput(body);
+    const branch = await branchFor();
+    const email = body.email ? emailValue(body.email) : null;
     const requestKey = body.client_request_id
       ? hash(actor.id + ":" + text(body.client_request_id, "request identifier", 100, true))
       : null;
     const payloadHash = hash(JSON.stringify({ data, branch_id: branch.id, email }));
-    if (requestKey) await tx.run("UPDATE users SET name=name WHERE id=?", [actor.id]);
+    if (requestKey) {
+      await tx.run("UPDATE users SET name=name WHERE id=?", [actor.id]);
+    }
     if (requestKey) {
       const previous = await tx.get(
         "SELECT patient_id,request_payload_hash FROM patient_origins WHERE request_key=?",
         [requestKey],
       );
       if (previous) {
-        if (previous.request_payload_hash !== payloadHash)
+        if (previous.request_payload_hash !== payloadHash) {
           fail(409, "Registration details changed. Use a new request identifier.");
+        }
         const address = await tx.get(
           "SELECT claimed_by FROM patient_addresses WHERE patient_id=?",
           [previous.patient_id],
@@ -229,16 +257,18 @@ export async function handlePatientOnboarding(tx, c) {
         };
       }
     }
-    if (email && body.identity_confirmed !== true)
+    if (email && body.identity_confirmed !== true) {
       fail(400, "Confirm you checked the patient identity and their own email.");
-    if (email && (await patientForEmail(tx, email)))
+    }
+    if (email && (await patientForEmail(tx, email))) {
       return {
         existing_account: true,
         message:
           "An account or registration already uses this email. Ask the patient to share their profile, or request access. No new profile was created.",
       };
-    const id = randomUUID(),
-      created = now();
+    }
+    const id = randomUUID();
+    const created = now();
     await tx.run(
       "INSERT INTO patients(id,healthpass_id,name,dob,phone,created_at) VALUES (?,?,?,?,?,?)",
       [
@@ -255,8 +285,9 @@ export async function handlePatientOnboarding(tx, c) {
         "INSERT INTO patient_addresses(email,patient_id,created_at) VALUES (?,?,?) ON CONFLICT(email) DO NOTHING RETURNING email",
         [email, id, created],
       );
-      if (!reserved)
+      if (!reserved) {
         fail(409, "An account or registration already uses this email. Request access instead.");
+      }
     }
     await tx.run(
       "INSERT INTO patient_origins(patient_id,organization_id,branch_id,registered_by,created_at,request_key,request_payload_hash) VALUES (?,?,?,?,?,?,?)",
@@ -284,8 +315,9 @@ export async function handlePatientOnboarding(tx, c) {
       "SELECT * FROM patient_origins WHERE patient_id=? AND organization_id=?",
       [patientId, actor.organization_id],
     );
-    if (!origin || (actor.branch_id && actor.branch_id !== origin.branch_id))
+    if (!origin || (actor.branch_id && actor.branch_id !== origin.branch_id)) {
       fail(404, "This facility cannot activate that profile.");
+    }
     const address = await tx.get("SELECT * FROM patient_addresses WHERE patient_id=?", [patientId]);
     const latest = await tx.get(
       "SELECT c.*,o.sent_at,o.last_error FROM patient_claims c LEFT JOIN patient_email_outbox o ON o.id=c.id WHERE c.patient_id=? ORDER BY c.created_at DESC,c.id DESC LIMIT 1",
@@ -320,25 +352,31 @@ export async function handlePatientOnboarding(tx, c) {
       "SELECT * FROM patient_origins WHERE patient_id=? AND organization_id=?",
       [patientId, actor.organization_id],
     );
-    if (!origin || (actor.branch_id && actor.branch_id !== origin.branch_id))
+    if (!origin || (actor.branch_id && actor.branch_id !== origin.branch_id)) {
       fail(404, "This facility cannot activate that profile.");
-    if (body.identity_confirmed !== true)
+    }
+    if (body.identity_confirmed !== true) {
       fail(400, "Confirm the patient supplied their own email and you checked their identity.");
-    const reference = text(body.review_reference, "identity review reference", 500, true),
-      email = emailValue(body.email);
+    }
+    const reference = text(body.review_reference, "identity review reference", 500, true);
+    const email = emailValue(body.email);
     const current = await tx.get("SELECT * FROM patient_addresses WHERE patient_id=?", [patientId]);
-    if (current?.claimed_by) fail(409, "This patient already has an account. Ask them to sign in.");
-    if (current && current.email !== email)
+    if (current?.claimed_by) {
+      fail(409, "This patient already has an account. Ask them to sign in.");
+    }
+    if (current && current.email !== email) {
       fail(
         409,
         "Email changes need a separate identity correction review. Use the recorded email for this invitation.",
       );
+    }
     const other = await patientForEmail(tx, email);
-    if (other && other.patient_id !== patientId)
+    if (other && other.patient_id !== patientId) {
       fail(
         409,
         "An account or registration already uses this email. Request access instead; do not merge these profiles.",
       );
+    }
     await tx.run(
       "INSERT INTO patient_addresses(email,patient_id,created_at) VALUES (?,?,?) ON CONFLICT(email) DO NOTHING",
       [email, patientId, now()],
@@ -346,8 +384,9 @@ export async function handlePatientOnboarding(tx, c) {
     const reserved = await tx.get("SELECT patient_id FROM patient_addresses WHERE email=?", [
       email,
     ]);
-    if (reserved?.patient_id !== patientId)
+    if (reserved?.patient_id !== patientId) {
       fail(409, "This email was registered elsewhere. Request access instead.");
+    }
     const facility = await tx.get("SELECT name FROM organizations WHERE id=?", [
       actor.organization_id,
     ]);
@@ -388,19 +427,21 @@ export async function handlePatientOnboarding(tx, c) {
   if (path === "/facility-access-requests" && method === "POST") {
     staffOnly();
     limit(`facility-request:${actor.id}`, 20);
-    const email = emailValue(body.email),
-      branch = await branchFor(),
-      purpose = text(body.purpose, "purpose", 500, true),
-      reference = text(body.review_reference, "identity review reference", 500, true);
-    if (body.identity_confirmed !== true)
+    const email = emailValue(body.email);
+    const branch = await branchFor();
+    const purpose = text(body.purpose, "purpose", 500, true);
+    const reference = text(body.review_reference, "identity review reference", 500, true);
+    if (body.identity_confirmed !== true) {
       fail(400, "Confirm the patient supplied this email and requested care at your facility.");
+    }
     const target = await patientForEmail(tx, email);
-    if (!target)
+    if (!target) {
       return {
         requested: true,
         message:
           "If a patient profile uses this email, its account will receive the request. Ask the patient to sign in and check requests.",
       };
+    }
     const pendingKey = `${target.patient_id}:${actor.organization_id}:${branch.id}`;
     await tx.run(
       "UPDATE facility_access_requests SET status='withdrawn',pending_key=NULL,resolved_at=? WHERE pending_key=? AND expires_at<=?",
@@ -421,7 +462,7 @@ export async function handlePatientOnboarding(tx, c) {
         expires(14),
       ],
     );
-    if (added)
+    if (added) {
       await audit(
         tx,
         actor,
@@ -433,6 +474,7 @@ export async function handlePatientOnboarding(tx, c) {
         null,
         JSON.stringify({ review_reference: reference }),
       );
+    }
     return {
       requested: true,
       message:
@@ -445,35 +487,45 @@ export async function handlePatientOnboarding(tx, c) {
   if (accessAction && method === "POST") {
     const [, id, action] = accessAction;
     const row = await tx.get("SELECT * FROM facility_access_requests WHERE id=?", [id]);
-    if (!row) fail(404, "Request unavailable.");
+    if (!row) {
+      fail(404, "Request unavailable.");
+    }
     if (action === "withdraw") {
       staffOnly();
       if (
         row.organization_id !== actor.organization_id ||
         (actor.branch_id && row.branch_id !== actor.branch_id)
-      )
+      ) {
         fail(404, "Request unavailable.");
+      }
     } else {
       patientOnly();
-      if (row.patient_id !== actor.patient_id) fail(404, "Request unavailable.");
+      if (row.patient_id !== actor.patient_id) {
+        fail(404, "Request unavailable.");
+      }
     }
-    if (requestState(row) !== "pending")
+    if (requestState(row) !== "pending") {
       fail(409, "This request is no longer pending. Refresh requests.");
-    if (action === "accept" && body.acknowledge_registration !== true)
+    }
+    if (action === "accept" && body.acknowledge_registration !== true) {
       fail(400, "Confirm facility registration and its local care-access explanation.");
+    }
     if (
       !(await tx.get("SELECT id FROM branches WHERE id=? AND organization_id=? AND active=1", [
         row.branch_id,
         row.organization_id,
       ]))
-    )
+    ) {
       fail(409, "This branch is no longer active.");
+    }
     const status = { accept: "accepted", decline: "declined", withdraw: "withdrawn" }[action];
     const changed = await tx.get(
       "UPDATE facility_access_requests SET status=?,pending_key=NULL,resolved_at=? WHERE id=? AND status='pending' AND expires_at>? RETURNING id",
       [status, now(), id, now()],
     );
-    if (!changed) fail(409, "The request changed. Refresh requests.");
+    if (!changed) {
+      fail(409, "The request changed. Refresh requests.");
+    }
     if (action === "accept") {
       await tx.run(
         "INSERT INTO patient_links(patient_id,organization_id,created_at) VALUES (?,?,?) ON CONFLICT(patient_id,organization_id) DO NOTHING",
@@ -534,9 +586,12 @@ export async function handlePatientOnboarding(tx, c) {
     const facility = await tx.get("SELECT id,name FROM organizations WHERE workspace_code=?", [
       text(body.workspace_code, "workspace code", 80, true).toUpperCase(),
     ]);
-    if (!facility) fail(404, "Facility unavailable. Check its workspace code.");
-    if (body.acknowledge_no_access_grant !== true)
+    if (!facility) {
+      fail(404, "Facility unavailable. Check its workspace code.");
+    }
+    if (body.acknowledge_no_access_grant !== true) {
       fail(400, "Confirm that primary status does not grant record access.");
+    }
     await tx.run(
       "UPDATE primary_care_requests SET status='withdrawn',pending_key=NULL,resolved_at=?,resolved_by=? WHERE patient_id=? AND status='pending'",
       [now(), actor.id, actor.patient_id],
@@ -617,29 +672,39 @@ export async function handlePatientOnboarding(tx, c) {
     const preliminary = await tx.get("SELECT patient_id FROM primary_care_requests WHERE id=?", [
       id,
     ]);
-    if (!preliminary) fail(404, "Request unavailable.");
+    if (!preliminary) {
+      fail(404, "Request unavailable.");
+    }
     await tx.run("UPDATE patients SET name=name WHERE id=?", [preliminary.patient_id]);
     const row = await tx.get("SELECT * FROM primary_care_requests WHERE id=?", [id]);
     if (action === "withdraw") {
       patientOnly();
-      if (row.patient_id !== actor.patient_id) fail(404, "Request unavailable.");
+      if (row.patient_id !== actor.patient_id) {
+        fail(404, "Request unavailable.");
+      }
     } else {
       permit(actor, "primary.manage");
-      if (row.organization_id !== actor.organization_id) fail(404, "Request unavailable.");
+      if (row.organization_id !== actor.organization_id) {
+        fail(404, "Request unavailable.");
+      }
     }
-    if (requestState(row) !== "pending")
+    if (requestState(row) !== "pending") {
       fail(409, "This request is no longer pending. Refresh requests.");
+    }
     const status = { accept: "accepted", decline: "declined", withdraw: "withdrawn" }[action];
     const changed = await tx.get(
       "UPDATE primary_care_requests SET status=?,pending_key=NULL,resolved_at=?,resolved_by=? WHERE id=? AND status='pending' AND expires_at>? RETURNING id",
       [status, now(), actor.id, id, now()],
     );
-    if (!changed) fail(409, "This request changed. Refresh requests.");
-    if (action === "accept")
+    if (!changed) {
+      fail(409, "This request changed. Refresh requests.");
+    }
+    if (action === "accept") {
       await tx.run(
         "INSERT INTO primary_care(patient_id,organization_id,source,changed_at) VALUES (?,?,'accepted_request',?) ON CONFLICT(patient_id) DO UPDATE SET organization_id=excluded.organization_id,source=excluded.source,changed_at=excluded.changed_at",
         [row.patient_id, row.organization_id, now()],
       );
+    }
     await audit(
       tx,
       actor,

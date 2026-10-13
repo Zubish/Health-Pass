@@ -55,9 +55,9 @@ export const Route = createFileRoute("/workspace")({
 function Workspace() {
   const { mode, setup, claim, workspace } = Route.useSearch();
   const navigate = Route.useNavigate();
-  const [me, setMe] = useState<Me | null>(null),
-    [loading, setLoading] = useState(true),
-    [error, setError] = useState("");
+  const [me, setMe] = useState<Me | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const signOut = useCallback(async () => {
     setMe(null);
@@ -78,16 +78,20 @@ function Workspace() {
   }, [navigate, workspace]);
   useEffect(() => {
     const expired = () => {
-      if (me) void signOut();
+      if (me) {
+        void signOut();
+      }
     };
     window.addEventListener("healthpass-session-expired", expired);
     return () => window.removeEventListener("healthpass-session-expired", expired);
   }, [me, signOut]);
   useEffect(() => {
-    if (!me) return;
+    if (!me) {
+      return;
+    }
     const idle = 30 * 60 * 1000;
-    let last = Date.now(),
-      lastSync = last;
+    let last = Date.now();
+    let lastSync = last;
     const key = "healthpass-last-activity";
     const saveActivity = () => {
       try {
@@ -143,7 +147,9 @@ function Workspace() {
       setError("");
     } catch (e) {
       setMe(null);
-      if (!(e as Error).message.includes("Sign in")) setError((e as Error).message);
+      if (!(e as Error).message.includes("Sign in")) {
+        setError((e as Error).message);
+      }
     } finally {
       setLoading(false);
     }
@@ -158,7 +164,7 @@ function Workspace() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
-  if (claim)
+  if (claim) {
     return (
       <PatientActivation
         claimId={claim}
@@ -173,14 +179,16 @@ function Workspace() {
         }}
       />
     );
-  if (loading)
+  }
+  if (loading) {
     return (
       <main className="hp-auth">
         <Mark />
         <p role="status">Opening your care workspace…</p>
       </main>
     );
-  if (!me)
+  }
+  if (!me) {
     return (
       <Auth
         key={`${mode ?? "login"}-${setup ?? false}-${workspace ?? ""}`}
@@ -204,7 +212,8 @@ function Workspace() {
         serviceError={error}
       />
     );
-  if (workspace && me.organization?.workspace_code !== workspace.trim().toUpperCase())
+  }
+  if (workspace && me.organization?.workspace_code !== workspace.trim().toUpperCase()) {
     return (
       <main className="hp-auth">
         <div className="hp-auth-card">
@@ -227,7 +236,8 @@ function Workspace() {
         </div>
       </main>
     );
-  if (me.pendingMembership || me.accessExpired)
+  }
+  if (me.pendingMembership || me.accessExpired) {
     return (
       <main className="hp-auth">
         <div className="hp-auth-card">
@@ -253,7 +263,10 @@ function Workspace() {
         </div>
       </main>
     );
-  if (me.mfaRequired) return <Mfa me={me} onSuccess={refresh} />;
+  }
+  if (me.mfaRequired) {
+    return <Mfa me={me} onSuccess={refresh} />;
+  }
   return (
     <CareWorkspace
       me={me}

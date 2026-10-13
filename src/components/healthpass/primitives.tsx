@@ -83,7 +83,9 @@ export function Modal({
     <Dialog.Root
       open
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (!open) {
+          onClose();
+        }
       }}
     >
       <Dialog.Portal>

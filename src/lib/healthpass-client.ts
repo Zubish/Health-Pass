@@ -19,8 +19,11 @@ export async function careApi<T = any>(path: string, method = "GET", body?: unkn
       "/auth/facility-register",
       "/auth/workspace-register",
     ].includes(path)
-  )
+  ) {
     window.dispatchEvent(new Event("healthpass-session-expired"));
-  if (!response.ok) throw new Error(data.error || "The request failed. Please retry.");
+  }
+  if (!response.ok) {
+    throw new Error(data.error || "The request failed. Please retry.");
+  }
   return data;
 }

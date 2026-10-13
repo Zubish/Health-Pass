@@ -18,7 +18,9 @@ async function fixture() {
         }),
       );
       const c = r.headers.get("set-cookie");
-      if (c) cookie = c.split(";")[0];
+      if (c) {
+        cookie = c.split(";")[0];
+      }
       return { status: r.status, data: await r.json() };
     };
   }
@@ -51,10 +53,10 @@ async function fixture() {
 test("facility-scoped credentials permit reused email/password without crossing workspaces or patient identity", async () => {
   const { db, client, facility } = await fixture();
   try {
-    const a = await facility("Synthetic A"),
-      b = await facility("Synthetic B");
-    const ca = await a.c("/auth/me"),
-      cb = await b.c("/auth/me");
+    const a = await facility("Synthetic A");
+    const b = await facility("Synthetic B");
+    const ca = await a.c("/auth/me");
+    const cb = await b.c("/auth/me");
     assert.notEqual(ca.data.user.id, cb.data.user.id);
     assert.notEqual(ca.data.organization.id, cb.data.organization.id);
     const p = client();
@@ -128,8 +130,8 @@ test("facility-scoped credentials permit reused email/password without crossing 
 test("codes request access only; reviewed approval, branch scopes and suspension enforce clinical boundaries", async () => {
   const { db, client, mfa, facility } = await fixture();
   try {
-    const a = await facility("Synthetic A"),
-      b = await facility("Synthetic B", "other-owner@synthetic.invalid");
+    const a = await facility("Synthetic A");
+    const b = await facility("Synthetic B", "other-owner@synthetic.invalid");
     const staff = client();
     assert.equal(
       (
@@ -295,8 +297,8 @@ test("sessions renew on activity and expire after thirty idle minutes", async ()
 test("workspace confirmation identifies only the requested facility without granting access", async () => {
   const { db, client, facility } = await fixture();
   try {
-    const a = await facility("Synthetic Confirmation A"),
-      b = await facility("Synthetic Confirmation B");
+    const a = await facility("Synthetic Confirmation A");
+    const b = await facility("Synthetic Confirmation B");
     const anonymous = client();
     const checked = await anonymous("/auth/workspace-check", "POST", {
       workspace_code: a.code.toLowerCase(),
@@ -474,8 +476,8 @@ async function approveRole(owner, member, settings, roleIds, extra = {}) {
 test("workspace roles isolate tenants, revoke access immediately and retain creator administration", async () => {
   const { db, client, facility } = await fixture();
   try {
-    const a = await facility("Synthetic Role A"),
-      b = await facility("Synthetic Role B");
+    const a = await facility("Synthetic Role A");
+    const b = await facility("Synthetic Role B");
     const { staff, member, settings } = await requestStaff(
       client,
       a.c,
@@ -487,8 +489,9 @@ test("workspace roles isolate tenants, revoke access immediately and retain crea
       "Nurse / midwife",
       "Pharmacist",
       "Pharmacy technician",
-    ])
+    ]) {
       assert.ok(settings.roles.some((r) => r.name === name));
+    }
     const created = await a.c("/workspace/roles", "POST", {
       name: "Front desk coordinator",
       description: "Synthetic operational role",
@@ -738,8 +741,8 @@ test("Zed Tech support requires operator identity verification and an expiring n
       "support@synthetic.invalid",
       "Zed Tech support",
     );
-    const role = request.settings.roles.find((r) => r.template_key === "zed-support"),
-      gp = request.settings.roles.find((r) => r.template_key === "gp");
+    const role = request.settings.roles.find((r) => r.template_key === "zed-support");
+    const gp = request.settings.roles.find((r) => r.template_key === "gp");
     const future = new Date(Date.now() + 3600000).toISOString();
     assert.equal(
       (

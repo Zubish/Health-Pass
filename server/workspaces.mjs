@@ -10,25 +10,31 @@ import { passwordHash } from "./security.mjs";
 
 export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, cookie, strong }) {
   const fields = (body) => {
-    const email = emailValue(body.email),
-      name = text(body.name, "full name", 160, true);
+    const email = emailValue(body.email);
+    const name = text(body.name, "full name", 160, true);
     const password = text(body.password, "password", 256, true);
-    if (password.length < 12) fail(400, "Use a password of at least 12 characters.");
+    if (password.length < 12) {
+      fail(400, "Use a password of at least 12 characters.");
+    }
     return { email, name, password };
   };
   return async (tx, path, method, body, actor, correlation, headers) => {
-    if (/^\/workspace\/members\/[^/]+\/restrictions$/.test(path)) return undefined;
+    if (/^\/workspace\/members\/[^/]+\/restrictions$/.test(path)) {
+      return undefined;
+    }
     if (path === "/auth/facility-register" && method === "POST") {
       const { email, name, password } = fields(body);
       const facility = text(body.facility_name, "facility name", 160, true);
       const type = text(body.facility_type, "facility type", 80, true);
-      if (!["hospital", "clinic", "therapy", "other"].includes(type))
+      if (!["hospital", "clinic", "therapy", "other"].includes(type)) {
         fail(400, "Choose a facility type.");
-      if (body.authority !== "confirmed")
+      }
+      if (body.authority !== "confirmed") {
         fail(400, "Confirm that you are authorized to create this facility workspace.");
-      const org = randomUUID(),
-        user = randomUUID(),
-        branch = randomUUID();
+      }
+      const org = randomUUID();
+      const user = randomUUID();
+      const branch = randomUUID();
       const code = "HP-" + randomBytes(6).toString("hex").toUpperCase();
       await tx.run(
         "INSERT INTO organizations(id,name,workspace_code,facility_type,address) VALUES (?,?,?,?,?)",
@@ -71,14 +77,17 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
       const { email, name, password } = fields(body);
       const code = text(body.workspace_code, "workspace code", 80, true).toUpperCase();
       const org = await tx.get("SELECT id FROM organizations WHERE workspace_code=?", [code]);
-      if (!org) fail(400, "Check the workspace code with your facility administrator.");
+      if (!org) {
+        fail(400, "Check the workspace code with your facility administrator.");
+      }
       if (
         await tx.get(
           "SELECT id FROM users WHERE COALESCE(login_email,email)=? AND account_scope=?",
           [email, org.id],
         )
-      )
+      ) {
         fail(409, "An account already exists in this workspace. Sign in instead.");
+      }
       const user = randomUUID();
       await tx.run(
         "INSERT INTO users(id,email,login_email,account_scope,workspace_auth,name,password_hash,profession,registration_number) VALUES (?,?,?,?,1,?,?,?,?)",
@@ -116,13 +125,18 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
       );
       return { requested: true };
     }
-    if (!path.startsWith("/workspace/")) return undefined;
+    if (!path.startsWith("/workspace/")) {
+      return undefined;
+    }
     strong(actor);
-    if (!actor.organization_id) fail(403, "A facility workspace is required.");
+    if (!actor.organization_id) {
+      fail(403, "A facility workspace is required.");
+    }
     const org = actor.organization_id;
     const requirePermission = (permission) => {
-      if (!hasPermission(actor, permission))
+      if (!hasPermission(actor, permission)) {
         fail(403, "This action is not permitted by your workspace roles.");
+      }
     };
     if (path === "/workspace/settings" && method === "GET") {
       requirePermission("workspace.view");
@@ -167,31 +181,42 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
             org,
           ])
         : null;
-      if (roleMatch && !existing) fail(404, "Role unavailable.");
+      if (roleMatch && !existing) {
+        fail(404, "Role unavailable.");
+      }
       const name = text(body.name, "role name", 100, true);
       const duplicate = await tx.get(
         "SELECT id FROM workspace_roles WHERE organization_id=? AND LOWER(name)=LOWER(?) AND id<>?",
         [org, name, existing?.id ?? ""],
       );
-      if (duplicate) fail(409, "A role with this name already exists in your workspace.");
+      if (duplicate) {
+        fail(409, "A role with this name already exists in your workspace.");
+      }
       if (
         !Array.isArray(body.permissions) ||
         body.permissions.some((key) => !permissionCatalog.some((p) => p.key === key))
-      )
+      ) {
         fail(400, "Choose permissions supported by HealthPass.");
+      }
       const permissions = [...new Set(body.permissions)];
       const template =
         existing?.template_key ??
         (roleTemplates.some((t) => t.key === body.template_key) ? body.template_key : null);
-      if (template === "zed-support" && permissions.some((key) => key !== "workspace.view"))
+      if (template === "zed-support" && permissions.some((key) => key !== "workspace.view")) {
         fail(400, "Zed Tech support roles only permit workspace information access.");
+      }
       const scope = permissions.some((key) => clinicalPermissions.has(key))
         ? body.clinical_scope
         : null;
-      if (scope && !["general", "nursing", "medication", "laboratory", "radiology"].includes(scope))
+      if (
+        scope &&
+        !["general", "nursing", "medication", "laboratory", "radiology"].includes(scope)
+      ) {
         fail(400, "Choose a supported clinical scope.");
-      if (permissions.some((key) => clinicalPermissions.has(key)) && !scope)
+      }
+      if (permissions.some((key) => clinicalPermissions.has(key)) && !scope) {
         fail(400, "Clinical permissions require a clinical scope.");
+      }
       const dependencies = {
         "diagnostics.order": "records.view",
         "laboratory.work": "records.view",
@@ -227,12 +252,14 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
         "staff.manage": "workspace.view",
         "branches.manage": "workspace.view",
       };
-      for (const [key, required] of Object.entries(dependencies))
-        if (permissions.includes(key) && !permissions.includes(required))
+      for (const [key, required] of Object.entries(dependencies)) {
+        if (permissions.includes(key) && !permissions.includes(required)) {
           fail(400, `The ${key} permission also requires ${required}.`);
-      const id = existing?.id ?? randomUUID(),
-        description = text(body.description ?? "", "role description", 500);
-      if (existing)
+        }
+      }
+      const id = existing?.id ?? randomUUID();
+      const description = text(body.description ?? "", "role description", 500);
+      if (existing) {
         await tx.run(
           "UPDATE workspace_roles SET name=?,description=?,clinical_scope=?,permissions=?,active=? WHERE id=? AND organization_id=?",
           [
@@ -245,11 +272,12 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
             org,
           ],
         );
-      else
+      } else {
         await tx.run(
           "INSERT INTO workspace_roles(id,organization_id,name,description,template_key,clinical_scope,permissions) VALUES (?,?,?,?,?,?,?)",
           [id, org, name, description, template, scope, JSON.stringify(permissions)],
         );
+      }
       await audit(
         tx,
         actor,
@@ -292,12 +320,16 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
         match[1],
         org,
       ]);
-      if (!member) fail(404, "Membership unavailable.");
-      if (member.user_id === actor.id)
+      if (!member) {
+        fail(404, "Membership unavailable.");
+      }
+      if (member.user_id === actor.id) {
         fail(400, "Your own administrator membership cannot be changed here.");
+      }
       if (body.action === "suspend") {
-        if (member.is_owner)
+        if (member.is_owner) {
           fail(400, "The workspace creator cannot be suspended through staff role management.");
+        }
         await tx.run("UPDATE memberships SET active=0 WHERE id=?", [member.id]);
         await audit(tx, actor, "membership.suspended", "allow", null, member.id, correlation);
         return { updated: true };
@@ -307,24 +339,31 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
         (["clinician", "reception", "administrator"].includes(body.role)
           ? ["role-" + org + "-" + body.role]
           : []);
-      if (!Array.isArray(roleIds) || !roleIds.length || roleIds.length > 10)
+      if (!Array.isArray(roleIds) || !roleIds.length || roleIds.length > 10) {
         fail(400, "Choose one or more workspace job roles.");
+      }
       const selected = [];
       for (const id of [...new Set(roleIds)]) {
         const role = await tx.get(
           "SELECT * FROM workspace_roles WHERE id=? AND organization_id=? AND active=1",
           [id, org],
         );
-        if (!role) fail(400, "Choose active roles from this workspace.");
+        if (!role) {
+          fail(400, "Choose active roles from this workspace.");
+        }
         selected.push(role);
       }
       const branch = await tx.get(
         "SELECT id FROM branches WHERE id=? AND organization_id=? AND active=1",
         [body.branch_id, org],
       );
-      if (!branch) fail(400, "Choose an active branch in this workspace.");
+      if (!branch) {
+        fail(400, "Choose an active branch in this workspace.");
+      }
       const reference = text(body.review_reference, "verification review reference", 500, true);
-      if (body.verified !== "confirmed") fail(400, "Confirm the staff identity review.");
+      if (body.verified !== "confirmed") {
+        fail(400, "Confirm the staff identity review.");
+      }
       const scopes = [
         ...new Set(
           selected
@@ -334,8 +373,9 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
       ];
       let clinicalReference = "";
       if (scopes.length) {
-        if (body.role_ids && body.clinical_verified !== "confirmed")
+        if (body.role_ids && body.clinical_verified !== "confirmed") {
           fail(400, "Clinical permissions require an explicit professional credential review.");
+        }
         clinicalReference = text(
           body.clinical_review_reference ?? (!body.role_ids ? reference : ""),
           "clinical credential review reference",
@@ -348,11 +388,12 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
       );
       let consultantReview = "";
       if (consultantRole) {
-        if (body.consultant_verified !== "confirmed")
+        if (body.consultant_verified !== "confirmed") {
           fail(
             400,
             "Confirm that consultant qualifications have been reviewed for the intended services.",
           );
+        }
         consultantReview = text(
           body.consultant_review_reference,
           "consultant qualification review reference",
@@ -364,19 +405,24 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
       let expiry = null;
       if (body.access_expires_at) {
         const parsed = Date.parse(body.access_expires_at);
-        if (!Number.isFinite(parsed) || parsed <= Date.now())
+        if (!Number.isFinite(parsed) || parsed <= Date.now()) {
           fail(400, "Choose a future access expiry.");
+        }
         expiry = new Date(parsed).toISOString();
       }
       if (support) {
         const user = await tx.get("SELECT provider_support_verified FROM users WHERE id=?", [
           member.user_id,
         ]);
-        if (!user.provider_support_verified)
+        if (!user.provider_support_verified) {
           fail(400, "Zed Tech support identity must first be verified by the platform operator.");
-        if (selected.length !== 1) fail(400, "Support access cannot be combined with other roles.");
-        if (!expiry || Date.parse(expiry) > Date.now() + 24 * 60 * 60 * 1000)
+        }
+        if (selected.length !== 1) {
+          fail(400, "Support access cannot be combined with other roles.");
+        }
+        if (!expiry || Date.parse(expiry) > Date.now() + 24 * 60 * 60 * 1000) {
           fail(400, "Support access requires an expiry within 24 hours.");
+        }
       }
       const legacy = scopes.length
         ? "clinician"
@@ -401,13 +447,14 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
         ],
       );
       await tx.run("DELETE FROM membership_roles WHERE membership_id=?", [member.id]);
-      for (const role of selected)
+      for (const role of selected) {
         await tx.run("INSERT INTO membership_roles(membership_id,role_id) VALUES (?,?)", [
           member.id,
           role.id,
         ]);
+      }
       await tx.run("UPDATE users SET verified=1 WHERE id=?", [member.user_id]);
-      if (support)
+      if (support) {
         await audit(
           tx,
           actor,
@@ -419,6 +466,7 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
           null,
           JSON.stringify({ roles: selected.map((r) => r.id), expires_at: expiry }),
         );
+      }
       await audit(
         tx,
         actor,

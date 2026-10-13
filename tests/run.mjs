@@ -2,13 +2,19 @@ import { spawnSync } from "node:child_process";
 const signinChecks = spawnSync(process.execPath, ["tests/signin-preferences.test.mjs"], {
   stdio: "inherit",
 });
-if (signinChecks.status !== 0) process.exit(signinChecks.status ?? 1);
+if (signinChecks.status !== 0) {
+  process.exit(signinChecks.status ?? 1);
+}
 const functionChecks = spawnSync(process.execPath, ["tests/function.test.mjs"], {
   stdio: "inherit",
 });
-if (functionChecks.status !== 0) process.exit(functionChecks.status ?? 1);
+if (functionChecks.status !== 0) {
+  process.exit(functionChecks.status ?? 1);
+}
 const proxyChecks = spawnSync(process.execPath, ["tests/proxy.test.mjs"], { stdio: "inherit" });
-if (proxyChecks.status !== 0) process.exit(proxyChecks.status ?? 1);
+if (proxyChecks.status !== 0) {
+  process.exit(proxyChecks.status ?? 1);
+}
 for (const engine of ["sqlite", "postgres"]) {
   console.log(`\nFoundation integration checks · ${engine}`);
   for (const file of [
@@ -27,6 +33,8 @@ for (const engine of ["sqlite", "postgres"]) {
       stdio: "inherit",
       env: { ...process.env, HEALTHPASS_TEST_ENGINE: engine },
     });
-    if (result.status !== 0) process.exit(result.status ?? 1);
+    if (result.status !== 0) {
+      process.exit(result.status ?? 1);
+    }
   }
 }

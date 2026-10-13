@@ -1,11 +1,7 @@
 import { CareAreaSettings } from "./care-area-settings";
 import type { CareArea } from "./individual-access";
-import {
-  RoleManagement,
-  type JobRole,
-  type Permission,
-  type RoleTemplate,
-} from "./role-management";
+import { type JobRole, type Permission, type RoleTemplate } from "@/lib/healthpass-role-types";
+import { RoleManagement } from "./role-management";
 import { StaffAccess, type StaffMember } from "./staff-access";
 import { useEffect, useState } from "react";
 import { careApi } from "@/lib/healthpass-client";
@@ -28,10 +24,10 @@ export function WorkspaceSettings({
   userId: string;
 }) {
   const can = (permission: string) => permissions.includes(permission);
-  const [data, setData] = useState<Settings | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [notice, setNotice] = useState("");
+  const [data, setData] = useState<Settings | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
   async function load() {
     const settings = await careApi<
       Omit<Settings, "roles"> & {
@@ -137,7 +133,9 @@ export function WorkspaceSettings({
                     const form = e.currentTarget;
                     const values = Object.fromEntries(new FormData(form));
                     void change("/workspace/branches", "POST", values).then((success) => {
-                      if (success) form.reset();
+                      if (success) {
+                        form.reset();
+                      }
                     });
                   }}
                 >

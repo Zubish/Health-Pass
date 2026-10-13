@@ -4,20 +4,25 @@ import { hasPermission } from "./roles.mjs";
 import { careProfessional, workflowEvent } from "./care-operations.mjs";
 import { careAreaAllowsPatient } from "./care-area-access.mjs";
 const now = () => new Date().toISOString();
-export async function handleConsultantReferrals(tx, c) {
-  const { actor, path, method, body, permit, strong, fail, text, careAuthority, searchParams } = c;
-  if (!path.startsWith("/consultant-referrals")) return undefined;
+export async function handleConsultantReferrals(tx, context) {
+  const { actor, path, method, body, permit, strong, fail, text, careAuthority, searchParams } =
+    context;
+  if (!path.startsWith("/consultant-referrals")) {
+    return undefined;
+  }
   strong(actor);
-  const org = actor.organization_id,
-    patient = !org && !!actor.patient_id;
+  const org = actor.organization_id;
+  const patient = !org && !!actor.patient_id;
   const authority = async (user, id, write = true, scope = "general") => {
-    if (!user || !user.clinicalScopes?.includes(scope) || !hasPermission(user, "records.view"))
+    if (!user || !user.clinicalScopes?.includes(scope) || !hasPermission(user, "records.view")) {
       fail(403, "Reviewed clinical scope and current record permission are required.");
+    }
     const result = await careAuthority(tx, user, id, write);
     if (
       !(write ? result.accessPolicy.contributionScopes : result.accessPolicy.scopes).includes(scope)
-    )
+    ) {
       fail(403, "Current patient sharing does not permit this consultation.");
+    }
   };
   const outpatient = async (id) => {
     if (
@@ -25,19 +30,21 @@ export async function handleConsultantReferrals(tx, c) {
         "SELECT id FROM care_admissions WHERE patient_id=? AND organization_id=? AND status='active'",
         [id, org],
       )
-    )
+    ) {
       fail(
         409,
         "This patient is under inpatient or observation care. Use their admission care team.",
       );
+    }
   };
   const sourceValid = async (row) => {
     const source = await tx.get("SELECT * FROM encounters WHERE id=?", [row.source_encounter_id]);
-    if (!source || source.status === "draft" || source.version !== row.source_version)
+    if (!source || source.status === "draft" || source.version !== row.source_version) {
       fail(
         409,
         "The referral source changed. Withdraw and issue a new referral using the current signed record.",
       );
+    }
     return source;
   };
   const recipient = async (row, sourceRead = true) => {
@@ -45,29 +52,34 @@ export async function handleConsultantReferrals(tx, c) {
     if (
       !user ||
       ["referrals.respond", "notes.create", "notes.sign"].some((p) => !hasPermission(user, p))
-    )
+    ) {
       fail(403, "Consultant permissions or reviewed credentials no longer permit this referral.");
+    }
     await authority(user, row.patient_id);
     if (row.source_scope && sourceRead) {
       const preview = await careAuthority(tx, user, row.patient_id, false);
-      if (!preview.accessPolicy.scopes.includes(row.source_scope))
+      if (!preview.accessPolicy.scopes.includes(row.source_scope)) {
         fail(403, "The consultant needs patient permission to read the referral source category.");
+      }
     }
     return user;
   };
   if (path === "/consultant-referrals/options" && method === "GET") {
     permit(actor, "referrals.create");
-    if (!actor.clinicalScopes.length) fail(403, "Referral requires reviewed clinical scope.");
+    if (!actor.clinicalScopes.length) {
+      fail(403, "Referral requires reviewed clinical scope.");
+    }
     const patientId = text(searchParams.get("patient_id"), "patient ID", 100, true);
     const accessResult = await careAuthority(tx, actor, patientId, true);
     const allowedScopes = actor.clinicalScopes.filter((s) =>
       accessResult.accessPolicy.contributionScopes.includes(s),
     );
-    if (!allowedScopes.length)
+    if (!allowedScopes.length) {
       fail(
         403,
         "Current patient sharing does not permit a referral source in your reviewed scope.",
       );
+    }
     await outpatient(patientId);
     const sources = await tx.all(
       "SELECT id,version,visit_id,complaint,created_at,note_kind FROM encounters WHERE patient_id=? AND organization_id=? AND author_id=? AND status<>'draft' AND (CAST(? AS TEXT) IS NULL OR branch_id=?) ORDER BY created_at DESC LIMIT 50",
@@ -87,52 +99,66 @@ export async function handleConsultantReferrals(tx, c) {
           hasPermission(user, p),
         ) &&
         (await careAreaAllowsPatient(tx, user, patientId))
-      )
+      ) {
         consultants.push(member);
+      }
     }
     return { sources: eligibleSources, consultants };
   }
   if (path === "/consultant-referrals" && method === "GET") {
-    if (!patient && !["referrals.create", "referrals.respond"].some((p) => hasPermission(actor, p)))
+    if (
+      !patient &&
+      !["referrals.create", "referrals.respond"].some((p) => hasPermission(actor, p))
+    ) {
       fail(403, "Referral inbox is not permitted.");
+    }
     const rows = await tx.all(
       `SELECT r.id,r.patient_id,p.name AS patient_name,p.healthpass_id,r.branch_id,b.name AS branch_name,r.from_user_id,s.name AS from_name,r.consultant_id,u.name AS consultant_name,r.kind,r.source_scope,r.status,r.scheduled_at,r.accepted_at,r.decline_reason,r.version,r.source_encounter_id,r.source_version,r.visit_id,r.created_at,r.updated_at FROM consultant_referrals r JOIN patients p ON p.id=r.patient_id JOIN users s ON s.id=r.from_user_id JOIN users u ON u.id=r.consultant_id JOIN branches b ON b.id=r.branch_id WHERE ${patient ? "r.patient_id=?" : "r.organization_id=? AND (r.from_user_id=? OR r.consultant_id=?) AND (CAST(? AS TEXT) IS NULL OR r.branch_id=?)"} ORDER BY r.created_at DESC LIMIT 100`,
       patient
         ? [actor.patient_id]
         : [org, actor.id, actor.id, actor.branch_id ?? null, actor.branch_id ?? null],
     );
-    if (!patient)
-      for (const row of rows)
+    if (!patient) {
+      for (const row of rows) {
         if (row.decline_reason) {
           try {
             const result = await careAuthority(tx, actor, row.patient_id, false);
-            if (!result.accessPolicy.scopes.includes("general"))
+            if (!result.accessPolicy.scopes.includes("general")) {
               throw Object.assign(new Error("Reason sharing unavailable"), { status: 403 });
+            }
           } catch (error) {
-            if (![403, 404].includes(error.status)) throw error;
+            if (![403, 404].includes(error.status)) {
+              throw error;
+            }
             row.decline_reason = null;
             row.reason_hidden = true;
           }
         }
+      }
+    }
     return { referrals: rows };
   }
   if (path === "/consultant-referrals" && method === "POST") {
     permit(actor, "referrals.create");
-    if (!["advice", "transfer"].includes(body.kind))
+    if (!["advice", "transfer"].includes(body.kind)) {
       fail(400, "Choose specialist advice or transfer of care.");
+    }
     const source = await tx.get(
       "SELECT * FROM encounters WHERE id=? AND author_id=? AND organization_id=? AND status<>'draft'",
       [body.source_encounter_id, actor.id, org],
     );
-    if (!source || (actor.branch_id && source.branch_id !== actor.branch_id))
+    if (!source || (actor.branch_id && source.branch_id !== actor.branch_id)) {
       fail(404, "Choose your own signed referral source note in this branch.");
+    }
     const visit = source.visit_id
       ? await tx.get("SELECT * FROM care_visits WHERE id=? AND organization_id=?", [
           source.visit_id,
           org,
         ])
       : null;
-    if (visit) await tx.run("UPDATE care_visits SET id=id WHERE id=?", [visit.id]);
+    if (visit) {
+      await tx.run("UPDATE care_visits SET id=id WHERE id=?", [visit.id]);
+    }
     await tx.run("UPDATE patients SET id=id WHERE id=?", [source.patient_id]);
     await outpatient(source.patient_id);
     await authority(actor, source.patient_id, true, source.note_kind);
@@ -146,26 +172,31 @@ export async function handleConsultantReferrals(tx, c) {
       source_version: source.version,
       source_scope: source.note_kind,
     };
-    if (row.consultant_id === actor.id) fail(400, "Choose another professional for this referral.");
+    if (row.consultant_id === actor.id) {
+      fail(400, "Choose another professional for this referral.");
+    }
     await recipient(row);
     if (body.kind === "transfer") {
       const current = visit && (await tx.get("SELECT * FROM care_visits WHERE id=?", [visit.id]));
-      if (!current || current.status !== "in-progress" || current.assigned_user_id !== actor.id)
+      if (!current || current.status !== "in-progress" || current.assigned_user_id !== actor.id) {
         fail(409, "Transfer requires your current in-progress outpatient visit.");
+      }
       if (
         await tx.get(
           "SELECT id FROM visit_handoffs WHERE visit_id=? AND status='pending' AND pending_key=?",
           [current.id, current.id],
         )
-      )
+      ) {
         fail(409, "Resolve the existing visit handoff before referring a transfer.");
+      }
       if (
         await tx.get(
           "SELECT id FROM encounters WHERE visit_id=? AND author_id=? AND status='draft'",
           [current.id, actor.id],
         )
-      )
+      ) {
         fail(409, "Finish your visit drafts before requesting a transfer.");
+      }
     }
     const request = hash(
       org + ":" + actor.id + ":" + text(body.client_request_id, "request ID", 100, true),
@@ -181,8 +212,9 @@ export async function handleConsultantReferrals(tx, c) {
       [request],
     );
     if (previous) {
-      if (previous.request_payload !== payload)
+      if (previous.request_payload !== payload) {
         fail(409, "This request ID belongs to another referral.");
+      }
       return { id: previous.id, version: previous.version, replayed: true };
     }
     if (
@@ -191,11 +223,13 @@ export async function handleConsultantReferrals(tx, c) {
         "SELECT id FROM consultant_referrals WHERE visit_id=? AND kind='transfer' AND status IN ('pending','scheduled')",
         [source.visit_id],
       ))
-    )
+    ) {
       fail(409, "Resolve or withdraw the current consultant transfer before requesting another.");
+    }
     const pending = org + ":" + source.patient_id + ":" + row.consultant_id + ":" + body.kind;
-    if (await tx.get("SELECT id FROM consultant_referrals WHERE pending_key=?", [pending]))
+    if (await tx.get("SELECT id FROM consultant_referrals WHERE pending_key=?", [pending])) {
       fail(409, "An open referral of this type already exists for this consultant and patient.");
+    }
     await tx.run(
       "INSERT INTO consultant_referrals(id,patient_id,organization_id,branch_id,from_user_id,consultant_id,source_encounter_id,source_version,source_scope,visit_id,kind,pending_key,created_at,updated_at,request_key,request_payload) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
       [
@@ -217,7 +251,7 @@ export async function handleConsultantReferrals(tx, c) {
         payload,
       ],
     );
-    await workflowEvent(tx, c, row, "referral.requested", {
+    await workflowEvent(tx, context, row, "referral.requested", {
       kind: body.kind,
       consultant_id: row.consultant_id,
       source_encounter_id: source.id,
@@ -237,8 +271,9 @@ export async function handleConsultantReferrals(tx, c) {
       !row ||
       (actor.id !== row.from_user_id && actor.id !== row.consultant_id) ||
       (actor.branch_id && actor.branch_id !== row.branch_id)
-    )
+    ) {
       fail(404, "Referral unavailable in your account and branch.");
+    }
     const action = match[2];
     if (action === "source" && method === "GET") {
       permit(actor, actor.id === row.from_user_id ? "referrals.create" : "referrals.respond");
@@ -249,46 +284,61 @@ export async function handleConsultantReferrals(tx, c) {
         actor.id === row.from_user_id ? row.source_scope : "general",
       );
       const previewAccess = await careAuthority(tx, actor, row.patient_id, false);
-      if (!previewAccess.accessPolicy.scopes.includes(row.source_scope))
+      if (!previewAccess.accessPolicy.scopes.includes(row.source_scope)) {
         fail(403, "The patient has not shared this referral source category.");
+      }
       const version = await tx.get(
         "SELECT payload,version,signed_at AS created_at FROM note_versions WHERE encounter_id=? AND version=?",
         [row.source_encounter_id, row.source_version],
       );
-      if (!version) fail(404, "Signed referral source unavailable.");
-      await workflowEvent(tx, c, row, "referral.source_read", {});
+      if (!version) {
+        fail(404, "Signed referral source unavailable.");
+      }
+      await workflowEvent(tx, context, row, "referral.source_read", {});
       return {
         source: JSON.parse(version.payload),
         version: version.version,
         created_at: version.created_at,
       };
     }
-    if (method !== "POST") fail(404, "Referral action unavailable.");
+    if (method !== "POST") {
+      fail(404, "Referral action unavailable.");
+    }
     permit(actor, action === "withdraw" ? "referrals.create" : "referrals.respond");
     if (
       (action === "withdraw" && actor.id !== row.from_user_id) ||
       (action !== "withdraw" && actor.id !== row.consultant_id)
-    )
+    ) {
       fail(403, "Only the responsible sender or consultant may perform this action.");
-    if (row.visit_id) await tx.run("UPDATE care_visits SET id=id WHERE id=?", [row.visit_id]);
+    }
+    if (row.visit_id) {
+      await tx.run("UPDATE care_visits SET id=id WHERE id=?", [row.visit_id]);
+    }
     await tx.run("UPDATE patients SET id=id WHERE id=?", [row.patient_id]);
     row = await tx.get("SELECT * FROM consultant_referrals WHERE id=?", [row.id]);
-    if (row.version !== body.version) fail(409, "Referral changed. Refresh before deciding.");
-    if (["decline", "accept"].includes(action) && row.status !== "pending")
+    if (row.version !== body.version) {
+      fail(409, "Referral changed. Refresh before deciding.");
+    }
+    if (["decline", "accept"].includes(action) && row.status !== "pending") {
       fail(409, "This referral is no longer pending.");
-    if (action === "withdraw" && !["pending", "scheduled"].includes(row.status))
+    }
+    if (action === "withdraw" && !["pending", "scheduled"].includes(row.status)) {
       fail(409, "Only pending or scheduled referrals can be withdrawn.");
-    if (["cancel", "reschedule"].includes(action) && row.status !== "scheduled")
+    }
+    if (["cancel", "reschedule"].includes(action) && row.status !== "scheduled") {
       fail(409, "Only scheduled referrals can be cancelled or rescheduled.");
-    if (action === "start" && row.status !== "scheduled")
+    }
+    if (action === "start" && row.status !== "scheduled") {
       fail(409, "This referral is not scheduled.");
-    if (action === "complete" && !["accepted"].includes(row.status))
+    }
+    if (action === "complete" && !["accepted"].includes(row.status)) {
       fail(409, "Start the consultation before completing it.");
-    let status,
-      acceptedAt = null,
-      scheduled = null,
-      reason = null,
-      responseNote = null;
+    }
+    let status;
+    let acceptedAt = null;
+    let scheduled = null;
+    let reason = null;
+    let responseNote = null;
     if (action === "decline") {
       reason = text(body.reason, "decline reason", 1000, true);
       status = "declined";
@@ -299,20 +349,27 @@ export async function handleConsultantReferrals(tx, c) {
       await outpatient(row.patient_id);
       await authority(actor, row.patient_id);
       await recipient(row, action !== "complete");
-      if (action !== "complete") await sourceValid(row);
+      if (action !== "complete") {
+        await sourceValid(row);
+      }
       if ((action === "accept" && body.decision === "schedule") || action === "reschedule") {
         const time = Date.parse(body.scheduled_at);
-        if (!Number.isFinite(time) || time <= Date.now())
+        if (!Number.isFinite(time) || time <= Date.now()) {
           fail(400, "Choose a future consultation date and time.");
+        }
         scheduled = new Date(time).toISOString();
         status = "scheduled";
       } else {
-        if (action === "accept" && body.decision !== "now")
+        if (action === "accept" && body.decision !== "now") {
           fail(400, "Choose Accept now or Schedule.");
-        if (action === "start" && Date.parse(row.scheduled_at) > Date.now())
+        }
+        if (action === "start" && Date.parse(row.scheduled_at) > Date.now()) {
           fail(409, "The scheduled consultation time has not arrived.");
+        }
         status = action === "complete" ? "completed" : "accepted";
-        if (status === "accepted") acceptedAt = now();
+        if (status === "accepted") {
+          acceptedAt = now();
+        }
         if (row.kind === "transfer" && action !== "complete") {
           const visit = await tx.get("SELECT * FROM care_visits WHERE id=? AND organization_id=?", [
             row.visit_id,
@@ -322,8 +379,9 @@ export async function handleConsultantReferrals(tx, c) {
             !visit ||
             visit.status !== "in-progress" ||
             visit.assigned_user_id !== row.from_user_id
-          )
+          ) {
             fail(409, "The GP’s visit responsibility changed. A new transfer referral is needed.");
+          }
           if (
             (await tx.get(
               "SELECT id FROM visit_handoffs WHERE visit_id=? AND pending_key=? AND status='pending'",
@@ -333,10 +391,12 @@ export async function handleConsultantReferrals(tx, c) {
               "SELECT id FROM encounters WHERE visit_id=? AND author_id=? AND status='draft'",
               [visit.id, row.from_user_id],
             ))
-          )
+          ) {
             fail(409, "Resolve pending handoffs and outgoing drafts before transfer.");
-          if (!hasPermission(actor, "visits.document"))
+          }
+          if (!hasPermission(actor, "visits.document")) {
             fail(403, "Transfer requires visit documentation permission.");
+          }
           const sender = await careProfessional(tx, row.from_user_id, org, row.branch_id);
           await authority(sender, row.patient_id, true, row.source_scope);
           await tx.run(
@@ -371,8 +431,9 @@ export async function handleConsultantReferrals(tx, c) {
               row.accepted_at ?? row.created_at,
             ],
           );
-          if (!note || (row.kind === "transfer" && note.visit_id !== row.visit_id))
+          if (!note || (row.kind === "transfer" && note.visit_id !== row.visit_id)) {
             fail(400, "Choose your own signed consultation note for this referral.");
+          }
           responseNote = note.id;
           if (row.kind === "transfer") {
             permit(actor, "visits.document");
@@ -384,16 +445,18 @@ export async function handleConsultantReferrals(tx, c) {
               !visit ||
               visit.assigned_user_id !== actor.id ||
               !["in-progress", "completed"].includes(visit.status)
-            )
+            ) {
               fail(409, "The transferred visit is no longer yours to complete.");
+            }
             if (visit.assigned_user_id === actor.id && visit.status === "in-progress") {
               if (
                 await tx.get(
                   "SELECT id FROM visit_handoffs WHERE visit_id=? AND status='pending'",
                   [visit.id],
                 )
-              )
+              ) {
                 fail(409, "Resolve the pending handoff before completing this consultation.");
+              }
               await tx.run(
                 "UPDATE care_visits SET status='completed',active_key=NULL,version=version+1,completed_at=?,updated_at=? WHERE id=?",
                 [now(), now(), visit.id],
@@ -420,7 +483,7 @@ export async function handleConsultantReferrals(tx, c) {
       "UPDATE consultant_referrals SET status=?,scheduled_at=COALESCE(?,scheduled_at),accepted_at=COALESCE(?,accepted_at),decline_reason=?,response_encounter_id=COALESCE(?,response_encounter_id),pending_key=CASE WHEN ? IN ('declined','cancelled','completed') THEN NULL ELSE pending_key END,version=version+1,updated_at=? WHERE id=?",
       [status, scheduled, acceptedAt, reason, responseNote, status, now(), row.id],
     );
-    await workflowEvent(tx, c, row, "referral." + status, {
+    await workflowEvent(tx, context, row, "referral." + status, {
       kind: row.kind,
       scheduled_at: scheduled ?? row.scheduled_at,
       reason,

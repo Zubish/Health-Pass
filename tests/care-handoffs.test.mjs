@@ -5,8 +5,8 @@ import { openTestDatabase } from "./database.mjs";
 import { createApi } from "../server/api.mjs";
 import { seed } from "../server/seed.mjs";
 
-const password = "synthetic-handoff-test-password",
-  branch = "main-org-lagos";
+const password = "synthetic-handoff-test-password";
+const branch = "main-org-lagos";
 const clinicalNote = {
   complaint: "Synthetic nursing triage",
   assessment: "Synthetic reviewed triage assessment",
@@ -55,23 +55,26 @@ async function fixture({
         }),
       );
       const set = response.headers.get("set-cookie");
-      if (set) cookie = set.split(";")[0];
+      if (set) {
+        cookie = set.split(";")[0];
+      }
       return { status: response.status, data: await response.json() };
     };
   }
   async function login(email) {
     const call = client();
     assert.equal((await call("/auth/login", "POST", { email, password })).status, 200);
-    if (email !== "patient@healthpass.test")
+    if (email !== "patient@healthpass.test") {
       assert.equal((await call("/auth/mfa/skip", "POST", {})).status, 200);
+    }
     return call;
   }
-  const patient = await login("patient@healthpass.test"),
-    nurse = await login("handoff-nurse@synthetic.invalid"),
-    gp = await login("doctor@healthpass.test"),
-    colleague = await login("handoff-colleague@synthetic.invalid"),
-    foreign = await login("ibadan@healthpass.test"),
-    reception = await login("reception@healthpass.test");
+  const patient = await login("patient@healthpass.test");
+  const nurse = await login("handoff-nurse@synthetic.invalid");
+  const gp = await login("doctor@healthpass.test");
+  const colleague = await login("handoff-colleague@synthetic.invalid");
+  const foreign = await login("ibadan@healthpass.test");
+  const reception = await login("reception@healthpass.test");
   async function grant(userId, scopes, canContribute = true, overrides = {}) {
     const result = await patient("/professional-access", "POST", {
       recipient_user_id: userId,
@@ -90,9 +93,14 @@ async function fixture({
     assert.equal(result.status, 200, JSON.stringify(result.data));
     return result.data.id;
   }
-  let nurseGrantId, gpGrantId;
-  if (nurseGrant) nurseGrantId = await grant("nurse", ["nursing"]);
-  if (gpGrant) gpGrantId = await grant("doctor-lagos", gpScopes, gpContribute);
+  let nurseGrantId;
+  let gpGrantId;
+  if (nurseGrant) {
+    nurseGrantId = await grant("nurse", ["nursing"]);
+  }
+  if (gpGrant) {
+    gpGrantId = await grant("doctor-lagos", gpScopes, gpContribute);
+  }
   const checked = await reception("/visits", "POST", {
     patient_id: "patient-ade",
     branch_id: branch,
@@ -695,8 +703,8 @@ test("concurrent handoff requests and acceptance switch responsibility once and 
     ]);
     assert.ok(requested.every((r) => r.status === 200));
     assert.equal(requested[0].data.id, requested[1].data.id);
-    const id = requested[0].data.id,
-      version = requested[0].data.version;
+    const id = requested[0].data.id;
+    const version = requested[0].data.version;
     const accepted = await Promise.all([
       f.gp(`/visits/${f.id}/handoffs/${id}/accept`, "POST", { version }),
       f.gp(`/visits/${f.id}/handoffs/${id}/accept`, "POST", { version }),
@@ -773,8 +781,8 @@ test("handoff acceptance and outgoing clinical writes serialize against the same
       const [first, second] = await Promise.all(
         writeFirst ? [write(), accept()] : [accept(), write()],
       );
-      const accepted = writeFirst ? second : first,
-        written = writeFirst ? first : second;
+      const accepted = writeFirst ? second : first;
+      const written = writeFirst ? first : second;
       const visit = (await f.reception(`/visits/${f.id}`)).data.visit;
       if (writeFirst && (operation === "draft" || operation === "amend")) {
         assert.equal(written.status, 200);
@@ -783,8 +791,11 @@ test("handoff acceptance and outgoing clinical writes serialize against the same
       } else {
         assert.equal(accepted.status, 200, JSON.stringify(accepted.data));
         assert.equal(visit.assigned_user_id, "doctor-lagos");
-        if (operation === "amend" || writeFirst) assert.equal(written.status, 200);
-        else deny(written);
+        if (operation === "amend" || writeFirst) {
+          assert.equal(written.status, 200);
+        } else {
+          deny(written);
+        }
       }
       const unfinished = await f.db.transaction((tx) =>
         tx.all(
@@ -792,12 +803,13 @@ test("handoff acceptance and outgoing clinical writes serialize against the same
           [f.id],
         ),
       );
-      if (visit.assigned_user_id === "doctor-lagos")
+      if (visit.assigned_user_id === "doctor-lagos") {
         assert.equal(
           unfinished.length,
           0,
           "accepted transfer never leaves a newly created outgoing draft",
         );
+      }
       const sourceVersions = await f.db.transaction((tx) =>
         tx.all("SELECT version FROM note_versions WHERE encounter_id=? ORDER BY version", [
           f.source.id,

@@ -6,7 +6,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi"] },
+  { ignores: ["dist", ".output", ".vinxi", ".tanstack", "src/routeTree.gen.ts"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -37,4 +37,21 @@ export default tseslint.config(
     },
   },
   eslintPluginPrettier,
+  {
+    files: [
+      "src/components/healthpass/**/*.{ts,tsx}",
+      "src/lib/**/*.{ts,tsx}",
+      "src/routes/**/*.{ts,tsx}",
+    ],
+    rules: {
+      "@typescript-eslint/no-unused-vars": "error",
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}", "server/**/*.mjs", "tests/**/*.mjs"],
+    rules: {
+      curly: ["error", "all"],
+      "one-var": ["error", "never"],
+    },
+  },
 );

@@ -171,8 +171,8 @@ export function WorkspaceShell({
   onLogout,
   children,
 }: Omit<PanelProps, "collapsed" | "mobile" | "onToggle"> & { children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false),
-    [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [open, setOpen] = useState(false);
   const preferenceKey = `healthpass-side-panel:v1:${me.user.id}`;
   useEffect(() => {
     try {
@@ -184,7 +184,9 @@ export function WorkspaceShell({
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
     const closeOnDesktop = () => {
-      if (media.matches) setOpen(false);
+      if (media.matches) {
+        setOpen(false);
+      }
     };
     closeOnDesktop();
     media.addEventListener("change", closeOnDesktop);

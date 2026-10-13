@@ -4,8 +4,8 @@ import { randomUUID } from "node:crypto";
 import { openTestDatabase } from "./database.mjs";
 import { seed } from "../server/seed.mjs";
 import { createApi } from "../server/api.mjs";
-const password = "synthetic-care-operations-password",
-  branch = "main-org-lagos";
+const password = "synthetic-care-operations-password";
+const branch = "main-org-lagos";
 const note = {
   complaint: "Synthetic consultation only",
   assessment: "Synthetic findings",
@@ -52,7 +52,9 @@ async function fixture() {
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         }),
       );
-      if (r.headers.get("set-cookie")) cookie = r.headers.get("set-cookie").split(";")[0];
+      if (r.headers.get("set-cookie")) {
+        cookie = r.headers.get("set-cookie").split(";")[0];
+      }
       return { status: r.status, data: await r.json() };
     };
   };
@@ -78,7 +80,9 @@ async function fixture() {
         : { account_type: "patient" }),
     });
     assert.equal(login.status, 200, JSON.stringify(login.data));
-    if (workspace) assert.equal((await c("/auth/mfa/skip", "POST", {})).status, 200);
+    if (workspace) {
+      assert.equal((await c("/auth/mfa/skip", "POST", {})).status, 200);
+    }
     clients[name] = c;
   }
   const ok = async (promise) => {
@@ -211,8 +215,8 @@ test("individual restrictions override every role, preserve other staff defaults
 test("OPD and ward scopes filter registry, charts and visits and cannot be overridden by an earlier OPD encounter", async () => {
   const f = await fixture();
   try {
-    const opd = await f.area("Synthetic OPD", "outpatient"),
-      ward = await f.area("Synthetic ward", "ward");
+    const opd = await f.area("Synthetic OPD", "outpatient");
+    const ward = await f.area("Synthetic ward", "ward");
     await f.ok(f.restrict("nurse-opd", [], [opd.id]));
     await f.ok(f.restrict("nurse-ward", [], [ward.id]));
     const v = await f.visit("patient-ade", opd.id);
@@ -258,8 +262,8 @@ test("admission teams require a real ward episode, retain a lead alongside suppo
       client_request_id: randomUUID(),
     };
     assert.equal((await f.admin("/care-responsibilities", "POST", lead)).status, 409);
-    const ward = await f.area("Synthetic inpatient ward", "ward"),
-      opd = await f.area("Synthetic outpatient", "outpatient");
+    const ward = await f.area("Synthetic inpatient ward", "ward");
+    const opd = await f.area("Synthetic outpatient", "outpatient");
     assert.equal(
       (
         await f.admin("/admissions", "POST", {
@@ -340,9 +344,9 @@ test("admission teams require a real ward episode, retain a lead alongside suppo
 test("consultant advice accepts now without transferring GP care; decline requires a reason and signed source stays immutable", async () => {
   const f = await fixture();
   try {
-    const visit = await f.visit(),
-      source = await f.sign(f.gp, "patient-ade", "general", visit.id),
-      ref = await f.referral(source);
+    const visit = await f.visit();
+    const source = await f.sign(f.gp, "patient-ade", "general", visit.id);
+    const ref = await f.referral(source);
     assert.equal(
       (
         await f.gp(`/consultant-referrals/${ref.id}/accept`, "POST", {
@@ -398,9 +402,9 @@ test("consultant advice accepts now without transferring GP care; decline requir
 test("scheduled transfer retains GP responsibility until due and explicit start; consultant signs their own care and former GP retains authorship", async () => {
   const f = await fixture();
   try {
-    const visit = await f.visit(),
-      source = await f.sign(f.gp, "patient-ade", "general", visit.id),
-      ref = await f.referral(source, "transfer");
+    const visit = await f.visit();
+    const source = await f.sign(f.gp, "patient-ade", "general", visit.id);
+    const ref = await f.referral(source, "transfer");
     const future = new Date(Date.now() + 3600000).toISOString();
     await f.ok(
       f.consultant(`/consultant-referrals/${ref.id}/accept`, "POST", {
@@ -587,8 +591,8 @@ test("an explicitly authorised nurse can refer within their own reviewed scope a
 test("moving an admission changes current area access, blocks invalid archive or type changes, and removed team members lose care-write authority", async () => {
   const f = await fixture();
   try {
-    const first = await f.area("Synthetic ward A", "ward"),
-      second = await f.area("Synthetic observation B", "observation");
+    const first = await f.area("Synthetic ward A", "ward");
+    const second = await f.area("Synthetic observation B", "observation");
     await f.ok(f.restrict("nurse-ward", [], [first.id]));
     const admission = await f.admit("patient-ade", first.id);
     await f.ok(
@@ -681,9 +685,9 @@ test("separate-session concurrent admissions and consultant decisions create one
       ),
     );
     assert.equal(saved.length, 1);
-    const visit = await f.visit(),
-      source = await f.sign(f.gp, "patient-ade", "general", visit.id),
-      ref = await f.referral(source, "transfer");
+    const visit = await f.visit();
+    const source = await f.sign(f.gp, "patient-ade", "general", visit.id);
+    const ref = await f.referral(source, "transfer");
     const decisions = await Promise.all(
       [f.consultant, f.consultantTwin].map((c) =>
         c(`/consultant-referrals/${ref.id}/accept`, "POST", { version: 1, decision: "now" }),
@@ -705,8 +709,8 @@ test("separate-session concurrent admissions and consultant decisions create one
 test("inpatient medication team preserves pharmacist scope and cannot expand into general or nursing care", async () => {
   const f = await fixture();
   try {
-    const area = await f.area("Synthetic medication ward", "ward"),
-      admission = await f.admit("patient-ade", area.id);
+    const area = await f.area("Synthetic medication ward", "ward");
+    const admission = await f.admit("patient-ade", area.id);
     const body = {
       patient_id: "patient-ade",
       note_kind: "medication",
@@ -723,7 +727,7 @@ test("inpatient medication team preserves pharmacist scope and cannot expand int
       }),
     );
     await f.sign(f.pharmacist, "patient-ade", "medication");
-    for (const kind of ["general", "nursing"])
+    for (const kind of ["general", "nursing"]) {
       assert.equal(
         (
           await f.pharmacist("/encounters", "POST", {
@@ -734,6 +738,7 @@ test("inpatient medication team preserves pharmacist scope and cannot expand int
         ).status,
         403,
       );
+    }
     await f.ok(f.restrict("pharmacist", ["notes.create"]));
     assert.equal(
       (await f.pharmacist("/encounters", "POST", { ...body, client_request_id: randomUUID() }))
@@ -748,9 +753,9 @@ test("inpatient medication team preserves pharmacist scope and cannot expand int
 test("cancelling an outpatient visit closes scheduled transfer requests without deleting referral history", async () => {
   const f = await fixture();
   try {
-    const visit = await f.visit(),
-      source = await f.sign(f.gp, "patient-ade", "general", visit.id),
-      ref = await f.referral(source, "transfer");
+    const visit = await f.visit();
+    const source = await f.sign(f.gp, "patient-ade", "general", visit.id);
+    const ref = await f.referral(source, "transfer");
     await f.ok(
       f.consultant(`/consultant-referrals/${ref.id}/accept`, "POST", {
         version: ref.version,

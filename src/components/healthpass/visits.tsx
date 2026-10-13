@@ -73,8 +73,12 @@ export function Visits({
   const [assignment, setAssignment] = useState("");
   async function load(next?: string) {
     const query = new URLSearchParams({ status, limit: "50" });
-    if (branch) query.set("branch_id", branch);
-    if (next) query.set("cursor", next);
+    if (branch) {
+      query.set("branch_id", branch);
+    }
+    if (next) {
+      query.set("cursor", next);
+    }
     const data = await careApi(`/visits?${query}`);
     setVisits((previous) => (next ? [...previous, ...data.visits] : data.visits));
     setCursor(data.nextCursor ?? null);
@@ -105,7 +109,9 @@ export function Visits({
     setError("");
     setDetail(null);
     const query = new URLSearchParams({ status, limit: "50" });
-    if (branch) query.set("branch_id", branch);
+    if (branch) {
+      query.set("branch_id", branch);
+    }
     const work = visitId
       ? careApi(`/visits/${visitId}`).then((data) => {
           if (current) {
@@ -121,10 +127,14 @@ export function Visits({
         });
     work
       .catch((e) => {
-        if (current) setError(e.message);
+        if (current) {
+          setError(e.message);
+        }
       })
       .finally(() => {
-        if (current) setLoading(false);
+        if (current) {
+          setLoading(false);
+        }
       });
     return () => {
       current = false;
@@ -136,10 +146,14 @@ export function Visits({
     const query = teamBranch ? `?branch_id=${encodeURIComponent(teamBranch)}` : "";
     careApi(`/visits/team${query}`)
       .then((data) => {
-        if (current) setTeam(data);
+        if (current) {
+          setTeam(data);
+        }
       })
       .catch((e) => {
-        if (current) setError(e.message);
+        if (current) {
+          setError(e.message);
+        }
       });
     return () => {
       current = false;
@@ -585,7 +599,9 @@ export function Visits({
         <Modal
           title={cancelling.task ? "Cancel follow-up" : "Cancel visit"}
           onClose={() => {
-            if (!busy) setCancelling(null);
+            if (!busy) {
+              setCancelling(null);
+            }
           }}
         >
           <form
@@ -619,7 +635,9 @@ export function Visits({
         <Modal
           title="Record visit observations"
           onClose={() => {
-            if (!busy) setObserving(false);
+            if (!busy) {
+              setObserving(false);
+            }
           }}
         >
           {error && (
@@ -676,7 +694,9 @@ export function Visits({
         <Modal
           title="Add visit follow-up"
           onClose={() => {
-            if (!busy) setFollowUp(false);
+            if (!busy) {
+              setFollowUp(false);
+            }
           }}
         >
           {error && (
@@ -739,8 +759,8 @@ function CheckIn({
   const [branch, setBranch] = useState(initialBranch || me.branch?.id || "");
   const [professionals, setProfessionals] = useState(team.professionals);
   const [assignee, setAssignee] = useState("");
-  const [areas, setAreas] = useState<CareArea[]>([]),
-    [areaId, setAreaId] = useState("");
+  const [areas, setAreas] = useState<CareArea[]>([]);
+  const [areaId, setAreaId] = useState("");
   useEffect(() => {
     void careApi("/care-areas")
       .then((v) => setAreas(v.areas))
@@ -765,13 +785,19 @@ function CheckIn({
         `/visits/patients?branch_id=${encodeURIComponent(branch)}&search=${encodeURIComponent(query.trim())}&limit=25`,
       )
         .then((data) => {
-          if (current) setPatients(data.patients);
+          if (current) {
+            setPatients(data.patients);
+          }
         })
         .catch((e) => {
-          if (current) setError(e.message);
+          if (current) {
+            setError(e.message);
+          }
         })
         .finally(() => {
-          if (current) setLoading(false);
+          if (current) {
+            setLoading(false);
+          }
         });
     }, 250);
     return () => {
@@ -780,15 +806,21 @@ function CheckIn({
     };
   }, [query, branch]);
   useEffect(() => {
-    if (!branch) return;
+    if (!branch) {
+      return;
+    }
     let current = true;
     setAssignee("");
     careApi(`/visits/team?branch_id=${encodeURIComponent(branch)}`)
       .then((data) => {
-        if (current) setProfessionals(data.professionals);
+        if (current) {
+          setProfessionals(data.professionals);
+        }
       })
       .catch((e) => {
-        if (current) setError(e.message);
+        if (current) {
+          setError(e.message);
+        }
       });
     return () => {
       current = false;
@@ -798,7 +830,9 @@ function CheckIn({
     <Modal
       title="Check in a registered patient"
       onClose={() => {
-        if (!busy) onClose();
+        if (!busy) {
+          onClose();
+        }
       }}
     >
       {error && (

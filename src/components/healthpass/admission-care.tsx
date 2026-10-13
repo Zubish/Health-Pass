@@ -46,26 +46,26 @@ type Options = {
   }[];
 };
 export function AdmissionCare({ me }: { me: Me }) {
-  const manager = me.permissions?.includes("admissions.manage") ?? false,
-    leadManager = me.permissions?.includes("careteam.manage") ?? false,
-    patient = me.role === "patient";
-  const [rows, setRows] = useState<Episode[]>([]),
-    [areas, setAreas] = useState<CareArea[]>([]),
-    [options, setOptions] = useState<Options>({ patients: [], professionals: [] }),
-    [consultants, setConsultants] = useState<
-      { id: string; name: string; branch_id: string | null }[]
-    >([]);
+  const manager = me.permissions?.includes("admissions.manage") ?? false;
+  const leadManager = me.permissions?.includes("careteam.manage") ?? false;
+  const patient = me.role === "patient";
+  const [rows, setRows] = useState<Episode[]>([]);
+  const [areas, setAreas] = useState<CareArea[]>([]);
+  const [options, setOptions] = useState<Options>({ patients: [], professionals: [] });
+  const [consultants, setConsultants] = useState<
+    { id: string; name: string; branch_id: string | null }[]
+  >([]);
   const [modal, setModal] = useState<{
-      type: "new" | "team" | "lead" | "move" | "end";
-      episode?: Episode;
-    } | null>(null),
-    [selectedArea, setSelectedArea] = useState(""),
-    [duty, setDuty] = useState("doctor"),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [loading, setLoading] = useState(true),
-    [busy, setBusy] = useState(false),
-    [requestId, setRequestId] = useState("");
+    type: "new" | "team" | "lead" | "move" | "end";
+    episode?: Episode;
+  } | null>(null);
+  const [selectedArea, setSelectedArea] = useState("");
+  const [duty, setDuty] = useState("doctor");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [requestId, setRequestId] = useState("");
   const refresh = useCallback(async () => {
     const [list, areaData, choices, leadChoices] = await Promise.all([
       careApi("/admissions"),
@@ -108,8 +108,8 @@ export function AdmissionCare({ me }: { me: Me }) {
     setSelectedArea(episode?.care_area_id ?? "");
     setModal({ type, episode });
   };
-  const episode = modal?.episode,
-    area = areas.find((a) => a.id === selectedArea);
+  const episode = modal?.episode;
+  const area = areas.find((a) => a.id === selectedArea);
   return (
     <>
       <div className="hp-heading">
@@ -265,7 +265,9 @@ export function AdmissionCare({ me }: { me: Me }) {
                     : "End recorded care episode"
           }
           onClose={() => {
-            if (!busy) setModal(null);
+            if (!busy) {
+              setModal(null);
+            }
           }}
         >
           {error && (
@@ -277,13 +279,13 @@ export function AdmissionCare({ me }: { me: Me }) {
             onSubmit={(e) => {
               e.preventDefault();
               const f = Object.fromEntries(new FormData(e.currentTarget));
-              if (modal.type === "new")
+              if (modal.type === "new") {
                 void change("/admissions", {
                   ...f,
                   care_area_id: selectedArea,
                   client_request_id: requestId,
                 });
-              else if (modal.type === "lead" && episode)
+              } else if (modal.type === "lead" && episode) {
                 void change(
                   episode.consultant
                     ? `/care-responsibilities/${episode.consultant.id}`
@@ -303,7 +305,7 @@ export function AdmissionCare({ me }: { me: Me }) {
                   },
                   episode.consultant ? "PATCH" : "POST",
                 );
-              else if (episode)
+              } else if (episode) {
                 void change(`/admissions/${episode.id}/${modal.type}`, {
                   ...f,
                   care_area_id: selectedArea,
@@ -311,6 +313,7 @@ export function AdmissionCare({ me }: { me: Me }) {
                   duty,
                   confirm_episode_end: f.confirm_episode_end === "confirmed",
                 });
+              }
             }}
           >
             {episode && (

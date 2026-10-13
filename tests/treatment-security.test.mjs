@@ -4,8 +4,8 @@ import { randomUUID } from "node:crypto";
 import { openTestDatabase } from "./database.mjs";
 import { seed } from "../server/seed.mjs";
 import { createApi } from "../server/api.mjs";
-const password = "synthetic-care-operations-password",
-  branch = "main-org-lagos";
+const password = "synthetic-care-operations-password";
+const branch = "main-org-lagos";
 const note = {
   complaint: "Synthetic consultation only",
   assessment: "Synthetic findings",
@@ -52,7 +52,9 @@ async function fixture() {
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         }),
       );
-      if (r.headers.get("set-cookie")) cookie = r.headers.get("set-cookie").split(";")[0];
+      if (r.headers.get("set-cookie")) {
+        cookie = r.headers.get("set-cookie").split(";")[0];
+      }
       return { status: r.status, data: await r.json() };
     };
   };
@@ -78,7 +80,9 @@ async function fixture() {
         : { account_type: "patient" }),
     });
     assert.equal(login.status, 200, JSON.stringify(login.data));
-    if (workspace) assert.equal((await c("/auth/mfa/skip", "POST", {})).status, 200);
+    if (workspace) {
+      assert.equal((await c("/auth/mfa/skip", "POST", {})).status, 200);
+    }
     clients[name] = c;
   }
   const ok = async (promise) => {
@@ -146,8 +150,8 @@ async function fixture() {
 
 const base = "/treatment/patients/patient-ade";
 async function ward(f) {
-  const area = await f.area("Synthetic treatment ward", "ward"),
-    a = await f.admit("patient-ade", area.id);
+  const area = await f.area("Synthetic treatment ward", "ward");
+  const a = await f.admit("patient-ade", area.id);
   let version = a.version;
   for (const [id, duty] of [
     ["doctor-lagos", "doctor"],
@@ -184,15 +188,15 @@ function rx(admission) {
 test("physician admission/discharge decisions retain identity, reasons and timestamps, and do not grant administrative clinical power", async () => {
   const f = await fixture();
   try {
-    const a = await ward(f),
-      body = {
-        admission_id: a.id,
-        kind: "admit",
-        reason: "Synthetic physician reason",
-        observations: "Synthetic observation",
-        confirm_physician: "confirmed",
-        client_request_id: randomUUID(),
-      };
+    const a = await ward(f);
+    const body = {
+      admission_id: a.id,
+      kind: "admit",
+      reason: "Synthetic physician reason",
+      observations: "Synthetic observation",
+      confirm_physician: "confirmed",
+      client_request_id: randomUUID(),
+    };
     assert.equal((await f.admin(base + "/decisions", "POST", body)).status, 403);
     assert.equal((await f.ward(base + "/decisions", "POST", body)).status, 403);
     const d = await f.ok(f.gp(base + "/decisions", "POST", body));
@@ -272,16 +276,16 @@ test("outpatient signed prescribing validates courses, authorises physicians onl
 test("inpatient dose outcomes need a current nurse team, medication sharing, valid slot and reason; duplicate administrations cannot occur", async () => {
   const f = await fixture();
   try {
-    const a = await ward(f),
-      order = await f.ok(f.gp(base + "/orders", "POST", rx(a.id))),
-      o = (await f.ok(f.patient(base))).orders[0],
-      body = {
-        outcome: "given",
-        dose: o.dose,
-        due_at: o.starts_at,
-        observations: "Synthetic observation",
-        client_request_id: randomUUID(),
-      };
+    const a = await ward(f);
+    const order = await f.ok(f.gp(base + "/orders", "POST", rx(a.id)));
+    const o = (await f.ok(f.patient(base))).orders[0];
+    const body = {
+      outcome: "given",
+      dose: o.dose,
+      due_at: o.starts_at,
+      observations: "Synthetic observation",
+      client_request_id: randomUUID(),
+    };
     assert.equal(
       (await f.opd(`${base}/orders/${order.id}/administrations`, "POST", body)).status,
       403,
@@ -329,14 +333,14 @@ test("inpatient dose outcomes need a current nurse team, medication sharing, val
 test("ward observations form longitudinal records independent of visits with measured and recorded time and clinical category filtering", async () => {
   const f = await fixture();
   try {
-    const a = await ward(f),
-      body = {
-        admission_id: a.id,
-        discipline: "nursing",
-        values: { temperature: 37, pulse: 80 },
-        observations: "Synthetic clinical observation",
-        client_request_id: randomUUID(),
-      };
+    const a = await ward(f);
+    const body = {
+      admission_id: a.id,
+      discipline: "nursing",
+      values: { temperature: 37, pulse: 80 },
+      observations: "Synthetic clinical observation",
+      client_request_id: randomUUID(),
+    };
     await f.ok(f.ward(base + "/observations", "POST", body));
     await f.ok(
       f.ward(base + "/observations", "POST", {
@@ -450,8 +454,8 @@ async function extraClient(f, email, country = "GB") {
       }),
     );
     for (const c of r.headers.getSetCookie()) {
-      const pair = c.split(";")[0],
-        name = pair.split("=")[0];
+      const pair = c.split(";")[0];
+      const name = pair.split("=")[0];
       cookie = cookie
         .split("; ")
         .filter((x) => x && !x.startsWith(name + "="))
@@ -519,10 +523,10 @@ test("new-device/country and failed-password signals are private, reviewable and
 test("two independent nurse sessions cannot record the same scheduled dose twice", async () => {
   const f = await fixture();
   try {
-    const a = await ward(f),
-      order = await f.ok(f.gp(base + "/orders", "POST", rx(a.id))),
-      o = (await f.ok(f.patient(base))).orders[0],
-      other = await extraClient(f, "nurse-ward@synthetic.invalid");
+    const a = await ward(f);
+    const order = await f.ok(f.gp(base + "/orders", "POST", rx(a.id)));
+    const o = (await f.ok(f.patient(base))).orders[0];
+    const other = await extraClient(f, "nurse-ward@synthetic.invalid");
     await f.ok(
       other("/auth/login", "POST", {
         email: "nurse-ward@synthetic.invalid",

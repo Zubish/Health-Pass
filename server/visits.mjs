@@ -26,8 +26,9 @@ async function scopedVisit(tx, actor, id, fail) {
     !visit ||
     (actor.branch_id && visit.branch_id !== actor.branch_id) ||
     !careAreaAllows(actor, visit.care_area_id)
-  )
+  ) {
     fail(404, "Visit unavailable in this workspace and branch.");
+  }
   if (visit.care_area_id) {
     const area = await tx.get("SELECT kind FROM care_areas WHERE id=?", [visit.care_area_id]);
     if (area?.kind !== "outpatient" && activeStatuses.has(visit.status)) {
@@ -35,11 +36,12 @@ async function scopedVisit(tx, actor, id, fail) {
         "SELECT id FROM care_admissions WHERE patient_id=? AND organization_id=? AND care_area_id=? AND status='active'",
         [visit.patient_id, actor.organization_id, visit.care_area_id],
       );
-      if (!current)
+      if (!current) {
         fail(
           409,
           "The admission ended or moved. Refresh the care episode before opening this ward visit.",
         );
+      }
     }
   }
   return visit;
@@ -51,27 +53,33 @@ async function scopedBranch(tx, actor, value, fail, text) {
     "SELECT id,name FROM branches WHERE id=? AND organization_id=? AND active=1",
     [id, actor.organization_id],
   );
-  if (!branch || (actor.branch_id && actor.branch_id !== id))
+  if (!branch || (actor.branch_id && actor.branch_id !== id)) {
     fail(403, "Choose an active branch within your workspace access.");
+  }
   return branch;
 }
 
 async function eligibleProfessional(tx, actor, userId, branchId) {
   const user = await tx.get("SELECT * FROM users WHERE id=? AND active=1 AND verified=1", [userId]);
-  if (!user) return null;
+  if (!user) {
+    return null;
+  }
   const membership = await tx.get(
     "SELECT * FROM memberships WHERE user_id=? AND organization_id=? AND active=1",
     [userId, actor.organization_id],
   );
-  if (!membership || (membership.branch_id && membership.branch_id !== branchId)) return null;
+  if (!membership || (membership.branch_id && membership.branch_id !== branchId)) {
+    return null;
+  }
   user.organization_id = actor.organization_id;
   await resolveMembership(tx, membership, user);
   if (
     !hasPermission(user, "visits.document") ||
     !hasPermission(user, "records.view") ||
     !user.clinicalScopes.length
-  )
+  ) {
     return null;
+  }
   return {
     id: user.id,
     name: user.name,
@@ -125,15 +133,17 @@ async function clinicalAccess(
       "UPDATE care_visits SET version=version WHERE id=? AND organization_id=? RETURNING *",
       [visit.id, actor.organization_id],
     );
-    if (!refreshed || (actor.branch_id && refreshed.branch_id !== actor.branch_id))
+    if (!refreshed || (actor.branch_id && refreshed.branch_id !== actor.branch_id)) {
       fail(404, "Visit unavailable in this workspace and branch.");
+    }
     Object.assign(visit, refreshed);
   }
   if (
     visit.assigned_user_id !== actor.id &&
     !(participant && (await visitParticipation(tx, actor, visit.id)))
-  )
+  ) {
     fail(403, "Clinical visit work is limited to an authorised visit participant.");
+  }
   // Operational routing never establishes consent or clinical chart authority.
   return access(tx, actor, visit.patient_id, write);
 }
@@ -155,16 +165,19 @@ function contributionDiscipline(result, actor, requested, allowed, fail) {
     (discipline) => allowed.includes(discipline) && scope.contributionScopes.includes(discipline),
   );
   const discipline = requested ?? eligible[0];
-  if (!scope.canContribute || !eligible.includes(discipline))
+  if (!scope.canContribute || !eligible.includes(discipline)) {
     fail(
       403,
       "Your reviewed scope and the patient's sharing choice do not permit this contribution.",
     );
+  }
   return discipline;
 }
 
 async function replayClinicalRequest(tx, table, visit, actor, requestId, payload, fail) {
-  if (!requestId) return null;
+  if (!requestId) {
+    return null;
+  }
   const replay = await tx.get(
     `SELECT id,request_payload,discipline${table === "visit_followups" ? ",version" : ""} FROM ${table} WHERE visit_id=? AND author_id=? AND client_request_id=?`,
     [visit.id, actor.id, requestId],
@@ -172,10 +185,13 @@ async function replayClinicalRequest(tx, table, visit, actor, requestId, payload
   let replayPayload = replay?.request_payload;
   if (replayPayload) {
     const original = JSON.parse(replayPayload);
-    if (original.length === 2) replayPayload = JSON.stringify([...original, replay.discipline]);
+    if (original.length === 2) {
+      replayPayload = JSON.stringify([...original, replay.discipline]);
+    }
   }
-  if (replay && replayPayload !== payload)
+  if (replay && replayPayload !== payload) {
     fail(409, "This request was already used for different clinical details.");
+  }
   return replay
     ? { id: replay.id, ...(replay.version ? { version: replay.version } : {}), existing: true }
     : null;
@@ -190,7 +206,9 @@ export async function validateEncounterVisit(
   { allowCompleted = false } = {},
 ) {
   const { actor, fail, permit, access } = context;
-  if (!visitId) return null;
+  if (!visitId) {
+    return null;
+  }
   const visit = await scopedVisit(tx, actor, visitId, fail);
   await clinicalAccess(
     tx,
@@ -200,13 +218,15 @@ export async function validateEncounterVisit(
     { permit, access, fail },
     { participant: allowCompleted },
   );
-  if (visit.patient_id !== patientId)
+  if (visit.patient_id !== patientId) {
     fail(400, "The note and visit must belong to the same patient.");
+  }
   if (
     visit.status !== "in-progress" &&
     !(allowCompleted && ["completed", "cancelled"].includes(visit.status))
-  )
+  ) {
     fail(409, "Start the visit before adding or changing a linked note.");
+  }
   return visit;
 }
 
@@ -225,14 +245,17 @@ export async function handleVisits(tx, context) {
     audit,
     correlation,
   } = context;
-  if (!path.startsWith("/visits")) return undefined;
+  if (!path.startsWith("/visits")) {
+    return undefined;
+  }
   if (path === "/visits/patients" && method === "GET") {
     permit(actor, "visits.manage");
     const branch = await scopedBranch(tx, actor, searchParams.get("branch_id"), fail, text);
     const search = text(searchParams.get("search") ?? "", "patient search", 160);
     const limit = Number(searchParams.get("limit") ?? 25);
-    if (!Number.isInteger(limit) || limit < 1 || limit > 50)
+    if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
       fail(400, "Patient search page size must be between 1 and 50.");
+    }
     const pattern = "%" + search.toLowerCase().replace(/[\\%_]/g, "\\$&") + "%";
     return {
       patients: await tx.all(
@@ -248,7 +271,9 @@ export async function handleVisits(tx, context) {
       actor.branch_id ? [actor.organization_id, actor.branch_id] : [actor.organization_id],
     );
     const branchId = searchParams.get("branch_id") ?? actor.branch_id ?? branches[0]?.id;
-    if (!branchId) return { professionals: [], branches };
+    if (!branchId) {
+      return { professionals: [], branches };
+    }
     await scopedBranch(tx, actor, branchId, fail, text);
     const rows = await tx.all(
       "SELECT user_id FROM memberships WHERE organization_id=? AND active=1 AND (branch_id IS NULL OR branch_id=?) ORDER BY user_id",
@@ -257,7 +282,9 @@ export async function handleVisits(tx, context) {
     const professionals = [];
     for (const row of rows) {
       const professional = await eligibleProfessional(tx, actor, row.user_id, branchId);
-      if (professional) professionals.push(professional);
+      if (professional) {
+        professionals.push(professional);
+      }
     }
     professionals.sort((a, b) => a.name.localeCompare(b.name));
     return { professionals, branches };
@@ -280,19 +307,24 @@ export async function handleVisits(tx, context) {
       args.push(branchId);
     }
     const status = params.get("status") ?? "active";
-    if (status === "active") where.push("v.status IN ('waiting','in-progress')");
-    else if (["waiting", "in-progress", "completed", "cancelled"].includes(status)) {
+    if (status === "active") {
+      where.push("v.status IN ('waiting','in-progress')");
+    } else if (["waiting", "in-progress", "completed", "cancelled"].includes(status)) {
       where.push("v.status=?");
       args.push(status);
-    } else if (status !== "all") fail(400, "Choose a valid visit status.");
+    } else if (status !== "all") {
+      fail(400, "Choose a valid visit status.");
+    }
     const limit = Number(params.get("limit") ?? 50);
-    if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
       fail(400, "Visit page size must be between 1 and 100.");
+    }
     const cursor = params.get("cursor");
     if (cursor) {
       const previous = await scopedVisit(tx, actor, text(cursor, "visit cursor", 100, true), fail);
-      if (branchId && previous.branch_id !== branchId)
+      if (branchId && previous.branch_id !== branchId) {
         fail(400, "Visit cursor is outside this branch.");
+      }
       where.push("(v.checked_in_at<? OR (v.checked_in_at=? AND v.id<?))");
       args.push(previous.checked_in_at, previous.checked_in_at, previous.id);
     }
@@ -327,14 +359,18 @@ export async function handleVisits(tx, context) {
         (admission
           ? areaId !== admission.care_area_id || area.kind === "outpatient"
           : area.kind !== "outpatient")
-      )
+      ) {
         fail(
           400,
           "Choose this admission’s current ward or observation area; outpatient visits require an outpatient department.",
         );
-      if (!area || !careAreaAllows(actor, areaId))
+      }
+      if (!area || !careAreaAllows(actor, areaId)) {
         fail(403, "Choose an outpatient department within your assigned scope.");
-    } else if (actor.careAreaRestricted) fail(400, "Choose your assigned outpatient department.");
+      }
+    } else if (actor.careAreaRestricted) {
+      fail(400, "Choose your assigned outpatient department.");
+    }
     const requestPayload = JSON.stringify(
       areaId ? [patientId, branch.id, assignee, areaId] : [patientId, branch.id, assignee],
     );
@@ -343,36 +379,42 @@ export async function handleVisits(tx, context) {
       [actor.organization_id, actor.id, requestId],
     );
     if (existing) {
-      if (existing.request_payload !== requestPayload)
+      if (existing.request_payload !== requestPayload) {
         fail(409, "This check-in request was already used for different details.");
+      }
       return { id: existing.id, version: existing.version, existing: true };
     }
     const patient = await tx.get(
       "SELECT p.id FROM patients p JOIN patient_links pl ON pl.patient_id=p.id JOIN branch_patient_links bp ON bp.patient_id=p.id WHERE p.id=? AND pl.organization_id=? AND bp.branch_id=?",
       [patientId, actor.organization_id, branch.id],
     );
-    if (!patient) fail(403, "Register or verify-link this patient in the selected branch first.");
+    if (!patient) {
+      fail(403, "Register or verify-link this patient in the selected branch first.");
+    }
     const chosenProfessional = await eligibleProfessional(tx, actor, assignee, branch.id);
-    if (!chosenProfessional || !careAreaAllows(chosenProfessional, areaId))
+    if (!chosenProfessional || !careAreaAllows(chosenProfessional, areaId)) {
       fail(403, "Choose an approved professional with reviewed clinical access in this branch.");
+    }
     if (
       admission &&
       !(await tx.get(
         "SELECT id FROM admission_team_members WHERE admission_id=? AND user_id=? AND active=1 UNION SELECT id FROM care_responsibilities WHERE admission_id=? AND consultant_id=? AND status='active'",
         [admission.id, assignee, admission.id, assignee],
       ))
-    )
+    ) {
       fail(403, "Assign this professional to the inpatient care team before routing ward care.");
+    }
     const activeKey = branch.id + ":" + patientId;
     if (
       await tx.get("SELECT id FROM care_visits WHERE organization_id=? AND active_key=?", [
         actor.organization_id,
         activeKey,
       ])
-    )
+    ) {
       fail(409, "This patient already has an active visit in this branch.");
-    const id = randomUUID(),
-      date = timestamp();
+    }
+    const id = randomUUID();
+    const date = timestamp();
     const inserted = await tx.run(
       "INSERT INTO care_visits(id,patient_id,organization_id,branch_id,assigned_user_id,created_by,client_request_id,request_payload,active_key,status,checked_in_at,updated_at,care_area_id) VALUES (?,?,?,?,?,?,?,?,?,'waiting',?,?,?) ON CONFLICT DO NOTHING",
       [
@@ -395,8 +437,9 @@ export async function handleVisits(tx, context) {
         "SELECT id,version,request_payload FROM care_visits WHERE organization_id=? AND created_by=? AND client_request_id=?",
         [actor.organization_id, actor.id, requestId],
       );
-      if (replay?.request_payload === requestPayload)
+      if (replay?.request_payload === requestPayload) {
         return { id: replay.id, version: replay.version, existing: true };
+      }
       fail(409, "An active visit or check-in request already exists. Refresh the queue.");
     }
     await recordEvent(
@@ -412,7 +455,9 @@ export async function handleVisits(tx, context) {
   }
 
   const match = path.match(/^\/visits\/([^/]+)(?:\/(observations|follow-ups)(?:\/([^/]+))?)?$/);
-  if (!match) return undefined;
+  if (!match) {
+    return undefined;
+  }
   const visit = await scopedVisit(tx, actor, match[1], fail);
   if (!match[2] && method === "GET") {
     permit(actor, "visits.view");
@@ -429,7 +474,9 @@ export async function handleVisits(tx, context) {
         clinicalPolicy = result.accessPolicy ?? null;
         clinicalAllowed = true;
       } catch (error) {
-        if (error.status !== 403 && error.statusCode !== 403) throw error;
+        if (error.status !== 403 && error.statusCode !== 403) {
+          throw error;
+        }
       }
     }
     const summary = await tx.get(`${operationalSelect} WHERE v.id=?`, [visit.id]);
@@ -439,7 +486,7 @@ export async function handleVisits(tx, context) {
       ? scopedParameters
       : [...scopedParameters, "unknown"];
     const followUpCategoryFilter = followUpScopes.map(() => "?").join(",");
-    if (clinicalAllowed)
+    if (clinicalAllowed) {
       await audit(
         tx,
         actor,
@@ -454,6 +501,7 @@ export async function handleVisits(tx, context) {
           scopes: scopedParameters,
         }),
       );
+    }
     const observations =
       clinicalAllowed && scopedParameters.length
         ? await tx.all(
@@ -487,26 +535,33 @@ export async function handleVisits(tx, context) {
   }
 
   if (!match[2] && method === "PATCH") {
-    if (!Number.isInteger(body.version) || body.version !== visit.version)
+    if (!Number.isInteger(body.version) || body.version !== visit.version) {
       fail(409, "This visit changed. Refresh it before continuing.");
+    }
     const assigning = Object.hasOwn(body, "assigned_user_id");
-    if (assigning && Object.hasOwn(body, "status"))
+    if (assigning && Object.hasOwn(body, "status")) {
       fail(400, "Change the assignment or status in one action, not both.");
-    let status = visit.status,
-      assignee = visit.assigned_user_id,
-      action;
+    }
+    let status = visit.status;
+    let assignee = visit.assigned_user_id;
+    let action;
     if (assigning) {
       permit(actor, "visits.manage");
-      if (visit.status !== "waiting") fail(409, "Only a waiting visit can be reassigned.");
+      if (visit.status !== "waiting") {
+        fail(409, "Only a waiting visit can be reassigned.");
+      }
       assignee = text(body.assigned_user_id, "assigned professional", 100, true);
-      if (!(await eligibleProfessional(tx, actor, assignee, visit.branch_id)))
+      if (!(await eligibleProfessional(tx, actor, assignee, visit.branch_id))) {
         fail(403, "Choose an approved professional with reviewed clinical access in this branch.");
+      }
       action = "visit.assign";
     } else {
       status = body.status;
       if (status === "cancelled") {
         permit(actor, "visits.manage");
-        if (!activeStatuses.has(visit.status)) fail(409, "Only an active visit can be cancelled.");
+        if (!activeStatuses.has(visit.status)) {
+          fail(409, "Only an active visit can be cancelled.");
+        }
       } else if (status === "in-progress" && visit.status === "waiting") {
         const result = await clinicalAccess(tx, actor, visit, "visits.document", context);
         contributionDiscipline(
@@ -523,18 +578,20 @@ export async function handleVisits(tx, context) {
             "SELECT id FROM visit_handoffs WHERE visit_id=? AND status='pending' LIMIT 1",
             [visit.id],
           )
-        )
+        ) {
           fail(409, "Resolve or withdraw the pending handoff before completing this visit.");
+        }
         if (
           await tx.get(
             "SELECT id FROM consultant_referrals WHERE visit_id=? AND kind='transfer' AND status IN ('pending','scheduled')",
             [visit.id],
           )
-        )
+        ) {
           fail(
             409,
             "Resolve or withdraw the pending consultant transfer before completing this visit.",
           );
+        }
         contributionDiscipline(
           result,
           actor,
@@ -549,10 +606,15 @@ export async function handleVisits(tx, context) {
           `SELECT e.id FROM encounters e JOIN note_versions n ON n.encounter_id=e.id WHERE e.visit_id=? AND e.patient_id=? AND e.organization_id=? AND e.branch_id=? AND e.author_id=? AND e.note_kind IN (${scopes.map(() => "?").join(",")}) AND e.status IN ('signed','amended') LIMIT 1`,
           [visit.id, visit.patient_id, actor.organization_id, visit.branch_id, actor.id, ...scopes],
         );
-        if (!signed) fail(409, "Sign a clinical note linked to this visit before completing it.");
-      } else fail(409, "This visit status transition is not available.");
-      if (body.version !== visit.version)
+        if (!signed) {
+          fail(409, "Sign a clinical note linked to this visit before completing it.");
+        }
+      } else {
+        fail(409, "This visit status transition is not available.");
+      }
+      if (body.version !== visit.version) {
         fail(409, "This visit changed. Refresh it before continuing.");
+      }
       action = "visit." + status;
     }
     const date = timestamp();
@@ -569,8 +631,9 @@ export async function handleVisits(tx, context) {
         body.version,
       ],
     );
-    if ((result.rowCount ?? result.changes) !== 1)
+    if ((result.rowCount ?? result.changes) !== 1) {
       fail(409, "This visit changed. Refresh it before continuing.");
+    }
     if (status === "cancelled") {
       const transfers = await tx.all(
         "SELECT * FROM consultant_referrals WHERE visit_id=? AND kind='transfer' AND status IN ('pending','scheduled')",
@@ -594,8 +657,9 @@ export async function handleVisits(tx, context) {
           "UPDATE visit_handoffs SET status='cancelled',pending_key=NULL,resolved_at=?,version=version+1 WHERE id=? AND version=? AND status='pending'",
           [date, handoff.id, handoff.version],
         );
-        if ((cancelled.rowCount ?? cancelled.changes) !== 1)
+        if ((cancelled.rowCount ?? cancelled.changes) !== 1) {
           fail(409, "The handoff changed. Refresh this visit before cancelling it.");
+        }
         await tx.run(
           "INSERT INTO visit_events(id,visit_id,actor_id,action,from_status,to_status,assigned_user_id,created_at) VALUES (?,?,?,?,?,?,?,?)",
           [
@@ -644,8 +708,9 @@ export async function handleVisits(tx, context) {
       ["general", "nursing"],
       fail,
     );
-    if (!body.values || typeof body.values !== "object" || Array.isArray(body.values))
+    if (!body.values || typeof body.values !== "object" || Array.isArray(body.values)) {
       fail(400, "Enter structured observation values.");
+    }
     const values = {};
     for (const [key, value] of Object.entries(body.values).sort(([a], [b]) => a.localeCompare(b))) {
       const bounds = vitalLimits[key];
@@ -655,20 +720,26 @@ export async function handleVisits(tx, context) {
         !Number.isFinite(value) ||
         value < bounds[0] ||
         value > bounds[1]
-      )
+      ) {
         fail(400, "Choose a supported vital and enter a value within its measurement range.");
+      }
       values[key] = value;
     }
-    if (!Object.keys(values).length) fail(400, "Enter at least one observation.");
+    if (!Object.keys(values).length) {
+      fail(400, "Enter at least one observation.");
+    }
     if (
       values.systolic !== undefined &&
       values.diastolic !== undefined &&
       values.systolic <= values.diastolic
-    )
+    ) {
       fail(400, "Systolic pressure must exceed diastolic pressure.");
+    }
     const date = timestamp();
     const observedTime = body.observed_at === undefined ? Date.now() : Date.parse(body.observed_at);
-    if (!Number.isFinite(observedTime)) fail(400, "Enter a valid observation time.");
+    if (!Number.isFinite(observedTime)) {
+      fail(400, "Enter a valid observation time.");
+    }
     const observedAt = new Date(observedTime).toISOString();
     const requestId =
       body.client_request_id === undefined
@@ -690,11 +761,15 @@ export async function handleVisits(tx, context) {
       payload,
       fail,
     );
-    if (replay) return replay;
-    if (visit.status !== "in-progress")
+    if (replay) {
+      return replay;
+    }
+    if (visit.status !== "in-progress") {
       fail(409, "Record observations during an in-progress visit.");
-    if (Date.parse(observedAt) > Date.now() + 60000 || observedAt < visit.checked_in_at)
+    }
+    if (Date.parse(observedAt) > Date.now() + 60000 || observedAt < visit.checked_in_at) {
       fail(400, "Observation time must fall within this visit and not in the future.");
+    }
     const id = randomUUID();
     const inserted = await tx.run(
       "INSERT INTO visit_observations(id,visit_id,author_id,client_request_id,request_payload,discipline,values_json,observed_at,created_at,observations) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
@@ -721,7 +796,9 @@ export async function handleVisits(tx, context) {
         payload,
         fail,
       );
-      if (concurrent) return concurrent;
+      if (concurrent) {
+        return concurrent;
+      }
       fail(409, "This observation request changed. Refresh the visit.");
     }
     await audit(tx, actor, "visit.observation", "allow", visit.patient_id, id, correlation);
@@ -739,7 +816,9 @@ export async function handleVisits(tx, context) {
     );
     const title = text(body.title, "follow-up task", 500, true);
     const due = Date.parse(body.due_at);
-    if (!Number.isFinite(due)) fail(400, "Choose a valid future follow-up date.");
+    if (!Number.isFinite(due)) {
+      fail(400, "Choose a valid future follow-up date.");
+    }
     const requestId =
       body.client_request_id === undefined
         ? null
@@ -754,12 +833,17 @@ export async function handleVisits(tx, context) {
       payload,
       fail,
     );
-    if (replay) return replay;
-    if (due < Date.now()) fail(400, "Choose a valid future follow-up date.");
-    if (visit.status === "waiting" || visit.status === "cancelled")
+    if (replay) {
+      return replay;
+    }
+    if (due < Date.now()) {
+      fail(400, "Choose a valid future follow-up date.");
+    }
+    if (visit.status === "waiting" || visit.status === "cancelled") {
       fail(409, "Create follow-up work during or after the clinical visit.");
-    const id = randomUUID(),
-      date = timestamp();
+    }
+    const id = randomUUID();
+    const date = timestamp();
     const inserted = await tx.run(
       "INSERT INTO visit_followups(id,visit_id,author_id,client_request_id,request_payload,discipline,title,due_at,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,'open',?,?) ON CONFLICT DO NOTHING",
       [
@@ -785,7 +869,9 @@ export async function handleVisits(tx, context) {
         payload,
         fail,
       );
-      if (concurrent) return concurrent;
+      if (concurrent) {
+        return concurrent;
+      }
       fail(409, "This follow-up request changed. Refresh the visit.");
     }
     await audit(tx, actor, "visit.followup.create", "allow", visit.patient_id, id, correlation);
@@ -800,12 +886,15 @@ export async function handleVisits(tx, context) {
       "SELECT * FROM visit_followups WHERE id=? AND visit_id=? AND author_id=?",
       [match[3], visit.id, actor.id],
     );
-    if (!task) fail(404, "Follow-up task unavailable.");
-    if (task.discipline === "unknown" && accessResult.accessPolicy?.restricted)
+    if (!task) {
+      fail(404, "Follow-up task unavailable.");
+    }
+    if (task.discipline === "unknown" && accessResult.accessPolicy?.restricted) {
       fail(
         403,
         "This historical follow-up has no confirmed category and cannot be changed through a scoped grant.",
       );
+    }
     contributionDiscipline(
       accessResult,
       actor,
@@ -813,10 +902,16 @@ export async function handleVisits(tx, context) {
       ["general", "nursing", "medication"],
       fail,
     );
-    if (!Number.isInteger(body.version) || body.version !== task.version || task.status !== "open")
+    if (
+      !Number.isInteger(body.version) ||
+      body.version !== task.version ||
+      task.status !== "open"
+    ) {
       fail(409, "This follow-up changed. Refresh it before continuing.");
-    if (!["completed", "cancelled"].includes(body.status))
+    }
+    if (!["completed", "cancelled"].includes(body.status)) {
       fail(400, "Choose completed or cancelled.");
+    }
     const result = await tx.run(
       "UPDATE visit_followups SET status=?,version=version+1,updated_at=?,resolution_reason=? WHERE id=? AND version=? AND status='open'",
       [
@@ -827,8 +922,9 @@ export async function handleVisits(tx, context) {
         body.version,
       ],
     );
-    if ((result.rowCount ?? result.changes) !== 1)
+    if ((result.rowCount ?? result.changes) !== 1) {
       fail(409, "This follow-up changed. Refresh it before continuing.");
+    }
     await audit(
       tx,
       actor,

@@ -3,20 +3,26 @@ export const emailReady = (config) =>
   !!(config.RESEND_API_KEY && config.HEALTHPASS_EMAIL_FROM && config.HEALTHPASS_AUTH_KEY);
 // Delivery happens after commit. A leased durable outbox survives provider failure and process restarts.
 export async function deliverPatientEmails(db, config, send = globalThis.fetch) {
-  if (!emailReady(config)) return;
+  if (!emailReady(config)) {
+    return;
+  }
   const now = new Date().toISOString();
   const item = await db.transaction(async (tx) => {
     const row = await tx.get(
       `SELECT o.* FROM patient_email_outbox o JOIN patient_claims c ON c.id=o.id WHERE o.sent_at IS NULL AND c.consumed_at IS NULL AND c.revoked_at IS NULL AND c.expires_at>? AND o.attempts<8 AND (o.retry_after IS NULL OR o.retry_after<=?) AND (o.lease_until IS NULL OR o.lease_until<=?) ORDER BY o.created_at,o.id LIMIT 1`,
       [now, now, now],
     );
-    if (!row) return null;
+    if (!row) {
+      return null;
+    }
     return await tx.get(
       `UPDATE patient_email_outbox SET lease_until=?,attempts=attempts+1 WHERE id=? AND sent_at IS NULL AND (lease_until IS NULL OR lease_until<=?) RETURNING *`,
       [new Date(Date.now() + 60000).toISOString(), row.id, now],
     );
   });
-  if (!item) return;
+  if (!item) {
+    return;
+  }
   let error = null;
   try {
     const message = JSON.parse(revealSecret(item.encrypted_payload, config.HEALTHPASS_AUTH_KEY));
@@ -35,7 +41,9 @@ export async function deliverPatientEmails(db, config, send = globalThis.fetch) 
       }),
       signal: AbortSignal.timeout(5000),
     });
-    if (!response.ok) error = `provider_${response.status}`;
+    if (!response.ok) {
+      error = `provider_${response.status}`;
+    }
   } catch {
     error = "delivery_unavailable";
   }

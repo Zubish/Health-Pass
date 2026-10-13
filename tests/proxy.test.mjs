@@ -20,7 +20,9 @@ test("compressed role settings survive both proxy HTTP hops with session and req
   let received;
   const origin = createServer(async (req, res) => {
     let body = "";
-    for await (const chunk of req) body += chunk;
+    for await (const chunk of req) {
+      body += chunk;
+    }
     received = { headers: req.headers, body };
     const encoded = brotliCompressSync(Buffer.from(JSON.stringify(payload)));
     res.writeHead(201, {
@@ -36,7 +38,9 @@ test("compressed role settings survive both proxy HTTP hops with session and req
   const proxy = createServer(async (req, res) => {
     try {
       let body = "";
-      for await (const chunk of req) body += chunk;
+      for await (const chunk of req) {
+        body += chunk;
+      }
       const request = new Request("http://proxy.example/workspace/settings", {
         method: "POST",
         body,

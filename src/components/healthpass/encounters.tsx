@@ -1,4 +1,4 @@
-import { scopeNames } from "./role-management";
+import { scopeNames } from "@/lib/healthpass-role-types";
 import { useBlocker } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Stethoscope } from "lucide-react";
@@ -27,15 +27,15 @@ export function NoteEditor({
   onSave: (note: Note, operation: string, reason?: string, kind?: string) => void;
 }) {
   const [initial] = useState<Note>(() =>
-      encounter === "new"
-        ? { ...blank }
-        : (Object.fromEntries(
-            Object.keys(blank).map((key) => [key, encounter[key as keyof Note]]),
-          ) as Note),
-    ),
-    [note, setNote] = useState<Note>(initial),
-    [reason, setReason] = useState(""),
-    [discard, setDiscard] = useState(false);
+    encounter === "new"
+      ? { ...blank }
+      : (Object.fromEntries(
+          Object.keys(blank).map((key) => [key, encounter[key as keyof Note]]),
+        ) as Note),
+  );
+  const [note, setNote] = useState<Note>(initial);
+  const [reason, setReason] = useState("");
+  const [discard, setDiscard] = useState(false);
   const [kind, setKind] = useState(
     encounter === "new" ? scopes[0] : (encounter.note_kind ?? "general"),
   );
@@ -48,7 +48,9 @@ export function NoteEditor({
       busy || (dirty && !window.confirm("Leave this page? Unsaved note changes will be lost.")),
   });
   useEffect(() => {
-    if (!dirty && !busy) return;
+    if (!dirty && !busy) {
+      return;
+    }
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
@@ -57,9 +59,14 @@ export function NoteEditor({
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty, busy]);
   function requestClose() {
-    if (busy) return;
-    if (dirty) setDiscard(true);
-    else onClose();
+    if (busy) {
+      return;
+    }
+    if (dirty) {
+      setDiscard(true);
+    } else {
+      onClose();
+    }
   }
   return (
     <Modal
@@ -104,7 +111,9 @@ export function NoteEditor({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (busy) return;
+          if (busy) {
+            return;
+          }
           onSave(note, signed ? "amend" : "save", reason, kind);
         }}
       >

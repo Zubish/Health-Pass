@@ -42,13 +42,19 @@ export function PatientLinking() {
     let current = true;
     careApi("/patient-link-invitations")
       .then((data) => {
-        if (current) setInvitations(data.invitations);
+        if (current) {
+          setInvitations(data.invitations);
+        }
       })
       .catch((e) => {
-        if (current) setError(e.message);
+        if (current) {
+          setError(e.message);
+        }
       })
       .finally(() => {
-        if (current) setLoading(false);
+        if (current) {
+          setLoading(false);
+        }
       });
     return () => {
       current = false;
@@ -220,7 +226,9 @@ export function PatientLinking() {
                 onClick={() =>
                   void action(async () => {
                     await careApi(`/patient-link-invitations/${i.id}/revoke`, "POST", {});
-                    if (issued?.invitation.id === i.id) setIssued(null);
+                    if (issued?.invitation.id === i.id) {
+                      setIssued(null);
+                    }
                     await load();
                   })
                 }
@@ -264,7 +272,9 @@ export function FacilityLinking({
     <Modal
       title="Link an existing HealthPass account"
       onClose={() => {
-        if (!busy) onClose();
+        if (!busy) {
+          onClose();
+        }
       }}
     >
       <p className="hp-muted">

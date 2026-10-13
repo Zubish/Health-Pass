@@ -10,6 +10,7 @@ Public app: **https://health-pass-psi.vercel.app/**. Use this stable address for
 - [Patient linking and outpatient visit workflow](docs/care-workflows.md).
 - [First-slice implementation, setup and verification](docs/foundation.md).
 - [Account choice, facility workspaces and branches](docs/account-workspaces.md).
+- [Code map, readability conventions and verification commands](docs/code-maintenance.md).
 - `/` — product introduction.
 - `/workspace` — patient/facility sign-in, registry, charts, encounters, sharing and audit.
 

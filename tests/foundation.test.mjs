@@ -29,7 +29,9 @@ async function fixture() {
         }),
       );
       const set = response.headers.get("set-cookie");
-      if (set) cookie = set.split(";")[0];
+      if (set) {
+        cookie = set.split(";")[0];
+      }
       return { status: response.status, data: await response.json() };
     };
   }
@@ -57,8 +59,8 @@ const note = {
 test("routine care: durable drafts, conflicts, signing, patient release and immutable amendments", async () => {
   const { db, login } = await fixture();
   try {
-    const clinician = await login("doctor@healthpass.test"),
-      patient = await login("patient@healthpass.test");
+    const clinician = await login("doctor@healthpass.test");
+    const patient = await login("patient@healthpass.test");
     const { data: created } = await clinician("/encounters", "POST", {
       patient_id: "patient-ade",
       ...note,
@@ -136,11 +138,11 @@ test("scope: MFA, receptionist/admin denial, tenant tampering, consent revocatio
     const unverified = client();
     await unverified("/auth/login", "POST", { email: "doctor@healthpass.test", password });
     assert.equal((await unverified("/patients")).status, 403);
-    const clinician = await login("doctor@healthpass.test"),
-      partner = await login("ibadan@healthpass.test"),
-      patient = await login("patient@healthpass.test"),
-      reception = await login("reception@healthpass.test"),
-      admin = await login("admin@healthpass.test");
+    const clinician = await login("doctor@healthpass.test");
+    const partner = await login("ibadan@healthpass.test");
+    const patient = await login("patient@healthpass.test");
+    const reception = await login("reception@healthpass.test");
+    const admin = await login("admin@healthpass.test");
     assert.equal((await clinician("/patients/patient-tunde")).status, 403);
     assert.equal((await patient("/patients/patient-tunde")).status, 403);
     assert.equal((await reception("/patients/patient-ade")).status, 403);
@@ -231,13 +233,13 @@ test("identity, CSRF, unknown history, shared phones, logout and malformed input
       400,
     );
     const first = await doctor("/patients", "POST", {
-        name: "Synthetic person",
-        phone: "shared-phone",
-      }),
-      second = await doctor("/patients", "POST", {
-        name: "Synthetic person",
-        phone: "shared-phone",
-      });
+      name: "Synthetic person",
+      phone: "shared-phone",
+    });
+    const second = await doctor("/patients", "POST", {
+      name: "Synthetic person",
+      phone: "shared-phone",
+    });
     assert.notEqual(first.data.id, second.data.id);
     const chart = (await doctor(`/patients/${first.data.id}`)).data;
     assert.equal(chart.patient.dob, null);
@@ -274,8 +276,8 @@ test("identity, CSRF, unknown history, shared phones, logout and malformed input
 test("concurrent writes cannot silently overwrite drafts or duplicate signing", async () => {
   const { db, login } = await fixture();
   try {
-    const doctor = await login("doctor@healthpass.test"),
-      { data } = await doctor("/encounters", "POST", { patient_id: "patient-ade", ...note });
+    const doctor = await login("doctor@healthpass.test");
+    const { data } = await doctor("/encounters", "POST", { patient_id: "patient-ade", ...note });
     const saves = await Promise.all([
       doctor(`/encounters/${data.id}`, "PATCH", { ...note, plan: "A", version: 1 }),
       doctor(`/encounters/${data.id}`, "PATCH", { ...note, plan: "B", version: 1 }),
@@ -331,8 +333,9 @@ test("authenticator secrets are encrypted and a code cannot authenticate twice",
           body: JSON.stringify(body),
         }),
       );
-      if (response.headers.has("set-cookie"))
+      if (response.headers.has("set-cookie")) {
         cookie = response.headers.get("set-cookie").split(";")[0];
+      }
       return { status: response.status, data: await response.json() };
     }
     await call("/auth/login", { email: "doctor@healthpass.test", password });
@@ -341,8 +344,8 @@ test("authenticator secrets are encrypted and a code cannot authenticate twice",
       401,
       "no empty-secret bypass",
     );
-    const setup = await call("/auth/mfa/setup", {}),
-      code = totp(setup.data.secret);
+    const setup = await call("/auth/mfa/setup", {});
+    const code = totp(setup.data.secret);
     const stored = await db.transaction((tx) =>
       tx.get("SELECT pending_totp FROM users WHERE id='doctor-lagos'"),
     );

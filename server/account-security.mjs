@@ -32,54 +32,65 @@ export function signinContext(request) {
   };
 }
 export async function recordSignin(tx, request, headers, secure, sessionToken) {
-  const s = await tx.get("SELECT * FROM sessions WHERE token_hash=?", [hash(sessionToken)]);
-  if (!s) return;
-  const info = signinContext(request),
-    token = info.device || randomBytes(32).toString("hex");
+  const session = await tx.get("SELECT * FROM sessions WHERE token_hash=?", [hash(sessionToken)]);
+  if (!session) {
+    return;
+  }
+  const signInContext = signinContext(request);
+  const token = signInContext.device || randomBytes(32).toString("hex");
   let device = await tx.get("SELECT * FROM login_devices WHERE user_id=? AND device_hash=?", [
-    s.user_id,
+    session.user_id,
     hash(token),
   ]);
   const previous = await tx.get(
     "SELECT country FROM signin_events WHERE user_id=? AND action='signed_in' ORDER BY created_at DESC LIMIT 1",
-    [s.user_id],
+    [session.user_id],
   );
   const risk =
     [
       !device && previous ? "new_device" : null,
-      previous?.country && info.country && previous.country !== info.country
+      previous?.country && signInContext.country && previous.country !== signInContext.country
         ? "country_changed"
         : null,
     ]
       .filter(Boolean)
       .join(",") || "normal";
-  const iphash = info.ip ? hash("healthpass-ip:" + info.ip) : null;
+  const ipHash = signInContext.ip ? hash("healthpass-ip:" + signInContext.ip) : null;
   if (!device) {
     device = { id: randomUUID() };
     await tx.run(
       "INSERT INTO login_devices(id,user_id,device_hash,device_label,country,ip_hash,created_at,last_seen_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(user_id,device_hash) DO NOTHING",
-      [device.id, s.user_id, hash(token), info.label, info.country, iphash, now(), now()],
+      [
+        device.id,
+        session.user_id,
+        hash(token),
+        signInContext.label,
+        signInContext.country,
+        ipHash,
+        now(),
+        now(),
+      ],
     );
     device = await tx.get("SELECT id FROM login_devices WHERE user_id=? AND device_hash=?", [
-      s.user_id,
+      session.user_id,
       hash(token),
     ]);
   }
   await tx.run(
     "UPDATE login_devices SET device_label=?,country=?,ip_hash=?,last_seen_at=? WHERE id=?",
-    [info.label, info.country, iphash, now(), device.id],
+    [signInContext.label, signInContext.country, ipHash, now(), device.id],
   );
-  await tx.run("UPDATE sessions SET device_id=? WHERE id=?", [device.id, s.id]);
+  await tx.run("UPDATE sessions SET device_id=? WHERE id=?", [device.id, session.id]);
   await tx.run(
     "INSERT INTO signin_events(id,user_id,device_id,action,device_label,country,ip_hash,risk,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
     [
       randomUUID(),
-      s.user_id,
+      session.user_id,
       device.id,
       "signed_in",
-      info.label,
-      info.country,
-      iphash,
+      signInContext.label,
+      signInContext.country,
+      ipHash,
       risk,
       now(),
     ],
@@ -89,10 +100,12 @@ export async function recordSignin(tx, request, headers, secure, sessionToken) {
     `hp_device=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${secure ? "; Secure" : ""}`,
   );
 }
-export async function handleAccountSecurity(tx, c) {
-  const { path, method, actor, body, fail } = c;
-  if (!path.startsWith("/account/security")) return;
-  c.strong(actor);
+export async function handleAccountSecurity(tx, context) {
+  const { path, method, actor, body, fail } = context;
+  if (!path.startsWith("/account/security")) {
+    return;
+  }
+  context.strong(actor);
   const events = () =>
     tx.all(
       "SELECT id,action,device_label,country,risk,created_at,reviewed_at FROM signin_events WHERE user_id=? ORDER BY created_at DESC LIMIT 100",
@@ -123,8 +136,9 @@ export async function handleAccountSecurity(tx, c) {
     };
   }
   if (path === "/account/security" && method === "PATCH") {
-    if (typeof body.eight_hour_limit !== "boolean")
+    if (typeof body.eight_hour_limit !== "boolean") {
       fail(400, "Choose whether to enable the eight-hour session limit.");
+    }
     await tx.run("UPDATE users SET eight_hour_limit=? WHERE id=?", [
       Number(body.eight_hour_limit),
       actor.id,
@@ -133,20 +147,21 @@ export async function handleAccountSecurity(tx, c) {
       const sessions = await tx.all("SELECT id,created_at FROM sessions WHERE user_id=?", [
         actor.id,
       ]);
-      for (const s of sessions)
+      for (const session of sessions) {
         await tx.run("UPDATE sessions SET expires_at=? WHERE id=?", [
-          new Date(Date.parse(s.created_at) + 30 * 86400000).toISOString(),
-          s.id,
+          new Date(Date.parse(session.created_at) + 30 * 86400000).toISOString(),
+          session.id,
         ]);
+      }
     }
-    await c.audit(
+    await context.audit(
       tx,
       actor,
       "security.session_limit.changed",
       "allow",
       null,
       actor.id,
-      c.correlation,
+      context.correlation,
       null,
       JSON.stringify({ enabled: body.eight_hour_limit }),
     );
@@ -154,14 +169,24 @@ export async function handleAccountSecurity(tx, c) {
   }
   const revoke = path.match(/^\/account\/security\/sessions\/([^/]+)\/revoke$/);
   if (revoke && method === "POST") {
-    const s = await tx.get("SELECT id FROM sessions WHERE id=? AND user_id=?", [
+    const session = await tx.get("SELECT id FROM sessions WHERE id=? AND user_id=?", [
       revoke[1],
       actor.id,
     ]);
-    if (!s) fail(404, "Session unavailable.");
-    await tx.run("DELETE FROM sessions WHERE id=? AND user_id=?", [s.id, actor.id]);
-    await c.audit(tx, actor, "security.session.revoked", "allow", null, s.id, c.correlation);
-    return { revoked: true, current: s.id === actor.session_id };
+    if (!session) {
+      fail(404, "Session unavailable.");
+    }
+    await tx.run("DELETE FROM sessions WHERE id=? AND user_id=?", [session.id, actor.id]);
+    await context.audit(
+      tx,
+      actor,
+      "security.session.revoked",
+      "allow",
+      null,
+      session.id,
+      context.correlation,
+    );
+    return { revoked: true, current: session.id === actor.session_id };
   }
   const review = path.match(/^\/account\/security\/events\/([^/]+)\/review$/);
   if (review && method === "POST") {
@@ -170,8 +195,9 @@ export async function handleAccountSecurity(tx, c) {
         review[1],
         actor.id,
       ]))
-    )
+    ) {
       fail(404, "Sign-in event unavailable.");
+    }
     await tx.run("UPDATE signin_events SET reviewed_at=? WHERE id=? AND user_id=?", [
       now(),
       review[1],

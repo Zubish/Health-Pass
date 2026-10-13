@@ -5,8 +5,9 @@ import { randomUUID } from "node:crypto";
 export async function openTestDatabase() {
   if (process.env.HEALTHPASS_TEST_ENGINE === "postgres-live") {
     const connection = new URL(process.env.HEALTHPASS_TEST_POSTGRES_URL);
-    if (!["localhost", "127.0.0.1", "[::1]"].includes(connection.hostname))
+    if (!["localhost", "127.0.0.1", "[::1]"].includes(connection.hostname)) {
       throw new Error("Live integration checks require an isolated local PostgreSQL server.");
+    }
     const { Pool } = await import("pg");
     const admin = new Pool({ connectionString: connection.toString() });
     const name = "hp_test_" + randomUUID().replaceAll("-", "");
@@ -22,8 +23,9 @@ export async function openTestDatabase() {
       },
     };
   }
-  if (process.env.HEALTHPASS_TEST_ENGINE !== "postgres")
+  if (process.env.HEALTHPASS_TEST_ENGINE !== "postgres") {
     return openDatabase({ HEALTHPASS_SQLITE_PATH: ":memory:" });
+  }
   const { PGlite } = await import("@electric-sql/pglite");
   const pg = new PGlite();
   let tail = Promise.resolve();

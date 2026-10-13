@@ -32,7 +32,9 @@ function activityLabel(action: string) {
     "account · security · sessions · revoke": "Session signed out",
     "account · security · events · review": "Sign-in reviewed",
   };
-  if (labels[action]) return labels[action];
+  if (labels[action]) {
+    return labels[action];
+  }
   const words: Record<string, string> = {
     auth: "Account",
     mfa: "Authenticator",
@@ -57,10 +59,18 @@ function activityLabel(action: string) {
     notes: "Clinical notes",
   };
   if (action.startsWith("treatment · ")) {
-    if (action.includes("administrations")) return "Medication administration recorded";
-    if (action.endsWith("orders")) return "Medication orders";
-    if (action.endsWith("observations")) return "Observations recorded";
-    if (action.endsWith("decisions")) return "Admission or discharge decision recorded";
+    if (action.includes("administrations")) {
+      return "Medication administration recorded";
+    }
+    if (action.endsWith("orders")) {
+      return "Medication orders";
+    }
+    if (action.endsWith("observations")) {
+      return "Observations recorded";
+    }
+    if (action.endsWith("decisions")) {
+      return "Admission or discharge decision recorded";
+    }
   }
   return (
     action
@@ -71,11 +81,11 @@ function activityLabel(action: string) {
   );
 }
 export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> }) {
-  const [data, setData] = useState<Security | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [notice, setNotice] = useState(""),
-    [showAllActivity, setShowAllActivity] = useState(false);
+  const [data, setData] = useState<Security | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [showAllActivity, setShowAllActivity] = useState(false);
   const load = useCallback(async () => setData(await careApi<Security>("/account/security")), []);
   useEffect(() => {
     void load().catch((e) => setError(e.message));
@@ -163,7 +173,9 @@ export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> })
                         "POST",
                         {},
                       );
-                      if (result.current) await onLogout();
+                      if (result.current) {
+                        await onLogout();
+                      }
                     })
                   }
                 >

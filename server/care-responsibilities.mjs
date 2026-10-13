@@ -14,15 +14,18 @@ async function candidate(tx, userId, organizationId, branchId) {
       userId,
       organizationId,
     ]));
-  if (!membership || (membership.branch_id && membership.branch_id !== branchId)) return null;
+  if (!membership || (membership.branch_id && membership.branch_id !== branchId)) {
+    return null;
+  }
   if (
     membership.branch_id &&
     !(await tx.get("SELECT id FROM branches WHERE id=? AND organization_id=? AND active=1", [
       membership.branch_id,
       organizationId,
     ]))
-  )
+  ) {
     return null;
+  }
   user.organization_id = organizationId;
   user.branch_id = membership.branch_id ?? null;
   await resolveMembership(tx, membership, user);
@@ -33,11 +36,12 @@ async function candidate(tx, userId, organizationId, branchId) {
     ["careteam.view", "records.view", "notes.create", "notes.sign"].some(
       (p) => !hasPermission(user, p),
     )
-  )
+  ) {
     return null;
+  }
   return user;
 }
-export async function handleCareResponsibilities(tx, c) {
+export async function handleCareResponsibilities(tx, context) {
   const {
     actor,
     path,
@@ -52,16 +56,22 @@ export async function handleCareResponsibilities(tx, c) {
     audit,
     correlation,
     limit,
-  } = c;
-  if (!path.startsWith("/care-responsibilities")) return undefined;
+  } = context;
+  if (!path.startsWith("/care-responsibilities")) {
+    return undefined;
+  }
   strong(actor);
   const patient = !!actor.patient_id && !actor.organization_id;
   const manage = () => {
     permit(actor, "careteam.manage");
-    if (actor.supportAccess) fail(403, "Support access does not manage clinical responsibility.");
+    if (actor.supportAccess) {
+      fail(403, "Support access does not manage clinical responsibility.");
+    }
   };
   const view = () => {
-    if (!patient && !hasPermission(actor, "careteam.manage")) permit(actor, "careteam.view");
+    if (!patient && !hasPermission(actor, "careteam.manage")) {
+      permit(actor, "careteam.view");
+    }
   };
   if (
     !patient &&
@@ -70,15 +80,20 @@ export async function handleCareResponsibilities(tx, c) {
       actor.branch_id,
       actor.organization_id,
     ]))
-  )
+  ) {
     fail(403, "Your branch is unavailable. Contact your administrator.");
+  }
   const authority = async (consultant, patientId) => {
-    if (!consultant) return false;
+    if (!consultant) {
+      return false;
+    }
     try {
       const result = await careAuthority(tx, consultant, patientId, true);
       return result.accessPolicy.contributionScopes.includes("general");
     } catch (error) {
-      if ([403, 404].includes(error.status)) return false;
+      if ([403, 404].includes(error.status)) {
+        return false;
+      }
       throw error;
     }
   };
@@ -89,23 +104,28 @@ export async function handleCareResponsibilities(tx, c) {
       actor.organization_id,
       branchId,
     );
-    if (!consultant)
+    if (!consultant) {
       fail(
         409,
         "Choose an active consultant with reviewed general medical scope and care-team, documentation and signing permissions in this branch.",
       );
-    if (!(await authority(consultant, patientId)))
+    }
+    if (!(await authority(consultant, patientId))) {
       fail(
         409,
         "The consultant needs current patient permission to contribute before assignment. Assignment cannot grant record access.",
       );
-    if (body.specialty_confirmed !== true)
+    }
+    if (body.specialty_confirmed !== true) {
       fail(400, "Confirm the consultant’s reviewed credentials cover the selected service.");
+    }
     return consultant;
   };
   const fields = (defaults = {}) => {
     const setting = body.care_setting ?? defaults.care_setting ?? "inpatient";
-    if (!["inpatient", "ongoing"].includes(setting)) fail(400, "Choose inpatient or ongoing care.");
+    if (!["inpatient", "ongoing"].includes(setting)) {
+      fail(400, "Choose inpatient or ongoing care.");
+    }
     return {
       service: text(body.service ?? defaults.service, "service", 80, true),
       ward: text(body.ward ?? defaults.ward ?? "", "ward", 100),
@@ -168,15 +188,18 @@ export async function handleCareResponsibilities(tx, c) {
     const consultants = [];
     for (const m of members) {
       const branch = branches.find((b) => !m.branch_id || m.branch_id === b.id);
-      if (!branch) continue;
+      if (!branch) {
+        continue;
+      }
       const user = await candidate(tx, m.user_id, actor.organization_id, branch.id);
-      if (user)
+      if (user) {
         consultants.push({
           id: user.id,
           name: user.name,
           branch_id: user.branch_id,
           role_names: user.jobRoles.map((r) => r.name),
         });
+      }
     }
     const admissions = await tx.all(
       "SELECT patient_id,branch_id FROM care_admissions WHERE organization_id=? AND status='active'",
@@ -193,15 +216,16 @@ export async function handleCareResponsibilities(tx, c) {
   if (path === "/care-responsibilities" && method === "GET") {
     view();
     const requested = searchParams.get("patient_id");
-    const offset = Number(searchParams.get("offset") ?? 0),
-      status = searchParams.get("status");
+    const offset = Number(searchParams.get("offset") ?? 0);
+    const status = searchParams.get("status");
     if (
       !Number.isInteger(offset) ||
       offset < 0 ||
       offset > 100000 ||
       (status && !["active", "ended"].includes(status))
-    )
+    ) {
       fail(400, "Invalid responsibility page or status.");
+    }
     const areaScope = careAreaPatientPredicate(actor);
     const rows = await tx.all(
       `SELECT r.*,p.name AS patient_name,p.healthpass_id,u.name AS consultant_name,o.name AS facility_name,b.name AS branch_name,ar.name AS current_area_name FROM care_responsibilities r JOIN patients p ON p.id=r.patient_id JOIN users u ON u.id=r.consultant_id JOIN organizations o ON o.id=r.organization_id JOIN branches b ON b.id=r.branch_id LEFT JOIN care_admissions ca ON ca.id=r.admission_id LEFT JOIN care_areas ar ON ar.id=ca.care_area_id WHERE ${patient ? "r.patient_id=?" : "r.organization_id=? AND (CAST(? AS TEXT) IS NULL OR r.branch_id=?)"} AND (CAST(? AS TEXT) IS NULL OR r.patient_id=?) AND (CAST(? AS TEXT) IS NULL OR r.status=?) AND (${patient ? "1=1" : areaScope.sql}) ORDER BY r.updated_at DESC,r.id LIMIT 51 OFFSET ?`,
@@ -249,20 +273,22 @@ export async function handleCareResponsibilities(tx, c) {
   if (path === "/care-responsibilities" && method === "POST") {
     manage();
     limit(`care-responsibility:${actor.id}`, 30);
-    const patientId = text(body.patient_id, "patient", 100, true),
-      branchId = text(body.branch_id, "branch", 100, true),
-      requestKey = hash(
-        actor.id + ":" + text(body.client_request_id, "request identifier", 100, true),
-      );
-    if (actor.branch_id && actor.branch_id !== branchId)
+    const patientId = text(body.patient_id, "patient", 100, true);
+    const branchId = text(body.branch_id, "branch", 100, true);
+    const requestKey = hash(
+      actor.id + ":" + text(body.client_request_id, "request identifier", 100, true),
+    );
+    if (actor.branch_id && actor.branch_id !== branchId) {
       fail(403, "Assign care only within your current branch.");
+    }
     if (
       !(await tx.get(
         "SELECT p.patient_id FROM patient_links p JOIN branch_patient_links bp ON bp.patient_id=p.patient_id JOIN branches b ON b.id=bp.branch_id WHERE p.patient_id=? AND p.organization_id=? AND b.organization_id=? AND b.id=? AND b.active=1",
         [patientId, actor.organization_id, actor.organization_id, branchId],
       ))
-    )
+    ) {
       fail(404, "Choose a patient registered at this facility branch.");
+    }
     // Authorise local registration before serialising responsibility changes on the patient.
     await tx.run("UPDATE patients SET name=name WHERE id=?", [patientId]);
     if (
@@ -270,43 +296,48 @@ export async function handleCareResponsibilities(tx, c) {
         branchId,
         actor.organization_id,
       ]))
-    )
+    ) {
       fail(409, "This branch changed. Refresh before assigning.");
-    const values = fields(),
-      payloadHash = hash(
-        JSON.stringify({ patientId, branchId, consultant_id: body.consultant_id, ...values }),
-      ),
-      previous = await tx.get("SELECT * FROM care_responsibilities WHERE request_key=?", [
-        requestKey,
-      ]);
+    }
+    const values = fields();
+    const payloadHash = hash(
+      JSON.stringify({ patientId, branchId, consultant_id: body.consultant_id, ...values }),
+    );
+    const previous = await tx.get("SELECT * FROM care_responsibilities WHERE request_key=?", [
+      requestKey,
+    ]);
     if (previous) {
-      if (previous.request_payload_hash !== payloadHash)
+      if (previous.request_payload_hash !== payloadHash) {
         fail(409, "The assignment details changed. Use a new request identifier.");
+      }
       return { ...resultFor(previous), replayed: true };
     }
     if (
       await tx.get("SELECT id FROM care_responsibilities WHERE active_key=?", [
         actor.organization_id + ":" + patientId,
       ])
-    )
+    ) {
       fail(
         409,
         "This patient already has a responsible consultant. Manage the existing assignment under Care responsibility; end any legacy unlinked assignment before creating an admission-linked one.",
       );
+    }
     const admission = await tx.get(
       "SELECT * FROM care_admissions WHERE patient_id=? AND organization_id=? AND branch_id=? AND status='active'",
       [patientId, actor.organization_id, branchId],
     );
-    if (!admission || !careAreaAllows(actor, admission.care_area_id))
+    if (!admission || !careAreaAllows(actor, admission.care_area_id)) {
       fail(
         409,
         "Open an inpatient or observation episode in this branch before assigning a consultant. Outpatients use consultant referrals.",
       );
-    if (values.care_setting !== "inpatient")
+    }
+    if (values.care_setting !== "inpatient") {
       fail(400, "New care-team assignments are only for inpatient or observation episodes.");
-    const consultant = await permittedLead(patientId, branchId),
-      id = randomUUID(),
-      created = now();
+    }
+    const consultant = await permittedLead(patientId, branchId);
+    const id = randomUUID();
+    const created = now();
     await tx.run(
       "INSERT INTO care_responsibilities(id,patient_id,organization_id,branch_id,consultant_id,service,ward,care_setting,specialty_review_reference,active_key,request_key,request_payload_hash,created_by,created_at,updated_at,admission_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
       [
@@ -339,17 +370,24 @@ export async function handleCareResponsibilities(tx, c) {
       "SELECT patient_id,branch_id FROM care_responsibilities WHERE id=? AND organization_id=?",
       [match[1], actor.organization_id],
     );
-    if (!preliminary || (actor.branch_id && preliminary.branch_id !== actor.branch_id))
+    if (!preliminary || (actor.branch_id && preliminary.branch_id !== actor.branch_id)) {
       fail(404, "Responsibility unavailable.");
+    }
     await tx.run("UPDATE patients SET name=name WHERE id=?", [preliminary.patient_id]);
     const row = await tx.get(
       "SELECT * FROM care_responsibilities WHERE id=? AND organization_id=?",
       [match[1], actor.organization_id],
     );
-    if (actor.branch_id && row.branch_id !== actor.branch_id)
+    if (actor.branch_id && row.branch_id !== actor.branch_id) {
       fail(404, "Responsibility unavailable in your branch.");
-    if (row.status !== "active" || !Number.isInteger(body.version) || body.version !== row.version)
+    }
+    if (
+      row.status !== "active" ||
+      !Number.isInteger(body.version) ||
+      body.version !== row.version
+    ) {
       fail(409, "Responsibility changed. Refresh before trying again.");
+    }
     const reason = text(body.reason, "change reason", 500, true);
     let lead;
     if (body.action === "end") {
@@ -364,18 +402,20 @@ export async function handleCareResponsibilities(tx, c) {
         !(await tx.get("SELECT id FROM care_admissions WHERE id=? AND status='active'", [
           row.admission_id,
         ]))
-      )
+      ) {
         fail(
           409,
           "Reassignment requires an active admission episode. Legacy ongoing responsibilities may be ended; outpatient referrals are separate.",
         );
+      }
       if (
         !(await tx.get("SELECT id FROM branches WHERE id=? AND organization_id=? AND active=1", [
           row.branch_id,
           actor.organization_id,
         ]))
-      )
+      ) {
         fail(409, "This branch is inactive. End the responsibility instead of reassigning.");
+      }
       lead = await permittedLead(row.patient_id, row.branch_id);
       const values = fields(row);
       await tx.run(
@@ -390,7 +430,9 @@ export async function handleCareResponsibilities(tx, c) {
           row.id,
         ],
       );
-    } else fail(400, "Choose reassign or end.");
+    } else {
+      fail(400, "Choose reassign or end.");
+    }
     const updated = await tx.get("SELECT * FROM care_responsibilities WHERE id=?", [row.id]);
     await recordEvent(updated, lead, body.action === "end" ? "ended" : "reassigned", reason);
     return resultFor(updated);

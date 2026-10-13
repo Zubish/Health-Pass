@@ -13,18 +13,20 @@ if (
   !values["user-id"] ||
   !values["review-reference"] ||
   (!values.revoke && !values["confirm-zed-tech-employment"])
-)
+) {
   throw new Error(
     "Use --user-id ID --review-reference REFERENCE and --confirm-zed-tech-employment, or --revoke. This is an operator-only identity review.",
   );
+}
 const db = await openDatabase();
 try {
   await db.transaction(async (tx) => {
     const user = await tx.get("SELECT id,patient_id,account_scope FROM users WHERE id=?", [
       values["user-id"],
     ]);
-    if (!user || user.patient_id || user.account_scope === "patient")
+    if (!user || user.patient_id || user.account_scope === "patient") {
       throw new Error("Choose an existing professional identity.");
+    }
     await tx.run("UPDATE users SET provider_support_verified=? WHERE id=?", [
       values.revoke ? 0 : 1,
       user.id,

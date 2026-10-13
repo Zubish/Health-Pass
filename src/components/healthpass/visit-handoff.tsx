@@ -12,12 +12,6 @@ const categories: Record<string, string> = {
   nursing: "Nursing care",
   medication: "Medication review",
 };
-const statusNames = {
-  pending: "Pending",
-  accepted: "Accepted",
-  declined: "Declined",
-  cancelled: "Withdrawn / cancelled",
-};
 const touchButton = { minHeight: 44, maxWidth: "100%", whiteSpace: "normal" as const };
 const empty: VisitHandoffState = {
   handoffs: [],
@@ -68,10 +62,14 @@ export function VisitHandoff({
         }
       })
       .catch((e) => {
-        if (current) setError(e.message);
+        if (current) {
+          setError(e.message);
+        }
       })
       .finally(() => {
-        if (current) setLoading(false);
+        if (current) {
+          setLoading(false);
+        }
       });
     return () => {
       current = false;
@@ -95,7 +93,7 @@ export function VisitHandoff({
           ? "This saved request has already been resolved. Review its history before requesting another handoff."
           : message,
       );
-    } catch (e) {
+    } catch {
       setNotice(
         requestedId
           ? "The request was acknowledged. Refresh to check its current status."
@@ -107,8 +105,9 @@ export function VisitHandoff({
     }
   }
   function reviewChart() {
-    if (onOpenChart) onOpenChart(visit.patient_id);
-    else
+    if (onOpenChart) {
+      onOpenChart(visit.patient_id);
+    } else {
       void navigate({
         search: {
           tab: "patients",
@@ -117,6 +116,7 @@ export function VisitHandoff({
           branch: visit.branch_id,
         },
       });
+    }
   }
   async function create() {
     setBusy(true);
@@ -124,8 +124,9 @@ export function VisitHandoff({
     setNotice("");
     try {
       const signature = JSON.stringify({ visit: visit.id, recipient, source });
-      if (!request.current || request.current.signature !== signature)
+      if (!request.current || request.current.signature !== signature) {
         request.current = { signature, id: crypto.randomUUID(), version: visit.version };
+      }
       const saved = await careApi<{ id: string }>(path, "POST", {
         version: request.current.version,
         to_user_id: recipient,
@@ -157,7 +158,9 @@ export function VisitHandoff({
       withdraw:
         "Withdraw this handoff request? The current professional will remain responsible for this visit.",
     };
-    if (!window.confirm(confirmations[operation])) return;
+    if (!window.confirm(confirmations[operation])) {
+      return;
+    }
     setBusy(true);
     setError("");
     setNotice("");

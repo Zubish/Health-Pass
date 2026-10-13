@@ -37,20 +37,20 @@ type Options = {
   consultants: { id: string; name: string; branch_id: string | null; role_names: string[] }[];
 };
 export function CareResponsibilities({ me }: { me: Me }) {
-  const patient = me.role === "patient",
-    manager = me.permissions?.includes("careteam.manage") ?? false;
-  const [rows, setRows] = useState<Responsibility[]>([]),
-    [options, setOptions] = useState<Options | null>(null),
-    [editing, setEditing] = useState<Responsibility | "new" | null>(null),
-    [ending, setEnding] = useState<Responsibility | null>(null),
-    [branch, setBranch] = useState(me.branch?.id ?? ""),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [loading, setLoading] = useState(true),
-    [busy, setBusy] = useState(false),
-    [query, setQuery] = useState(""),
-    [hasMore, setHasMore] = useState(false),
-    [nextOffset, setNextOffset] = useState(0);
+  const patient = me.role === "patient";
+  const manager = me.permissions?.includes("careteam.manage") ?? false;
+  const [rows, setRows] = useState<Responsibility[]>([]);
+  const [options, setOptions] = useState<Options | null>(null);
+  const [editing, setEditing] = useState<Responsibility | "new" | null>(null);
+  const [ending, setEnding] = useState<Responsibility | null>(null);
+  const [branch, setBranch] = useState(me.branch?.id ?? "");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState("");
+  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState(0);
   const retry = useRef<{ payload: string; key: string } | null>(null);
   const refresh = useCallback(async () => {
     const [roster, directory] = await Promise.all([
@@ -60,7 +60,9 @@ export function CareResponsibilities({ me }: { me: Me }) {
     setRows(roster.responsibilities);
     setHasMore(roster.has_more);
     setNextOffset(roster.next_offset);
-    if (directory) setOptions(directory);
+    if (directory) {
+      setOptions(directory);
+    }
   }, [manager]);
   useEffect(() => {
     void refresh()
@@ -295,7 +297,9 @@ export function CareResponsibilities({ me }: { me: Me }) {
         <Modal
           title={editing === "new" ? "Assign responsible consultant" : "Update care responsibility"}
           onClose={() => {
-            if (!busy) setEditing(null);
+            if (!busy) {
+              setEditing(null);
+            }
           }}
         >
           {error && (
@@ -306,15 +310,16 @@ export function CareResponsibilities({ me }: { me: Me }) {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              const form = new FormData(e.currentTarget),
-                values = {
-                  ...Object.fromEntries(form),
-                  specialty_confirmed: form.get("specialty_confirmed") === "on",
-                };
+              const form = new FormData(e.currentTarget);
+              const values = {
+                ...Object.fromEntries(form),
+                specialty_confirmed: form.get("specialty_confirmed") === "on",
+              };
               if (editing === "new") {
                 const payload = JSON.stringify(values);
-                if (!retry.current || retry.current.payload !== payload)
+                if (!retry.current || retry.current.payload !== payload) {
                   retry.current = { payload, key: crypto.randomUUID() };
+                }
                 void change(
                   () =>
                     careApi("/care-responsibilities", "POST", {
@@ -470,7 +475,9 @@ export function CareResponsibilities({ me }: { me: Me }) {
         <Modal
           title="End consultant responsibility"
           onClose={() => {
-            if (!busy) setEnding(null);
+            if (!busy) {
+              setEnding(null);
+            }
           }}
         >
           {error && (
@@ -515,18 +522,22 @@ export function CareResponsibilities({ me }: { me: Me }) {
 }
 
 export function PatientResponsibleConsultant({ patientId }: { patientId: string }) {
-  const [rows, setRows] = useState<Responsibility[]>([]),
-    [error, setError] = useState("");
+  const [rows, setRows] = useState<Responsibility[]>([]);
+  const [error, setError] = useState("");
   useEffect(() => {
     let current = true;
     setRows([]);
     setError("");
     void careApi(`/care-responsibilities?patient_id=${encodeURIComponent(patientId)}&status=active`)
       .then((data) => {
-        if (current) setRows(data.responsibilities);
+        if (current) {
+          setRows(data.responsibilities);
+        }
       })
       .catch((e) => {
-        if (current) setError(e.message);
+        if (current) {
+          setError(e.message);
+        }
       });
     return () => {
       current = false;

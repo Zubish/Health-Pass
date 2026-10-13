@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Permission } from "./role-management";
+import type { Permission } from "@/lib/healthpass-role-types";
 export type CareArea = {
   id: string;
   name: string;
@@ -55,7 +55,9 @@ export function IndividualAccess({
             reason,
             version: member.access_policy_version ?? 1,
           }).then((ok) => {
-            if (ok) setReason("");
+            if (ok) {
+              setReason("");
+            }
           });
         }}
       >

@@ -22,12 +22,18 @@ async function getServerEntry(): Promise<ServerEntry> {
 // h3 swallows in-handler throws into a normal 500 Response with body
 // {"unhandled":true,"message":"HTTPError"} — try/catch alone never fires for those.
 async function normalizeCatastrophicSsrResponse(response: Response): Promise<Response> {
-  if (response.status < 500) return response;
+  if (response.status < 500) {
+    return response;
+  }
   const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) return response;
+  if (!contentType.includes("application/json")) {
+    return response;
+  }
 
   const body = await response.clone().text();
-  if (!isH3SwallowedErrorBody(body)) return response;
+  if (!isH3SwallowedErrorBody(body)) {
+    return response;
+  }
 
   console.error(consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`));
   return new Response(renderErrorPage(), {
@@ -52,11 +58,12 @@ export default {
         const origin =
           (env as { HEALTHPASS_API_ORIGIN?: string } | undefined)?.HEALTHPASS_API_ORIGIN ??
           process.env.HEALTHPASS_API_ORIGIN;
-        if (!origin)
+        if (!origin) {
           return Response.json(
             { error: "The care workspace is awaiting its API connection." },
             { status: 503, headers: { "cache-control": "no-store" } },
           );
+        }
         const target = new URL(request.url);
         const upstream = new URL(target.pathname + target.search, origin);
         const headers = new Headers(request.headers);
@@ -66,16 +73,21 @@ export default {
         const originSecret =
           (env as { HEALTHPASS_ORIGIN_SECRET?: string } | undefined)?.HEALTHPASS_ORIGIN_SECRET ??
           process.env.HEALTHPASS_ORIGIN_SECRET;
-        if (originSecret) headers.set("x-healthpass-origin-secret", originSecret);
+        if (originSecret) {
+          headers.set("x-healthpass-origin-secret", originSecret);
+        }
         headers.delete("x-healthpass-country");
         headers.delete("x-healthpass-client-ip");
         const country = process.env.VERCEL ? request.headers.get("x-vercel-ip-country") : null;
-        if (country && /^[A-Z]{2}$/.test(country)) headers.set("x-healthpass-country", country);
+        if (country && /^[A-Z]{2}$/.test(country)) {
+          headers.set("x-healthpass-country", country);
+        }
         const clientIp = process.env.VERCEL
           ? request.headers.get("x-vercel-forwarded-for")?.split(",")[0].trim()
           : null;
-        if (clientIp && /^[a-fA-F0-9:.]{3,64}$/.test(clientIp))
+        if (clientIp && /^[a-fA-F0-9:.]{3,64}$/.test(clientIp)) {
           headers.set("x-healthpass-client-ip", clientIp);
+        }
         headers.set("user-agent", request.headers.get("user-agent") ?? "Unknown device");
         try {
           return await fetchHealthpassOrigin(request, upstream, headers);

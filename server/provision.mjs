@@ -18,24 +18,26 @@ if (
   !values.name ||
   !values.facility ||
   !["clinician", "reception", "administrator"].includes(values.role)
-)
+) {
   throw new Error(
     "Usage: npm run provision -- --email EMAIL --name NAME --facility FACILITY --role clinician|reception|administrator [--verified]",
   );
+}
 const password = process.env.HEALTHPASS_PROVISION_PASSWORD;
-if (!password || password.length < 12)
+if (!password || password.length < 12) {
   throw new Error(
     "Supply HEALTHPASS_PROVISION_PASSWORD through a private server environment, at least 12 characters.",
   );
+}
 const db = await openDatabase();
 try {
   await db.transaction(async (tx) => {
     const email = values.email.trim().toLowerCase();
-    const org = randomUUID(),
-      user = randomUUID();
+    const org = randomUUID();
+    const user = randomUUID();
     // Explicit operator review establishes verification; no external credential service is claimed.
-    const code = "HP-" + randomBytes(6).toString("hex").toUpperCase(),
-      branch = randomUUID();
+    const code = "HP-" + randomBytes(6).toString("hex").toUpperCase();
+    const branch = randomUUID();
     await tx.run("INSERT INTO organizations(id,name,workspace_code) VALUES (?,?,?)", [
       org,
       values.facility.trim(),
@@ -67,13 +69,15 @@ try {
       "INSERT INTO membership_roles(membership_id,role_id) SELECT id,? FROM memberships WHERE user_id=?",
       ["role-" + org + "-" + values.role, user],
     );
-    if (values.role === "administrator")
+    if (values.role === "administrator") {
       await tx.run("UPDATE memberships SET is_owner=1 WHERE user_id=?", [user]);
-    if (values.role === "clinician" && values.verified)
+    }
+    if (values.role === "clinician" && values.verified) {
       await tx.run(
         "UPDATE memberships SET clinical_verified=1,clinical_scopes='[\"general\"]',clinical_review_reference='Operator reviewed clinical credentials' WHERE user_id=?",
         [user],
       );
+    }
     console.log("Workspace code:", code);
     await tx.run(
       "INSERT INTO audits(id,actor_id,organization_id,resource_id,action,decision,purpose,created_at,correlation_id) VALUES (?,?,?,?,?,?,?,?,?)",

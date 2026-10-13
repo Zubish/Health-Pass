@@ -18,7 +18,7 @@ const actionLabels: Record<string, string> = {
   complete: "Complete examination",
   "take-report": "Take for interpretation",
 };
-const names: Record<Department, string> = {
+const departmentNames: Record<Department, string> = {
   laboratory: "Laboratory",
   radiology: "Radiology",
   pharmacy: "Pharmacy",
@@ -75,21 +75,21 @@ type Order = {
   }[];
 };
 export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
-  const patient = me.role === "patient",
-    can = (p: string) => me.permissions?.includes(p) ?? false;
+  const isPatient = me.role === "patient";
+  const hasPermission = (p: string) => me.permissions?.includes(p) ?? false;
   const generation = useRef(0);
   const [requestDepartment, setRequestDepartment] = useState<Department>(
-    can("diagnostics.order") ? "laboratory" : "pharmacy",
+    hasPermission("diagnostics.order") ? "laboratory" : "pharmacy",
   );
-  const [department, setDepartment] = useState(""),
-    [orders, setOrders] = useState<Order[]>([]),
-    [next, setNext] = useState<string | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [loading, setLoading] = useState(true),
-    [creating, setCreating] = useState(false),
-    [action, setAction] = useState<{ order: Order; kind: string } | null>(null),
-    [key, setKey] = useState("");
+  const [department, setDepartment] = useState("");
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [next, setNext] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [action, setAction] = useState<{ order: Order; kind: string } | null>(null);
+  const [key, setKey] = useState("");
   const [medications, setMedications] = useState<
     { id: string; medicine: string; dose: string; status: string }[]
   >([]);
@@ -99,18 +99,30 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
       setLoading(true);
       try {
         const q = new URLSearchParams();
-        if (patientId) q.set("patient_id", patientId);
-        if (department) q.set("department", department);
-        if (before) q.set("before", before);
+        if (patientId) {
+          q.set("patient_id", patientId);
+        }
+        if (department) {
+          q.set("department", department);
+        }
+        if (before) {
+          q.set("before", before);
+        }
         const data = await careApi<{ orders: Order[]; next: string | null }>("/departments?" + q);
-        if (current !== generation.current) return;
+        if (current !== generation.current) {
+          return;
+        }
         setOrders((old) => (before ? [...old, ...data.orders] : data.orders));
         setNext(data.next);
         setError("");
       } catch (e) {
-        if (current === generation.current) setError((e as Error).message);
+        if (current === generation.current) {
+          setError((e as Error).message);
+        }
       } finally {
-        if (current === generation.current) setLoading(false);
+        if (current === generation.current) {
+          setLoading(false);
+        }
       }
     },
     [patientId, department],
@@ -127,7 +139,7 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
   async function openRequest() {
     setError("");
     setKey(crypto.randomUUID());
-    if (can("prescriptions.create") && patientId) {
+    if (hasPermission("prescriptions.create") && patientId) {
       try {
         const data = await careApi("/treatment/patients/" + patientId);
         setMedications(data.orders.filter((m: { status: string }) => m.status === "active"));
@@ -181,25 +193,27 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
     <section className="hp-panel hp-departments">
       <div className="hp-panel-heading">
         <div>
-          <h2>{patient ? "Tests, imaging & medicines" : "Department work"}</h2>
+          <h2>{isPatient ? "Tests, imaging & medicines" : "Department work"}</h2>
           <p>
-            {patient
+            {isPatient
               ? "Released reports and pharmacy progress from your care facilities."
               : "Manage laboratory, imaging and pharmacy requests."}
           </p>
         </div>
-        {patientId && !patient && (can("diagnostics.order") || can("prescriptions.create")) && (
-          <button className="hp-button primary" onClick={() => void openRequest()}>
-            Request department care
-          </button>
-        )}
+        {patientId &&
+          !isPatient &&
+          (hasPermission("diagnostics.order") || hasPermission("prescriptions.create")) && (
+            <button className="hp-button primary" onClick={() => void openRequest()}>
+              Request department care
+            </button>
+          )}
       </div>
       <div className="hp-department-toolbar">
         <label>
           Department
           <select value={department} onChange={(e) => setDepartment(e.target.value)}>
             <option value="">All departments</option>
-            {Object.entries(names).map(([id, name]) => (
+            {Object.entries(departmentNames).map(([id, name]) => (
               <option key={id} value={id}>
                 {name}
               </option>
@@ -220,7 +234,7 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
         <Empty
           title="No department requests"
           text={
-            patient
+            isPatient
               ? "Requests and released reports will appear here when your care team adds them."
               : patientId
                 ? "Request a test, imaging study or pharmacy review for this patient."
@@ -232,7 +246,7 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
         <article className="hp-department-order" key={order.id}>
           <div className="hp-panel-heading">
             <div>
-              <span className="hp-chip blue">{names[order.department]}</span>
+              <span className="hp-chip blue">{departmentNames[order.department]}</span>
               <h3>{order.service}</h3>
               <p>
                 {order.patient_name} · {order.healthpass_id}
@@ -296,10 +310,10 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
               </p>
             </div>
           ))}
-          {patient && order.status !== "released" && (
+          {isPatient && order.status !== "released" && (
             <p>The report will appear after release by the department.</p>
           )}
-          {!patient && (
+          {!isPatient && (
             <div className="hp-department-actions">
               {order.can_work && order.status === "requested" && (
                 <button className="hp-button primary" onClick={() => startAction(order, "accept")}>
@@ -456,13 +470,15 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
                     onChange={(e) => setRequestDepartment(e.target.value as Department)}
                     required
                   >
-                    {can("diagnostics.order") && (
+                    {hasPermission("diagnostics.order") && (
                       <>
                         <option value="laboratory">Laboratory</option>
                         <option value="radiology">Radiology</option>
                       </>
                     )}
-                    {can("prescriptions.create") && <option value="pharmacy">Pharmacy</option>}
+                    {hasPermission("prescriptions.create") && (
+                      <option value="pharmacy">Pharmacy</option>
+                    )}
                   </select>
                 </label>
                 {requestDepartment !== "pharmacy" && (
@@ -476,7 +492,7 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
                     />
                   </label>
                 )}
-                {requestDepartment === "pharmacy" && can("prescriptions.create") && (
+                {requestDepartment === "pharmacy" && hasPermission("prescriptions.create") && (
                   <label>
                     Prescription for pharmacy review
                     <select name="medication_order_id" required>
@@ -504,7 +520,7 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
             ) : (
               <>
                 <p>
-                  {action?.order.patient_name} · {names[action!.order.department]}
+                  {action?.order.patient_name} · {departmentNames[action!.order.department]}
                 </p>
                 {action?.kind === "schedule" && (
                   <label>

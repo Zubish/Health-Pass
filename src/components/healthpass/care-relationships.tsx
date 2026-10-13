@@ -14,20 +14,20 @@ type RequestRow = {
 };
 type Primary = { organization_id: string; facility_name: string; source: string };
 export function CareRelationships({ me }: { me: Me }) {
-  const patient = !!me.user.patient_id,
-    canRegister = me.permissions?.includes("registry.create"),
-    canManage = me.permissions?.includes("primary.manage");
-  const [requests, setRequests] = useState<RequestRow[]>([]),
-    [primaryRequests, setPrimaryRequests] = useState<RequestRow[]>([]),
-    [primary, setPrimary] = useState<Primary | null>(null),
-    [first, setFirst] = useState<Primary | null>(null),
-    [branches, setBranches] = useState<{ id: string; name: string }[]>([]),
-    [busy, setBusy] = useState(false),
-    [loading, setLoading] = useState(true),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [approved, setApproved] = useState<Record<string, boolean>>({}),
-    [profiles, setProfiles] = useState<Record<string, boolean>>({});
+  const patient = !!me.user.patient_id;
+  const canRegister = me.permissions?.includes("registry.create");
+  const canManage = me.permissions?.includes("primary.manage");
+  const [requests, setRequests] = useState<RequestRow[]>([]);
+  const [primaryRequests, setPrimaryRequests] = useState<RequestRow[]>([]);
+  const [primary, setPrimary] = useState<Primary | null>(null);
+  const [first, setFirst] = useState<Primary | null>(null);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [approved, setApproved] = useState<Record<string, boolean>>({});
+  const [profiles, setProfiles] = useState<Record<string, boolean>>({});
   const branchId = me.branch?.id;
   const refresh = useCallback(async () => {
     const [access, care, workspace] = await Promise.all([
@@ -49,16 +49,22 @@ export function CareRelationships({ me }: { me: Me }) {
       setPrimary(care.primary);
       setFirst(care.first_registration);
     }
-    if (workspace) setBranches(workspace.branches ?? []);
+    if (workspace) {
+      setBranches(workspace.branches ?? []);
+    }
   }, [patient, canRegister, canManage, branchId]);
   useEffect(() => {
     let active = true;
     void refresh()
       .catch((e) => {
-        if (active) setError(e.message);
+        if (active) {
+          setError(e.message);
+        }
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       });
     return () => {
       active = false;
@@ -412,8 +418,9 @@ export function PatientRelationshipNotice({ onOpen }: { onOpen: () => void }) {
     const load = () =>
       void careApi("/facility-access-requests")
         .then((data) => {
-          if (active)
+          if (active) {
             setCount(data.requests.filter((r: RequestRow) => r.status === "pending").length);
+          }
         })
         .catch(() => {});
     load();

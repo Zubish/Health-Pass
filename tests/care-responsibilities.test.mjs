@@ -5,8 +5,8 @@ import { openTestDatabase } from "./database.mjs";
 import { createApi } from "../server/api.mjs";
 import { seed } from "../server/seed.mjs";
 
-const password = "synthetic-care-responsibility-password",
-  branch = "main-org-lagos";
+const password = "synthetic-care-responsibility-password";
+const branch = "main-org-lagos";
 const note = {
   complaint: "Synthetic independent GP consultation",
   assessment: "Synthetic clinical assessment",
@@ -56,11 +56,12 @@ async function fixture() {
       "INSERT INTO care_admissions(id,patient_id,organization_id,branch_id,care_area_id,kind,active_key,created_by,created_at,request_key,request_payload) VALUES ('responsibility-admission','patient-ade','org-lagos','main-org-lagos','responsibility-ward','inpatient','org-lagos:patient-ade','admin',?,'synthetic-responsibility-admission','{}')",
       [new Date().toISOString()],
     );
-    for (const id of ["doctor-lagos", "colleague"])
+    for (const id of ["doctor-lagos", "colleague"]) {
       await tx.run(
         "INSERT INTO admission_team_members(id,admission_id,user_id,duty) VALUES (?,'responsibility-admission',?,'doctor')",
         ["responsibility-team-" + id, id],
       );
+    }
   });
   const api = createApi(db, { PUBLIC_APP_ORIGIN: "http://localhost:3000" });
   function client() {
@@ -74,26 +75,29 @@ async function fixture() {
         }),
       );
       const set = response.headers.get("set-cookie");
-      if (set) cookie = set.split(";")[0];
+      if (set) {
+        cookie = set.split(";")[0];
+      }
       return { status: response.status, data: await response.json() };
     };
   }
   async function login(email) {
     const call = client();
     assert.equal((await call("/auth/login", "POST", { email, password })).status, 200);
-    if (email !== "patient@healthpass.test")
+    if (email !== "patient@healthpass.test") {
       assert.equal((await call("/auth/mfa/skip", "POST", {})).status, 200);
+    }
     return call;
   }
-  const admin = await login("admin@healthpass.test"),
-    doctor = await login("doctor@healthpass.test"),
-    colleague = await login("responsibility-gp@synthetic.invalid"),
-    nurse = await login("responsibility-nurse@synthetic.invalid"),
-    tech = await login("responsibility-tech@synthetic.invalid"),
-    support = await login("responsibility-support@synthetic.invalid"),
-    reception = await login("reception@healthpass.test"),
-    foreign = await login("ibadan@healthpass.test"),
-    patient = await login("patient@healthpass.test");
+  const admin = await login("admin@healthpass.test");
+  const doctor = await login("doctor@healthpass.test");
+  const colleague = await login("responsibility-gp@synthetic.invalid");
+  const nurse = await login("responsibility-nurse@synthetic.invalid");
+  const tech = await login("responsibility-tech@synthetic.invalid");
+  const support = await login("responsibility-support@synthetic.invalid");
+  const reception = await login("reception@healthpass.test");
+  const foreign = await login("ibadan@healthpass.test");
+  const patient = await login("patient@healthpass.test");
   const body = {
     patient_id: "patient-ade",
     branch_id: branch,
@@ -227,20 +231,23 @@ test("care team management and candidate eligibility enforce tenant, branch, rol
     assert.ok(options.data.patients.some((patient) => patient.id === "patient-ade"));
     assert.ok(!options.data.patients.some((patient) => patient.id === "patient-tunde"));
     assert.ok(options.data.consultants.some((person) => person.id === "doctor-lagos"));
-    for (const id of ["admin", "nurse", "tech", "support", "doctor-ibadan"])
+    for (const id of ["admin", "nurse", "tech", "support", "doctor-ibadan"]) {
       assert.ok(
         !options.data.consultants.some((person) => person.id === id),
         id + " is not a reviewed general lead candidate",
       );
-    for (const actor of [f.reception, f.nurse, f.tech, f.support, f.doctor])
+    }
+    for (const actor of [f.reception, f.nurse, f.tech, f.support, f.doctor]) {
       denied(await f.assign({}, actor));
+    }
     assert.equal(
       (await f.nurse("/care-responsibilities")).status,
       200,
       "reviewed nursing staff may view team metadata without managing it",
     );
-    for (const actor of [f.reception, f.tech, f.support])
+    for (const actor of [f.reception, f.tech, f.support]) {
       denied(await actor("/care-responsibilities"));
+    }
     rejected(await f.assign({ consultant_id: "admin" }));
     rejected(await f.assign({ consultant_id: "nurse" }));
     rejected(await f.assign({ consultant_id: "support" }));

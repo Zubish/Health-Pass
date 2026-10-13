@@ -44,8 +44,11 @@ test("remembered context expires after thirty days even with repeated sign-ins",
     assert.equal(readSigninPreference(), null);
   } finally {
     Date.now = originalNow;
-    if (oldStorage === undefined) delete globalThis.localStorage;
-    else globalThis.localStorage = oldStorage;
+    if (oldStorage === undefined) {
+      delete globalThis.localStorage;
+    } else {
+      globalThis.localStorage = oldStorage;
+    }
   }
 });
 
@@ -74,7 +77,10 @@ test("storage failure cannot block link-based sign-in and link labels never repl
       workspaceSigninPath("Same name", "HP-B"),
     );
   } finally {
-    if (oldStorage === undefined) delete globalThis.localStorage;
-    else globalThis.localStorage = oldStorage;
+    if (oldStorage === undefined) {
+      delete globalThis.localStorage;
+    } else {
+      globalThis.localStorage = oldStorage;
+    }
   }
 });

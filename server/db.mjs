@@ -10,17 +10,22 @@ import {
 } from "./roles.mjs";
 
 export async function openDatabase(config = process.env, dependencies = {}) {
-  let engine, pool;
+  let engine;
+  let pool;
   if (config.DATABASE_URL) {
     const { Pool } = await import("pg");
     pool = dependencies.pool ?? new Pool({ connectionString: config.DATABASE_URL });
     engine = "postgres";
   } else {
-    if (config.NODE_ENV === "production") throw new Error("Production requires DATABASE_URL.");
+    if (config.NODE_ENV === "production") {
+      throw new Error("Production requires DATABASE_URL.");
+    }
     const path =
       config.HEALTHPASS_SQLITE_PATH ||
       fileURLToPath(new URL("../.data/healthpass.sqlite", import.meta.url));
-    if (path !== ":memory:") await mkdir(dirname(path), { recursive: true });
+    if (path !== ":memory:") {
+      await mkdir(dirname(path), { recursive: true });
+    }
     const { DatabaseSync } = await import("node:sqlite");
     pool = new DatabaseSync(path);
     pool.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");
@@ -28,7 +33,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   }
   const adapt = (connection) => ({
     async all(sql, args = []) {
-      if (engine === "sqlite") return connection.prepare(sql).all(...args);
+      if (engine === "sqlite") {
+        return connection.prepare(sql).all(...args);
+      }
       let n = 0;
       return (
         await connection.query(
@@ -41,7 +48,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
       return (await this.all(sql, args))[0];
     },
     async run(sql, args = []) {
-      if (engine === "sqlite") return connection.prepare(sql).run(...args);
+      if (engine === "sqlite") {
+        return connection.prepare(sql).run(...args);
+      }
       let n = 0;
       return connection.query(
         sql.replace(/\?/g, () => `$${++n}`),
@@ -91,23 +100,30 @@ export async function openDatabase(config = process.env, dependencies = {}) {
       }
     },
     async close() {
-      if (engine === "sqlite") pool.close();
-      else await pool.end();
+      if (engine === "sqlite") {
+        pool.close();
+      } else {
+        await pool.end();
+      }
     },
   };
   if (config.NODE_ENV === "production" && config.HEALTHPASS_RUN_MIGRATIONS !== "1") {
     await db.transaction(async (tx) => {
-      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='015'")))
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='015'"))) {
         throw new Error(
           "Apply schema migrations 001 through 015 using the migration identity before starting the API.",
         );
+      }
     });
     return db;
   }
   const schema = readFileSync(new URL("./migrations/001-foundation.sql", import.meta.url), "utf8");
   await db.transaction(async (tx) => {
-    if (engine === "sqlite") pool.exec(schema);
-    else await tx.run(schema);
+    if (engine === "sqlite") {
+      pool.exec(schema);
+    } else {
+      await tx.run(schema);
+    }
     if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='001'"))) {
       if (engine === "sqlite") {
         pool.exec(`CREATE TRIGGER note_versions_no_update BEFORE UPDATE ON note_versions BEGIN SELECT RAISE(ABORT, 'Signed notes are immutable'); END;
@@ -128,8 +144,11 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   );
   await db.transaction(async (tx) => {
     if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='002'"))) {
-      if (engine === "sqlite") pool.exec(workspaceSchema);
-      else await tx.run(workspaceSchema);
+      if (engine === "sqlite") {
+        pool.exec(workspaceSchema);
+      } else {
+        await tx.run(workspaceSchema);
+      }
       await tx.run("INSERT INTO schema_migrations(version) VALUES ('002')");
     }
   });
@@ -139,8 +158,11 @@ export async function openDatabase(config = process.env, dependencies = {}) {
         new URL("./migrations/003-session-idle.sql", import.meta.url),
         "utf8",
       );
-      if (engine === "sqlite") pool.exec(idleSchema);
-      else await tx.run(idleSchema);
+      if (engine === "sqlite") {
+        pool.exec(idleSchema);
+      } else {
+        await tx.run(idleSchema);
+      }
       await tx.run("INSERT INTO schema_migrations(version) VALUES ('003')");
     }
   });
@@ -150,8 +172,11 @@ export async function openDatabase(config = process.env, dependencies = {}) {
         new URL("./migrations/004-optional-authenticator.sql", import.meta.url),
         "utf8",
       );
-      if (engine === "sqlite") pool.exec(optionalSchema);
-      else await tx.run(optionalSchema);
+      if (engine === "sqlite") {
+        pool.exec(optionalSchema);
+      } else {
+        await tx.run(optionalSchema);
+      }
       await tx.run("INSERT INTO schema_migrations(version) VALUES ('004')");
     }
   });
@@ -161,8 +186,11 @@ export async function openDatabase(config = process.env, dependencies = {}) {
         new URL("./migrations/005-workspace-roles.sql", import.meta.url),
         "utf8",
       );
-      if (engine === "sqlite") pool.exec(roleSchema);
-      else await tx.run(roleSchema);
+      if (engine === "sqlite") {
+        pool.exec(roleSchema);
+      } else {
+        await tx.run(roleSchema);
+      }
       await tx.run("INSERT INTO schema_migrations(version) VALUES ('005')");
     }
   });
@@ -172,8 +200,11 @@ export async function openDatabase(config = process.env, dependencies = {}) {
         new URL("./migrations/006-authenticator-preference.sql", import.meta.url),
         "utf8",
       );
-      if (engine === "sqlite") pool.exec(preferenceSchema);
-      else await tx.run(preferenceSchema);
+      if (engine === "sqlite") {
+        pool.exec(preferenceSchema);
+      } else {
+        await tx.run(preferenceSchema);
+      }
       await tx.run("INSERT INTO schema_migrations(version) VALUES ('006')");
     }
   });
@@ -191,8 +222,11 @@ export async function openDatabase(config = process.env, dependencies = {}) {
     await db.transaction(async (tx) => {
       if (!(await tx.get("SELECT version FROM schema_migrations WHERE version=?", [version]))) {
         const schema = readFileSync(new URL("./migrations/" + file, import.meta.url), "utf8");
-        if (engine === "sqlite") pool.exec(schema);
-        else await tx.run(schema);
+        if (engine === "sqlite") {
+          pool.exec(schema);
+        } else {
+          await tx.run(schema);
+        }
         if (version === "015") {
           for (const org of await tx.all("SELECT id FROM organizations")) {
             for (const role of roleTemplates.filter((r) =>
@@ -213,14 +247,15 @@ export async function openDatabase(config = process.env, dependencies = {}) {
             }
           }
           for (const table of ["department_events", "department_reports"]) {
-            if (engine === "sqlite")
+            if (engine === "sqlite") {
               pool.exec(
                 `CREATE TRIGGER ${table}_no_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'Department history is immutable'); END; CREATE TRIGGER ${table}_no_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'Department history is immutable'); END;`,
               );
-            else
+            } else {
               await tx.run(
                 `CREATE TRIGGER ${table}_immutable BEFORE UPDATE OR DELETE ON ${table} FOR EACH ROW EXECUTE FUNCTION hp_immutable()`,
               );
+            }
           }
         }
         if (version === "008") {
@@ -236,34 +271,38 @@ export async function openDatabase(config = process.env, dependencies = {}) {
             }
           }
         }
-        if (version === "011") await upgradePrimaryRoles(tx);
+        if (version === "011") {
+          await upgradePrimaryRoles(tx);
+        }
         if (version === "012") {
           await upgradeCareResponsibilities(tx);
-          if (engine === "sqlite")
+          if (engine === "sqlite") {
             pool.exec(
               "CREATE TRIGGER care_responsibility_events_no_update BEFORE UPDATE ON care_responsibility_events BEGIN SELECT RAISE(ABORT, 'Care responsibility history is immutable'); END; CREATE TRIGGER care_responsibility_events_no_delete BEFORE DELETE ON care_responsibility_events BEGIN SELECT RAISE(ABORT, 'Care responsibility history is immutable'); END;",
             );
-          else
+          } else {
             await tx.run(
               "CREATE TRIGGER care_responsibility_events_immutable BEFORE UPDATE OR DELETE ON care_responsibility_events FOR EACH ROW EXECUTE FUNCTION hp_immutable()",
             );
+          }
         }
         if (version === "013") {
-          if (engine === "sqlite")
+          if (engine === "sqlite") {
             pool.exec(
               "CREATE TRIGGER care_workflow_events_no_update BEFORE UPDATE ON care_workflow_events BEGIN SELECT RAISE(ABORT, 'Care workflow history is immutable'); END; CREATE TRIGGER care_workflow_events_no_delete BEFORE DELETE ON care_workflow_events BEGIN SELECT RAISE(ABORT, 'Care workflow history is immutable'); END;",
             );
-          else
+          } else {
             await tx.run(
               "CREATE TRIGGER care_workflow_events_immutable BEFORE UPDATE OR DELETE ON care_workflow_events FOR EACH ROW EXECUTE FUNCTION hp_immutable()",
             );
+          }
         }
         if (version === "014") {
-          if (engine === "sqlite")
+          if (engine === "sqlite") {
             pool.exec(
               "CREATE TRIGGER medication_orders_signed_update BEFORE UPDATE ON medication_orders WHEN OLD.id IS NOT NEW.id OR OLD.patient_id IS NOT NEW.patient_id OR OLD.organization_id IS NOT NEW.organization_id OR OLD.branch_id IS NOT NEW.branch_id OR OLD.admission_id IS NOT NEW.admission_id OR OLD.prescriber_id IS NOT NEW.prescriber_id OR OLD.medicine IS NOT NEW.medicine OR OLD.dose IS NOT NEW.dose OR OLD.route IS NOT NEW.route OR OLD.frequency IS NOT NEW.frequency OR OLD.interval_hours IS NOT NEW.interval_hours OR OLD.prn IS NOT NEW.prn OR OLD.indication IS NOT NEW.indication OR OLD.instructions IS NOT NEW.instructions OR OLD.starts_at IS NOT NEW.starts_at OR OLD.ends_at IS NOT NEW.ends_at OR OLD.created_at IS NOT NEW.created_at OR OLD.request_key IS NOT NEW.request_key OR OLD.request_payload IS NOT NEW.request_payload BEGIN SELECT RAISE(ABORT,'Signed prescriptions cannot be rewritten'); END; CREATE TRIGGER medication_orders_no_delete BEFORE DELETE ON medication_orders BEGIN SELECT RAISE(ABORT,'Signed prescriptions cannot be deleted'); END;",
             );
-          else {
+          } else {
             await tx.run(
               "CREATE FUNCTION hp_prescription_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP='DELETE' THEN RAISE EXCEPTION 'Signed prescriptions cannot be deleted'; END IF; IF (to_jsonb(NEW)-'status'-'version'-'stopped_at'-'stop_reason') IS DISTINCT FROM (to_jsonb(OLD)-'status'-'version'-'stopped_at'-'stop_reason') THEN RAISE EXCEPTION 'Signed prescriptions cannot be rewritten'; END IF; RETURN NEW; END $$",
             );
@@ -278,14 +317,15 @@ export async function openDatabase(config = process.env, dependencies = {}) {
             "ward_observations",
             "treatment_events",
           ]) {
-            if (engine === "sqlite")
+            if (engine === "sqlite") {
               pool.exec(
                 `CREATE TRIGGER ${table}_no_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'Treatment history is immutable'); END; CREATE TRIGGER ${table}_no_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'Treatment history is immutable'); END;`,
               );
-            else
+            } else {
               await tx.run(
                 `CREATE TRIGGER ${table}_immutable BEFORE UPDATE OR DELETE ON ${table} FOR EACH ROW EXECUTE FUNCTION hp_immutable()`,
               );
+            }
           }
         }
         await tx.run("INSERT INTO schema_migrations(version) VALUES (?)", [version]);

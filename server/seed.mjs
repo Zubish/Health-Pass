@@ -4,11 +4,13 @@ import { openDatabase } from "./db.mjs";
 import { passwordHash } from "./security.mjs";
 
 export async function seed(db, password) {
-  if (!password || password.length < 12)
+  if (!password || password.length < 12) {
     throw new Error("Set HEALTHPASS_DEMO_PASSWORD to at least 12 characters.");
+  }
   await db.transaction(async (tx) => {
-    if (await tx.get("SELECT id FROM users LIMIT 1"))
+    if (await tx.get("SELECT id FROM users LIMIT 1")) {
       throw new Error("Seed requires an empty database.");
+    }
     const now = new Date().toISOString();
     for (const [id, name] of [
       ["org-lagos", "Lagos Primary Care · Demo"],
@@ -71,15 +73,18 @@ export async function seed(db, password) {
         "INSERT INTO users(id,email,name,password_hash,patient_id,verified) VALUES (?,?,?,?,?,1)",
         [id, email, name, passwordHash(password), patient],
       );
-      if (org)
+      if (org) {
         await tx.run("INSERT INTO memberships(id,user_id,organization_id,role) VALUES (?,?,?,?)", [
           randomUUID(),
           id,
           org,
           role,
         ]);
+      }
     }
-    for (const org of ["org-lagos", "org-ibadan"]) await createDefaultRoles(tx, org);
+    for (const org of ["org-lagos", "org-ibadan"]) {
+      await createDefaultRoles(tx, org);
+    }
     await tx.run(
       "INSERT INTO membership_roles(membership_id,role_id) SELECT id,'role-' || organization_id || '-' || role FROM memberships",
     );
@@ -96,8 +101,9 @@ export async function seed(db, password) {
   });
 }
 if (process.argv[1]?.endsWith("/seed.mjs")) {
-  if (process.env.NODE_ENV === "production")
+  if (process.env.NODE_ENV === "production") {
     throw new Error("Synthetic seed is disabled in production.");
+  }
   const db = await openDatabase();
   try {
     await seed(db, process.env.HEALTHPASS_DEMO_PASSWORD);

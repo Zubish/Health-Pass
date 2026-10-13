@@ -5,7 +5,9 @@ export type SigninPreference = { workspaceCode?: string; expiresAt: number };
 export function readSigninPreference(): SigninPreference | null {
   try {
     const raw = localStorage.getItem(SIGNIN_PREFERENCE_KEY);
-    if (!raw) return null;
+    if (!raw) {
+      return null;
+    }
     const value = JSON.parse(raw);
     if (
       !Number.isFinite(value.expiresAt) ||
@@ -24,8 +26,9 @@ export function readSigninPreference(): SigninPreference | null {
 }
 export function rememberSigninWorkspace(code?: string) {
   try {
-    if (!code) localStorage.removeItem(SIGNIN_PREFERENCE_KEY);
-    else {
+    if (!code) {
+      localStorage.removeItem(SIGNIN_PREFERENCE_KEY);
+    } else {
       const existing = readSigninPreference();
       localStorage.setItem(
         SIGNIN_PREFERENCE_KEY,
