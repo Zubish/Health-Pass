@@ -108,7 +108,7 @@ export function CareResponsibilities({ me }: { me: Me }) {
           <p>
             {patient
               ? "See the consultant responsible for your ongoing care at each facility."
-              : "A lead consultant remains responsible for overall management while authorised colleagues provide day-to-day care."}
+              : "View and manage the consultant responsible for each patient."}
           </p>
         </div>
         <div className="hp-responsibility-actions">
@@ -145,12 +145,6 @@ export function CareResponsibilities({ me }: { me: Me }) {
           {notice}
         </p>
       )}
-      <div className="hp-notice">
-        <p>
-          Individual visits keep their assigned professional. Consultant responsibility does not
-          change patient sharing permissions or ownership of signed records.
-        </p>
-      </div>
       {loading && <p role="status">Loading care responsibilities…</p>}
       {!loading && (
         <>

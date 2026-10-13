@@ -3,6 +3,21 @@ import { careApi } from "@/lib/healthpass-client";
 import { date, type Me } from "@/lib/healthpass-types";
 import { Empty, Modal } from "./primitives";
 type Department = "laboratory" | "radiology" | "pharmacy";
+const actionLabels: Record<string, string> = {
+  accept: "Accept request",
+  start: "Start service",
+  report: "Sign report",
+  release: "Release outcome",
+  decline: "Decline request",
+  cancel: "Cancel request",
+  amend: "Amend report",
+  acknowledge: "Record clinical review",
+  clarify: "Request clarification",
+  respond: "Respond to department",
+  schedule: "Schedule service",
+  complete: "Complete examination",
+  "take-report": "Take for interpretation",
+};
 const names: Record<Department, string> = {
   laboratory: "Laboratory",
   radiology: "Radiology",
@@ -170,11 +185,11 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
           <p>
             {patient
               ? "Released reports and pharmacy progress from your care facilities."
-              : "Requests, department progress and signed outcomes."}
+              : "Manage laboratory, imaging and pharmacy requests."}
           </p>
         </div>
         {patientId && !patient && (can("diagnostics.order") || can("prescriptions.create")) && (
-          <button className="hp-primary" onClick={() => void openRequest()}>
+          <button className="hp-button primary" onClick={() => void openRequest()}>
             Request department care
           </button>
         )}
@@ -191,7 +206,7 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
             ))}
           </select>
         </label>
-        <button className="hp-secondary" disabled={loading} onClick={() => void load()}>
+        <button className="hp-button secondary" disabled={loading} onClick={() => void load()}>
           Refresh worklist
         </button>
       </div>
@@ -209,7 +224,7 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
               ? "Requests and released reports will appear here when your care team adds them."
               : patientId
                 ? "Request a test, imaging study or pharmacy review for this patient."
-                : "Open a patient's record to request department care. Requests within your permissions and patient sharing appear here."
+                : "Open a patient’s record to create a request."
           }
         />
       )}
@@ -287,22 +302,28 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
           {!patient && (
             <div className="hp-department-actions">
               {order.can_work && order.status === "requested" && (
-                <button className="hp-primary" onClick={() => startAction(order, "accept")}>
+                <button className="hp-button primary" onClick={() => startAction(order, "accept")}>
                   Accept request
                 </button>
               )}
               {order.can_work && ["requested", "accepted"].includes(order.status) && (
-                <button className="hp-secondary" onClick={() => startAction(order, "decline")}>
+                <button
+                  className="hp-button secondary"
+                  onClick={() => startAction(order, "decline")}
+                >
                   Decline with reason
                 </button>
               )}
               {order.can_work && order.status === "accepted" && (
-                <button className="hp-secondary" onClick={() => startAction(order, "schedule")}>
+                <button
+                  className="hp-button secondary"
+                  onClick={() => startAction(order, "schedule")}
+                >
                   Schedule service
                 </button>
               )}
               {order.can_work && order.status === "accepted" && (
-                <button className="hp-primary" onClick={() => startAction(order, "start")}>
+                <button className="hp-button primary" onClick={() => startAction(order, "start")}>
                   {order.department === "laboratory"
                     ? "Record collection"
                     : order.department === "radiology"
@@ -311,19 +332,28 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
                 </button>
               )}
               {order.can_work && ["accepted", "in-progress"].includes(order.status) && (
-                <button className="hp-secondary" onClick={() => startAction(order, "clarify")}>
+                <button
+                  className="hp-button secondary"
+                  onClick={() => startAction(order, "clarify")}
+                >
                   Request clarification
                 </button>
               )}
               {order.can_work &&
                 order.department === "radiology" &&
                 order.status === "in-progress" && (
-                  <button className="hp-primary" onClick={() => startAction(order, "complete")}>
+                  <button
+                    className="hp-button primary"
+                    onClick={() => startAction(order, "complete")}
+                  >
                     Complete examination
                   </button>
                 )}
               {order.can_take_report && (
-                <button className="hp-secondary" onClick={() => startAction(order, "take-report")}>
+                <button
+                  className="hp-button secondary"
+                  onClick={() => startAction(order, "take-report")}
+                >
                   Take for interpretation
                 </button>
               )}
@@ -331,32 +361,44 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
                 (order.department === "radiology"
                   ? order.status === "awaiting-report"
                   : order.status === "in-progress") && (
-                  <button className="hp-primary" onClick={() => startAction(order, "report")}>
+                  <button
+                    className="hp-button primary"
+                    onClick={() => startAction(order, "report")}
+                  >
                     {order.department === "pharmacy" ? "Sign pharmacy review" : "Sign report"}
                   </button>
                 )}
               {order.can_release && order.status === "reported" && (
-                <button className="hp-primary" onClick={() => startAction(order, "release")}>
+                <button className="hp-button primary" onClick={() => startAction(order, "release")}>
                   {order.department === "pharmacy" ? "Record supply & release" : "Release report"}
                 </button>
               )}
               {order.can_report && ["reported", "released"].includes(order.status) && (
-                <button className="hp-secondary" onClick={() => startAction(order, "amend")}>
+                <button className="hp-button secondary" onClick={() => startAction(order, "amend")}>
                   Amend report
                 </button>
               )}
               {order.can_cancel && ["accepted", "in-progress"].includes(order.status) && (
-                <button className="hp-secondary" onClick={() => startAction(order, "respond")}>
+                <button
+                  className="hp-button secondary"
+                  onClick={() => startAction(order, "respond")}
+                >
                   Respond to department
                 </button>
               )}
               {order.can_cancel && ["requested", "accepted"].includes(order.status) && (
-                <button className="hp-secondary" onClick={() => startAction(order, "cancel")}>
+                <button
+                  className="hp-button secondary"
+                  onClick={() => startAction(order, "cancel")}
+                >
                   Cancel request
                 </button>
               )}
               {order.can_acknowledge && order.status === "released" && (
-                <button className="hp-secondary" onClick={() => startAction(order, "acknowledge")}>
+                <button
+                  className="hp-button secondary"
+                  onClick={() => startAction(order, "acknowledge")}
+                >
                   Record clinical review
                 </button>
               )}
@@ -379,7 +421,7 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
         </article>
       ))}
       {next && (
-        <button className="hp-secondary" disabled={loading} onClick={() => void load(next)}>
+        <button className="hp-button secondary" disabled={loading} onClick={() => void load(next)}>
           Load more requests
         </button>
       )}
@@ -388,7 +430,7 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
           title={
             creating
               ? "Request department care"
-              : `${action?.kind === "report" ? "Sign report" : action?.kind === "amend" ? "Amend signed report" : action?.kind === "release" ? "Release outcome" : action?.kind} · ${action?.order.service}`
+              : `${actionLabels[action!.kind]} · ${action?.order.service}`
           }
           onClose={() => {
             if (!busy) {
@@ -564,7 +606,7 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
                 {error}
               </p>
             )}
-            <button className="hp-primary" disabled={busy}>
+            <button className="hp-button primary" disabled={busy}>
               {busy
                 ? "Saving…"
                 : creating

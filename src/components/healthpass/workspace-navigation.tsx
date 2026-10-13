@@ -1,15 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import {
-  Activity,
-  LogOut,
-  Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
-  ShieldCheck,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, X, type LucideIcon } from "lucide-react";
 import type { Me } from "@/lib/healthpass-types";
 
 export type NavigationItem = readonly [id: string, label: string, icon: LucideIcon];
@@ -137,12 +128,6 @@ function NavigationPanel({
         </nav>
       </div>
       <div className="hp-navigation-footer">
-        <div className="hp-navigation-ecosystem">
-          <Activity size={16} aria-hidden="true" />
-          <span>
-            Connected by care<small>RxLedger · Rai ecosystem</small>
-          </span>
-        </div>
         <div className="hp-navigation-account" title={`${me.user.name} · ${accountRoles}`}>
           <span className="hp-avatar" aria-hidden="true">
             {me.user.name
@@ -153,7 +138,11 @@ function NavigationPanel({
           </span>
           <div className="hp-navigation-account-text">
             <strong>{me.user.name}</strong>
-            <small>{accountRoles}</small>
+            <small>
+              {patient
+                ? "Patient account"
+                : `${me.jobRoles?.find((r) => r.name === "General practitioner")?.name ?? me.jobRoles?.[0]?.name ?? "Professional account"}${(me.jobRoles?.length ?? 0) > 1 ? ` +${me.jobRoles!.length - 1} roles` : ""}`}
+            </small>
           </div>
         </div>
         <button
@@ -244,10 +233,6 @@ export function WorkspaceShell({
                   : (me.branch?.name ?? "Facility workspace")}
               </small>
             </div>
-            <span className="hp-navigation-security" title="Scoped, audited access">
-              <ShieldCheck size={17} aria-hidden="true" />
-              <span>Scoped, audited access</span>
-            </span>
           </header>
           {children}
         </div>

@@ -140,9 +140,9 @@ export function ConsultantReferrals({ me }: { me: Me }) {
           <span className="hp-eyebrow">OUTPATIENT SPECIALIST CARE</span>
           <h1>{patient ? "My consultant referrals" : "Consultant referrals"}</h1>
           <p>
-            Specialist advice keeps the referring clinician responsible. Transfer changes visit
-            responsibility only after acceptance; scheduling keeps it with the GP until the
-            consultation starts.
+            {patient
+              ? "Track your specialist referrals and appointments."
+              : "Review, schedule and respond to specialist referrals."}
           </p>
         </div>
         <div className="hp-inline-actions">

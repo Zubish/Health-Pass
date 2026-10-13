@@ -117,8 +117,9 @@ export function AdmissionCare({ me }: { me: Me }) {
           <span className="hp-eyebrow">{patient ? "MY CARE" : "WARD & OBSERVATION"}</span>
           <h1>{patient ? "My care episodes" : "Admissions & care teams"}</h1>
           <p>
-            Recorded inpatient and observation episodes, accountable consultants and supporting
-            doctors and nurses.
+            {patient
+              ? "Your admissions and assigned care teams."
+              : "Ward admissions and assigned care teams."}
           </p>
         </div>
         <div className="hp-inline-actions">
@@ -168,7 +169,7 @@ export function AdmissionCare({ me }: { me: Me }) {
               <p>
                 {row.healthpass_id} · {row.branch_name}
               </p>
-              <p>
+              <div className="hp-episode-context">
                 {(patient || me.permissions?.includes("records.view")) && (
                   <p>
                     <a
@@ -179,8 +180,10 @@ export function AdmissionCare({ me }: { me: Me }) {
                     </a>
                   </p>
                 )}
-                <strong>{row.area_name}</strong> · Opened {date(row.created_at)}
-              </p>
+                <p>
+                  <strong>{row.area_name}</strong> · Opened {date(row.created_at)}
+                </p>
+              </div>
               <p>
                 Responsible consultant: <strong>{row.consultant?.name ?? "Not assigned"}</strong>
                 {row.consultant ? ` · ${row.consultant.service}` : ""}

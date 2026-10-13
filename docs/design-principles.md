@@ -34,3 +34,7 @@ Use verified facility links as the convenient entry and workspace codes as an al
 ## Reusable role defaults with deliberate individual limits — 12 October 2026
 
 Select a staff member's job roles to inherit reusable workspace permissions. Put exceptions in a separate Individual restrictions section; disabling a permission must override every role and survive later role edits. A job title is not credential evidence. Use a recorded department/ward assignment to constrain patient context, separately from disabling a task such as charting. Keep inpatient team accountability separate from outpatient referrals and each professional's authored records. Allow administrators to configure their facility's operation using supported controls while identity, consent, credential gates, workflow transitions and immutable history remain application rules.
+
+## Shared workspace controls — 13 October 2026
+
+Use defined shared button, heading, form-grid and choice-row styles rather than introducing unstyled class names. Keep checkboxes/radios intrinsically sized beside their labels. Group settings into bounded cards that stack on smaller screens; retain readable clinical context without repeated implementation explanations or promotional copy. Show concise sidebar role summaries with full details available, and translate internal activity identifiers into user-facing labels. Verify populated screens and dialogs, not only empty workspaces or absence of horizontal overflow.

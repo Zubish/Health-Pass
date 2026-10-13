@@ -23,11 +23,59 @@ type Security = {
     reviewed_at: string | null;
   }[];
 };
+function activityLabel(action: string) {
+  const labels: Record<string, string> = {
+    "auth · login": "Signed in",
+    "auth · mfa · skip": "Continued to workspace",
+    "auth · logout": "Signed out",
+    "account · security": "Session settings updated",
+    "account · security · sessions · revoke": "Session signed out",
+    "account · security · events · review": "Sign-in reviewed",
+  };
+  if (labels[action]) return labels[action];
+  const words: Record<string, string> = {
+    auth: "Account",
+    mfa: "Authenticator",
+    treatment: "Treatment",
+    patients: "Patient record",
+    orders: "Orders",
+    departments: "Department care",
+    account: "Account",
+    security: "Security",
+    prescriptions: "Prescriptions",
+    visits: "Visits",
+    workspace: "Workspace",
+    members: "Team access",
+    roles: "Job roles",
+    report: "Report signed",
+    release: "Report released",
+    accept: "Request accepted",
+    start: "Care started",
+    amend: "Report amended",
+    observations: "Observations",
+    login: "Sign-in",
+    notes: "Clinical notes",
+  };
+  if (action.startsWith("treatment · ")) {
+    if (action.includes("administrations")) return "Medication administration recorded";
+    if (action.endsWith("orders")) return "Medication orders";
+    if (action.endsWith("observations")) return "Observations recorded";
+    if (action.endsWith("decisions")) return "Admission or discharge decision recorded";
+  }
+  return (
+    action
+      .split(" · ")
+      .map((part) => words[part])
+      .filter(Boolean)
+      .join(" · ") || "Account activity"
+  );
+}
 export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> }) {
   const [data, setData] = useState<Security | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [notice, setNotice] = useState("");
+    [notice, setNotice] = useState(""),
+    [showAllActivity, setShowAllActivity] = useState(false);
   const load = useCallback(async () => setData(await careApi<Security>("/account/security")), []);
   useEffect(() => {
     void load().catch((e) => setError(e.message));
@@ -48,8 +96,8 @@ export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> })
   return (
     <>
       <div className="hp-page-heading">
-        <p className="hp-eyebrow">YOUR ACCOUNT</p>
         <h1>Session management & security</h1>
+        <p>Manage your sessions and review sign-ins.</p>
       </div>
       {error && (
         <p className="hp-error" role="alert">
@@ -57,14 +105,14 @@ export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> })
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
+      {!data && !error && <p role="status">Loading security settings…</p>}
       {data && (
-        <>
+        <div className="hp-security-grid">
           <section className="hp-panel hp-security-panel">
             <h2>Session limits</h2>
             <p>
               HealthPass signs you out after <strong>30 minutes without activity</strong>. Every
-              session also expires after <strong>30 days</strong>, requiring a fresh sign-in with
-              your credentials. These platform limits cannot be changed.
+              session expires after <strong>30 days</strong>. You’ll then need to sign in again.
             </p>
             <label className="hp-choice">
               <input
@@ -87,9 +135,8 @@ export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> })
               <span>End active sessions after eight hours</span>
             </label>
             <p className="hp-fine">
-              This optional limit reduces the time a stolen session can remain active. When enabled,
-              it signs you out after eight hours even while you are working. It is enabled initially
-              for every account.
+              Adds protection on shared devices by signing you out after eight hours, even while
+              you’re working.
             </p>
           </section>
           <section className="hp-panel hp-security-panel">
@@ -127,19 +174,32 @@ export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> })
           </section>
           <section className="hp-panel hp-security-panel">
             <h2>My recent actions</h2>
-            <p>Action times are recorded independently of the audit screen.</p>
-            {data.activity?.map((a) => (
-              <p key={a.id}>
-                {a.action} · {date(a.created_at)}
-              </p>
-            ))}
+
+            <ul className="hp-activity-list">
+              {(showAllActivity ? data.activity : data.activity?.slice(0, 6))?.map((a) => (
+                <li key={a.id}>
+                  <span>{activityLabel(a.action)}</span>
+                  <time dateTime={a.created_at}>{date(a.created_at)}</time>
+                </li>
+              ))}
+            </ul>
+            {!data.activity?.length && <p>No recent activity.</p>}
+            {data.activity?.length > 6 && (
+              <button
+                className="hp-text-button"
+                onClick={() => setShowAllActivity(!showAllActivity)}
+              >
+                {showAllActivity ? "Show less" : "Show all activity"}
+              </button>
+            )}
           </section>
           <section className="hp-panel hp-security-panel">
             <h2>Recent sign-in activity</h2>
             <p>
-              New devices and changes in country are flagged for review. Travel, VPNs and browser
-              changes can also explain these alerts. Location is approximate and may be unavailable.
+              Check any sign-in you don’t recognise. Locations are approximate and may change when
+              you travel or use a VPN.
             </p>
+            {!data.events.length && <p>No recent sign-ins to review.</p>}
             {data.events.map((e) => (
               <div className="hp-grant" key={e.id}>
                 <div>
@@ -173,13 +233,9 @@ export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> })
                 )}
               </div>
             ))}
-            <p className="hp-fine">
-              If a sign-in was not yours, sign out that session. Recognition is a warning signal,
-              not proof that a person is legitimate. HealthPass does not override your password or
-              optional authenticator checks.
-            </p>
+            <p className="hp-fine">Don’t recognise a sign-in? End that session above.</p>
           </section>
-        </>
+        </div>
       )}
     </>
   );

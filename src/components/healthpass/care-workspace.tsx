@@ -230,7 +230,9 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           <PatientRelationshipNotice key={tab} onOpen={() => setTab("relationships")} />
         )}
         {health === "synthetic-development" && (
-          <div className="hp-demo-banner">Development workspace · use synthetic records only</div>
+          <div className="hp-environment-note" title="Test environment: use synthetic records only">
+            Test environment
+          </div>
         )}
         {error && (
           <div className="hp-error" role="alert">
@@ -294,7 +296,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                 <p>
                   {isPatient
                     ? "Your record, sharing permissions and care history in one place."
-                    : "A clearer picture of your patients. A thoughtful start to every encounter."}
+                    : "Open a patient record or continue today’s care."}
                 </p>
               </div>
               {canRegister && (
@@ -303,29 +305,13 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                 </button>
               )}
             </div>
-            <div className="hp-stats">
+            <div className="hp-overview-summary">
               <Stat
                 icon={<Users />}
                 tone="teal"
                 value={String(patients.length)}
                 label={isPatient ? "Your patient identity" : "Accessible patients"}
                 detail={isPatient ? "A persistent HealthPass ID" : "Within your permitted scope"}
-              />
-              <Stat
-                icon={<ShieldCheck />}
-                tone="blue"
-                value={isPatient ? "You decide" : "Verified"}
-                label={isPatient ? "Record sharing" : "Professional access"}
-                detail={
-                  isPatient ? "Time-limited facility grants" : "Reviewed workspace permissions"
-                }
-              />
-              <Stat
-                icon={<ClipboardList />}
-                tone="burgundy"
-                value="Traceable"
-                label="Care documentation"
-                detail="Signed versions retain their source"
               />
             </div>
             <div className="hp-overview-grid">
@@ -588,7 +574,6 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                 <div className="hp-panel-heading">
                   <div>
                     <h2>Care timeline</h2>
-                    <p>Original source and signed versions stay visible.</p>
                   </div>
                   <span className="hp-chip blue">{chart.encounters.length} encounters</span>
                 </div>
@@ -883,10 +868,8 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
         )}
         {tab === "relationships" && <CareRelationships me={me} />}
         {!!me.securityAlerts && tab !== "security" && (
-          <p className="hp-notice">
-            <a href="/workspace?tab=security">
-              Review recent sign-in activity in Session management.
-            </a>
+          <p className="hp-security-reminder">
+            <a href="/workspace?tab=security">Review sign-in activity</a>
           </p>
         )}
         {tab === "departments" && <Departments me={me} />}
@@ -1011,9 +994,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           </Modal>
         )}
       </main>
-      <footer className="hp-footer">
-        HealthPass <span>·</span> Care with continuity <span>·</span> Nigeria
-      </footer>
+      <footer className="hp-footer">HealthPass</footer>
     </WorkspaceShell>
   );
 }
