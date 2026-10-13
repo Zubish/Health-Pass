@@ -81,9 +81,9 @@ async function eligibleProfessional(tx, actor, userId, branchId) {
   };
 }
 
-async function recordEvent(tx, actor, visit, action, nextStatus, audit, correlation) {
+async function recordEvent(tx, actor, visit, action, nextStatus, audit, correlation, reason = "") {
   await tx.run(
-    "INSERT INTO visit_events(id,visit_id,actor_id,action,from_status,to_status,assigned_user_id,created_at) VALUES (?,?,?,?,?,?,?,?)",
+    "INSERT INTO visit_events(id,visit_id,actor_id,action,from_status,to_status,assigned_user_id,created_at,reason) VALUES (?,?,?,?,?,?,?,?,?)",
     [
       randomUUID(),
       visit.id,
@@ -93,6 +93,7 @@ async function recordEvent(tx, actor, visit, action, nextStatus, audit, correlat
       nextStatus,
       visit.assigned_user_id,
       timestamp(),
+      reason,
     ],
   );
   await audit(
@@ -456,7 +457,7 @@ export async function handleVisits(tx, context) {
     const observations =
       clinicalAllowed && scopedParameters.length
         ? await tx.all(
-            `SELECT o.id,o.author_id,u.name AS author_name,o.discipline,o.values_json,o.observed_at,o.created_at FROM visit_observations o JOIN users u ON u.id=o.author_id WHERE o.visit_id=? AND o.discipline IN (${categoryFilter}) ORDER BY o.observed_at DESC,o.id DESC LIMIT 100`,
+            `SELECT o.id,o.author_id,u.name AS author_name,o.discipline,o.values_json,o.observed_at,o.created_at,o.observations FROM visit_observations o JOIN users u ON u.id=o.author_id WHERE o.visit_id=? AND o.discipline IN (${categoryFilter}) ORDER BY o.observed_at DESC,o.id DESC LIMIT 100`,
             [visit.id, ...scopedParameters],
           )
         : [];
@@ -478,7 +479,7 @@ export async function handleVisits(tx, context) {
       followUps:
         clinicalAllowed && followUpScopes.length
           ? await tx.all(
-              `SELECT f.id,f.author_id,u.name AS author_name,f.discipline,f.title,f.due_at,f.status,f.version,f.created_at,f.updated_at FROM visit_followups f JOIN users u ON u.id=f.author_id WHERE f.visit_id=? AND f.discipline IN (${followUpCategoryFilter}) ORDER BY f.due_at,f.id LIMIT 100`,
+              `SELECT f.id,f.author_id,u.name AS author_name,f.discipline,f.title,f.due_at,f.status,f.version,f.created_at,f.updated_at,f.resolution_reason FROM visit_followups f JOIN users u ON u.id=f.author_id WHERE f.visit_id=? AND f.discipline IN (${followUpCategoryFilter}) ORDER BY f.due_at,f.id LIMIT 100`,
               [visit.id, ...followUpScopes],
             )
           : [],
@@ -629,6 +630,7 @@ export async function handleVisits(tx, context) {
       status,
       audit,
       correlation,
+      text(body.reason ?? "", "visit action reason", 1000),
     );
     return { id: visit.id, version: body.version + 1 };
   }
@@ -672,10 +674,12 @@ export async function handleVisits(tx, context) {
       body.client_request_id === undefined
         ? null
         : text(body.client_request_id, "observation request ID", 100, true);
+    const observationComment = text(body.observations ?? "", "observation comments", 2000);
     const payload = JSON.stringify([
       values,
       body.observed_at === undefined ? null : observedAt,
       discipline,
+      ...(observationComment ? [observationComment] : []),
     ]);
     const replay = await replayClinicalRequest(
       tx,
@@ -693,7 +697,7 @@ export async function handleVisits(tx, context) {
       fail(400, "Observation time must fall within this visit and not in the future.");
     const id = randomUUID();
     const inserted = await tx.run(
-      "INSERT INTO visit_observations(id,visit_id,author_id,client_request_id,request_payload,discipline,values_json,observed_at,created_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
+      "INSERT INTO visit_observations(id,visit_id,author_id,client_request_id,request_payload,discipline,values_json,observed_at,created_at,observations) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
       [
         id,
         visit.id,
@@ -704,6 +708,7 @@ export async function handleVisits(tx, context) {
         JSON.stringify(values),
         observedAt,
         date,
+        observationComment,
       ],
     );
     if ((inserted.rowCount ?? inserted.changes) !== 1) {
@@ -813,8 +818,14 @@ export async function handleVisits(tx, context) {
     if (!["completed", "cancelled"].includes(body.status))
       fail(400, "Choose completed or cancelled.");
     const result = await tx.run(
-      "UPDATE visit_followups SET status=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status='open'",
-      [body.status, timestamp(), task.id, body.version],
+      "UPDATE visit_followups SET status=?,version=version+1,updated_at=?,resolution_reason=? WHERE id=? AND version=? AND status='open'",
+      [
+        body.status,
+        timestamp(),
+        text(body.reason ?? "", "follow-up reason", 1000),
+        task.id,
+        body.version,
+      ],
     );
     if ((result.rowCount ?? result.changes) !== 1)
       fail(409, "This follow-up changed. Refresh it before continuing.");

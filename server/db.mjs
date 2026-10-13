@@ -92,9 +92,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   };
   if (config.NODE_ENV === "production" && config.HEALTHPASS_RUN_MIGRATIONS !== "1") {
     await db.transaction(async (tx) => {
-      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='013'")))
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='014'")))
         throw new Error(
-          "Apply schema migrations 001 through 013 using the migration identity before starting the API.",
+          "Apply schema migrations 001 through 014 using the migration identity before starting the API.",
         );
     });
     return db;
@@ -180,6 +180,7 @@ export async function openDatabase(config = process.env, dependencies = {}) {
     ["011", "011-patient-onboarding.sql"],
     ["012", "012-care-responsibilities.sql"],
     ["013", "013-care-operations.sql"],
+    ["014", "014-clinical-treatment-security.sql"],
   ]) {
     await db.transaction(async (tx) => {
       if (!(await tx.get("SELECT version FROM schema_migrations WHERE version=?", [version]))) {
@@ -220,6 +221,36 @@ export async function openDatabase(config = process.env, dependencies = {}) {
             await tx.run(
               "CREATE TRIGGER care_workflow_events_immutable BEFORE UPDATE OR DELETE ON care_workflow_events FOR EACH ROW EXECUTE FUNCTION hp_immutable()",
             );
+        }
+        if (version === "014") {
+          if (engine === "sqlite")
+            pool.exec(
+              "CREATE TRIGGER medication_orders_signed_update BEFORE UPDATE ON medication_orders WHEN OLD.id IS NOT NEW.id OR OLD.patient_id IS NOT NEW.patient_id OR OLD.organization_id IS NOT NEW.organization_id OR OLD.branch_id IS NOT NEW.branch_id OR OLD.admission_id IS NOT NEW.admission_id OR OLD.prescriber_id IS NOT NEW.prescriber_id OR OLD.medicine IS NOT NEW.medicine OR OLD.dose IS NOT NEW.dose OR OLD.route IS NOT NEW.route OR OLD.frequency IS NOT NEW.frequency OR OLD.interval_hours IS NOT NEW.interval_hours OR OLD.prn IS NOT NEW.prn OR OLD.indication IS NOT NEW.indication OR OLD.instructions IS NOT NEW.instructions OR OLD.starts_at IS NOT NEW.starts_at OR OLD.ends_at IS NOT NEW.ends_at OR OLD.created_at IS NOT NEW.created_at OR OLD.request_key IS NOT NEW.request_key OR OLD.request_payload IS NOT NEW.request_payload BEGIN SELECT RAISE(ABORT,'Signed prescriptions cannot be rewritten'); END; CREATE TRIGGER medication_orders_no_delete BEFORE DELETE ON medication_orders BEGIN SELECT RAISE(ABORT,'Signed prescriptions cannot be deleted'); END;",
+            );
+          else {
+            await tx.run(
+              "CREATE FUNCTION hp_prescription_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP='DELETE' THEN RAISE EXCEPTION 'Signed prescriptions cannot be deleted'; END IF; IF (to_jsonb(NEW)-'status'-'version'-'stopped_at'-'stop_reason') IS DISTINCT FROM (to_jsonb(OLD)-'status'-'version'-'stopped_at'-'stop_reason') THEN RAISE EXCEPTION 'Signed prescriptions cannot be rewritten'; END IF; RETURN NEW; END $$",
+            );
+            await tx.run(
+              "CREATE TRIGGER medication_orders_signed BEFORE UPDATE OR DELETE ON medication_orders FOR EACH ROW EXECUTE FUNCTION hp_prescription_immutable()",
+            );
+          }
+          for (const table of [
+            "account_activity",
+            "clinical_admission_decisions",
+            "medication_administrations",
+            "ward_observations",
+            "treatment_events",
+          ]) {
+            if (engine === "sqlite")
+              pool.exec(
+                `CREATE TRIGGER ${table}_no_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'Treatment history is immutable'); END; CREATE TRIGGER ${table}_no_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'Treatment history is immutable'); END;`,
+              );
+            else
+              await tx.run(
+                `CREATE TRIGGER ${table}_immutable BEFORE UPDATE OR DELETE ON ${table} FOR EACH ROW EXECUTE FUNCTION hp_immutable()`,
+              );
+          }
         }
         await tx.run("INSERT INTO schema_migrations(version) VALUES (?)", [version]);
       }

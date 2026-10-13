@@ -67,6 +67,16 @@ export default {
           (env as { HEALTHPASS_ORIGIN_SECRET?: string } | undefined)?.HEALTHPASS_ORIGIN_SECRET ??
           process.env.HEALTHPASS_ORIGIN_SECRET;
         if (originSecret) headers.set("x-healthpass-origin-secret", originSecret);
+        headers.delete("x-healthpass-country");
+        headers.delete("x-healthpass-client-ip");
+        const country = process.env.VERCEL ? request.headers.get("x-vercel-ip-country") : null;
+        if (country && /^[A-Z]{2}$/.test(country)) headers.set("x-healthpass-country", country);
+        const clientIp = process.env.VERCEL
+          ? request.headers.get("x-vercel-forwarded-for")?.split(",")[0].trim()
+          : null;
+        if (clientIp && /^[a-fA-F0-9:.]{3,64}$/.test(clientIp))
+          headers.set("x-healthpass-client-ip", clientIp);
+        headers.set("user-agent", request.headers.get("user-agent") ?? "Unknown device");
         try {
           return await fetchHealthpassOrigin(request, upstream, headers);
         } catch {

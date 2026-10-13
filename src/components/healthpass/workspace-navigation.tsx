@@ -39,8 +39,8 @@ function NavigationPanel({
   const accountRoles = patient
     ? "Patient account"
     : me.jobRoles?.map((role) => role.name).join(" · ") || "Professional account";
-  const care = items.filter(([id]) => !["workspace", "audit"].includes(id));
-  const administration = items.filter(([id]) => ["workspace", "audit"].includes(id));
+  const care = items.filter(([id]) => !["workspace", "audit", "security"].includes(id));
+  const administration = items.filter(([id]) => ["workspace", "audit", "security"].includes(id));
   const groups = [
     { label: patient ? "MY CARE" : "CARE & DAILY WORK", items: care },
     { label: patient ? "MY ACTIVITY" : "WORKSPACE", items: administration },

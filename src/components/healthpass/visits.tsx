@@ -62,6 +62,11 @@ export function Visits({
   const [loading, setLoading] = useState(true);
   const [checkIn, setCheckIn] = useState(false);
   const [observing, setObserving] = useState(false);
+  const [cancelling, setCancelling] = useState<{
+    id: string;
+    version: number;
+    task: boolean;
+  } | null>(null);
   const [followUp, setFollowUp] = useState(false);
   const [observationRequest, setObservationRequest] = useState("");
   const [followUpRequest, setFollowUpRequest] = useState("");
@@ -384,16 +389,9 @@ export function Visits({
                   <button
                     className="hp-text-button"
                     disabled={busy}
-                    onClick={() => {
-                      if (window.confirm("Cancel this visit? Its care records will be preserved."))
-                        void action(async () => {
-                          await careApi(`/visits/${visit.id}`, "PATCH", {
-                            version: visit.version,
-                            status: "cancelled",
-                          });
-                          await loadDetail();
-                        }, "Visit cancelled; care records preserved.");
-                    }}
+                    onClick={() =>
+                      setCancelling({ id: visit.id, version: visit.version, task: false })
+                    }
                   >
                     Cancel visit
                   </button>
@@ -471,6 +469,7 @@ export function Visits({
                       <div className="hp-grant" key={o.id}>
                         <div>
                           <strong>{date(o.observed_at)}</strong>
+                          {o.observations && <p>{o.observations}</p>}
                           <p>
                             {vitalFields
                               .filter(([key]) => o.values[key] !== undefined)
@@ -514,7 +513,8 @@ export function Visits({
                           <strong>{f.title}</strong>
                           <p>Due {date(f.due_at)}</p>
                           <small>
-                            {f.status} · {f.author_name || "Original task author"}
+                            {f.status} · {f.author_name || "Original task author"} ·{" "}
+                            {date(f.updated_at || f.created_at || "")}
                           </small>
                         </div>
                         {f.status === "open" &&
@@ -548,17 +548,7 @@ export function Visits({
                                 className="hp-text-button"
                                 disabled={busy}
                                 onClick={() =>
-                                  void action(async () => {
-                                    await careApi(
-                                      `/visits/${visit.id}/follow-ups/${f.id}`,
-                                      "PATCH",
-                                      {
-                                        version: f.version,
-                                        status: "cancelled",
-                                      },
-                                    );
-                                    await loadDetail();
-                                  }, "Follow-up cancelled.")
+                                  setCancelling({ id: f.id, version: f.version, task: true })
                                 }
                               >
                                 Cancel
@@ -591,6 +581,40 @@ export function Visits({
           }}
         />
       )}
+      {cancelling && visit && (
+        <Modal
+          title={cancelling.task ? "Cancel follow-up" : "Cancel visit"}
+          onClose={() => {
+            if (!busy) setCancelling(null);
+          }}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const reason = String(new FormData(e.currentTarget).get("reason") || "");
+              void action(async () => {
+                await careApi(
+                  cancelling.task
+                    ? `/visits/${visit.id}/follow-ups/${cancelling.id}`
+                    : `/visits/${visit.id}`,
+                  "PATCH",
+                  { version: cancelling.version, status: "cancelled", reason },
+                );
+                setCancelling(null);
+                await loadDetail();
+              }, "Cancellation recorded; care history preserved.");
+            }}
+          >
+            <label>
+              Reason for cancellation
+              <textarea name="reason" required maxLength={1000} />
+            </label>
+            <button className="hp-button primary" disabled={busy}>
+              Confirm cancellation
+            </button>
+          </form>
+        </Modal>
+      )}
       {observing && visit && (
         <Modal
           title="Record visit observations"
@@ -615,6 +639,7 @@ export function Visits({
               void action(async () => {
                 await careApi(`/visits/${visit.id}/observations`, "POST", {
                   values,
+                  observations: String(fields.get("observations") || ""),
                   client_request_id: observationRequest,
                 });
                 setObserving(false);
@@ -630,6 +655,10 @@ export function Visits({
                 </label>
               ))}
             </div>
+            <label>
+              Observations / comments
+              <textarea name="observations" maxLength={2000} />
+            </label>
             <button className="hp-button primary" disabled={busy}>
               Save observations
             </button>

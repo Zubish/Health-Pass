@@ -176,8 +176,8 @@ export async function handleCareOperations(tx, c) {
       fail(409, "A care area with this name already exists in this branch.");
     const row = { id: randomUUID(), organization_id: org };
     await tx.run(
-      "INSERT INTO care_areas(id,organization_id,branch_id,name,kind) VALUES (?,?,?,?,?)",
-      [row.id, org, b.id, name, body.kind],
+      "INSERT INTO care_areas(id,organization_id,branch_id,name,kind,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",
+      [row.id, org, b.id, name, body.kind, now(), now()],
     );
     await workflowEvent(tx, c, row, "care_area.created", {
       branch_id: b.id,
@@ -219,9 +219,10 @@ export async function handleCareOperations(tx, c) {
         409,
         "Move or end active care episodes and resolve active visits before archiving this area.",
       );
-    await tx.run("UPDATE care_areas SET name=?,active=? WHERE id=?", [
+    await tx.run("UPDATE care_areas SET name=?,active=?,updated_at=? WHERE id=?", [
       name,
       body.active === false ? 0 : 1,
+      now(),
       current.id,
     ]);
     await workflowEvent(tx, c, current, "care_area.updated", {
@@ -276,7 +277,7 @@ export async function handleCareOperations(tx, c) {
         )) ?? null;
       if (row.consultant) delete row.consultant.specialty_review_reference;
       row.history = await tx.all(
-        "SELECT action,payload,created_at FROM care_workflow_events WHERE object_id=? ORDER BY created_at DESC LIMIT 30",
+        "SELECT e.action,e.payload,e.created_at,u.name AS actor_name FROM care_workflow_events e JOIN users u ON u.id=e.actor_id WHERE e.object_id=? ORDER BY e.created_at DESC LIMIT 30",
         [row.id],
       );
     }
@@ -371,6 +372,45 @@ export async function handleCareOperations(tx, c) {
         reason,
       });
     } else if (match[2] === "end") {
+      if (
+        (await tx.get(
+          "SELECT id FROM clinical_admission_decisions WHERE admission_id=? AND kind='admit'",
+          [row.id],
+        )) &&
+        !(await tx.get(
+          "SELECT id FROM clinical_admission_decisions WHERE admission_id=? AND kind='discharge'",
+          [row.id],
+        ))
+      )
+        fail(
+          409,
+          "The physician must record a clinical discharge decision before this admitted episode can end.",
+        );
+      const orders = await tx.all(
+        "SELECT id FROM medication_orders WHERE admission_id=? AND status='active'",
+        [row.id],
+      );
+      for (const order of orders) {
+        const stopReason =
+          "Inpatient episode ended; this ward order does not authorize outpatient medication.";
+        await tx.run(
+          "UPDATE medication_orders SET status='stopped',version=version+1,stopped_at=?,stop_reason=? WHERE id=?",
+          [now(), stopReason, order.id],
+        );
+        await tx.run(
+          "INSERT INTO treatment_events(id,patient_id,organization_id,object_id,actor_id,action,reason,created_at) VALUES (?,?,?,?,?,?,?,?)",
+          [
+            randomUUID(),
+            row.patient_id,
+            org,
+            order.id,
+            actor.id,
+            "medication.episode_ended",
+            stopReason,
+            now(),
+          ],
+        );
+      }
       if (!body.confirm_episode_end)
         fail(400, "Confirm this admission or observation episode has ended.");
       await tx.run(
@@ -457,8 +497,8 @@ export async function handleCareOperations(tx, c) {
         if (!auth.accessPolicy.scopes.includes(scope))
           fail(403, "The patient has not shared this record category with that professional.");
         await tx.run(
-          "INSERT INTO admission_team_members(id,admission_id,user_id,duty) VALUES (?,?,?,?) ON CONFLICT(admission_id,user_id) DO UPDATE SET duty=excluded.duty,active=1,version=admission_team_members.version+1",
-          [randomUUID(), row.id, target.id, body.duty],
+          "INSERT INTO admission_team_members(id,admission_id,user_id,duty,created_at,updated_at) VALUES (?,?,?,?,?,?) ON CONFLICT(admission_id,user_id) DO UPDATE SET duty=excluded.duty,active=1,version=admission_team_members.version+1,updated_at=excluded.updated_at",
+          [randomUUID(), row.id, target.id, body.duty, now(), now()],
         );
       }
       await tx.run("UPDATE care_admissions SET version=version+1 WHERE id=?", [row.id]);

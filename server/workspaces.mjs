@@ -193,6 +193,10 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
       if (permissions.some((key) => clinicalPermissions.has(key)) && !scope)
         fail(400, "Clinical permissions require a clinical scope.");
       const dependencies = {
+        "admissions.decide": "records.view",
+        "prescriptions.create": "records.view",
+        "medication.administer": "records.view",
+        "ward.observations": "records.view",
         "areas.manage": "workspace.view",
         "referrals.create": "records.view",
         "referrals.respond": "records.view",

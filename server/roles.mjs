@@ -1,4 +1,20 @@
 export const permissionCatalog = [
+  {
+    key: "admissions.decide",
+    label: "Record physician admission and discharge decisions",
+    category: "clinical",
+  },
+  {
+    key: "prescriptions.create",
+    label: "Prescribe and stop medication orders",
+    category: "clinical",
+  },
+  {
+    key: "medication.administer",
+    label: "Record inpatient medication administration",
+    category: "clinical",
+  },
+  { key: "ward.observations", label: "Record ward observations and vitals", category: "clinical" },
   { key: "areas.manage", label: "Manage departments and wards", category: "operational" },
   {
     key: "admissions.manage",
@@ -80,7 +96,7 @@ export const roleTemplates = [
     key: "gp",
     name: "General practitioner",
     description:
-      "General practice consultations and clinical notes. Prescribing is not yet available.",
+      "General practice consultations and clinical notes. Structured prescribing with reviewed clinical authority.",
     clinical_scope: "general",
     permissions: [
       "registry.view",
@@ -114,8 +130,7 @@ export const roleTemplates = [
   {
     key: "pharmacist",
     name: "Pharmacist",
-    description:
-      "Medication review notes. Dispensing and prescribing modules are not yet available.",
+    description: "Medication review notes. Medication review; dispensing is separate.",
     clinical_scope: "medication",
     permissions: [
       "registry.view",
@@ -246,6 +261,12 @@ export async function upgradeVisitRoles(tx) {
 export const clinicalPermissions = new Set(
   permissionCatalog.filter((p) => p.category === "clinical").map((p) => p.key),
 );
+for (const template of roleTemplates) {
+  if (["gp", "consultant", "clinician"].includes(template.key))
+    template.permissions.push("admissions.decide", "prescriptions.create", "ward.observations");
+  if (template.key === "nurse")
+    template.permissions.push("medication.administer", "ward.observations");
+}
 export const ownerPermissions = roleTemplates.find((r) => r.key === "administrator").permissions;
 export async function createDefaultRoles(tx, organization) {
   for (const role of roleTemplates)
@@ -263,6 +284,10 @@ export async function createDefaultRoles(tx, organization) {
     );
 }
 export const permissionDependencies = {
+  "admissions.decide": "records.view",
+  "prescriptions.create": "records.view",
+  "medication.administer": "records.view",
+  "ward.observations": "records.view",
   "careteam.view": "registry.view",
   "registry.create": "registry.view",
   "visits.view": "registry.view",

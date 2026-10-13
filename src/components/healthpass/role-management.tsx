@@ -56,6 +56,10 @@ export function RoleManagement({
   }
   function toggle(key: string, checked: boolean) {
     const dependencies: Record<string, string> = {
+      "admissions.decide": "records.view",
+      "prescriptions.create": "records.view",
+      "medication.administer": "records.view",
+      "ward.observations": "records.view",
       "careteam.view": "registry.view",
       "areas.manage": "workspace.view",
       "referrals.create": "records.view",
@@ -250,8 +254,8 @@ export function RoleManagement({
           </label>
         )}
         <p className="hp-fine">
-          The workspace creator retains administration access. Prescribing, dispensing, payments and
-          financial reports are not available permissions yet.
+          The workspace creator retains administration access. Dispensing, payments and financial
+          reports are not available permissions yet.
         </p>
         <button className="hp-button primary" disabled={busy}>
           {editing ? "Save role changes" : "Add role"}

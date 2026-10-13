@@ -32,7 +32,7 @@ type Episode = {
     active: number;
     version: number;
   }[];
-  history: { action: string; payload: string; created_at: string }[];
+  history: { action: string; payload: string; created_at: string; actor_name?: string }[];
 };
 type Options = {
   patients: { id: string; name: string; healthpass_id: string; branch_id: string }[];
@@ -169,6 +169,16 @@ export function AdmissionCare({ me }: { me: Me }) {
                 {row.healthpass_id} · {row.branch_name}
               </p>
               <p>
+                {(patient || me.permissions?.includes("records.view")) && (
+                  <p>
+                    <a
+                      className="hp-button secondary"
+                      href={`/workspace?tab=patients&patient=${encodeURIComponent(row.patient_id)}`}
+                    >
+                      Open treatment & ward record
+                    </a>
+                  </p>
+                )}
                 <strong>{row.area_name}</strong> · Opened {date(row.created_at)}
               </p>
               <p>
@@ -230,7 +240,7 @@ export function AdmissionCare({ me }: { me: Me }) {
                 {row.history.map((h, i) => (
                   <p key={i}>
                     {h.action.replaceAll("admission.", "").replaceAll("_", " ")} ·{" "}
-                    {date(h.created_at)}
+                    {date(h.created_at)} · {h.actor_name || "Historical actor"}
                   </p>
                 ))}
               </details>

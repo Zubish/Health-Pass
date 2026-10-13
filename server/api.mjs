@@ -1,3 +1,5 @@
+import { handleAccountSecurity, recordSignin, signinContext } from "./account-security.mjs";
+import { handleTreatment } from "./treatment.mjs";
 import { handleCareOperations } from "./care-operations.mjs";
 import { handleConsultantReferrals } from "./consultant-referrals.mjs";
 import { careAreaAllowsPatient, careAreaPatientPredicate } from "./care-area-access.mjs";
@@ -93,7 +95,7 @@ export function createApi(db, config = process.env) {
       for (const [k, v] of attempts) if (v.until < time) attempts.delete(k);
     if (value.count > maximum) fail(429, "Too many attempts. Try again in ten minutes.");
   }
-  const cookie = (token, age = 28800) =>
+  const cookie = (token, age = 2592000) =>
     `hp_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${secure ? "; Secure" : ""}`;
   async function audit(
     tx,
@@ -127,8 +129,13 @@ export function createApi(db, config = process.env) {
     const token = request.headers.get("cookie")?.match(/(?:^|;\s*)hp_session=([a-f0-9]+)/)?.[1];
     if (!token) return null;
     const user = await tx.get(
-      "SELECT u.*, s.id AS session_id,s.organization_id,s.mfa_verified,s.mfa_skipped,s.created_at AS session_created FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND s.last_seen_at>? AND u.active=1",
-      [hash(token), now(), new Date(Date.now() - 30 * 60 * 1000).toISOString()],
+      "SELECT u.*, s.id AS session_id,s.organization_id,s.mfa_verified,s.mfa_skipped,s.created_at AS session_created FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND s.last_seen_at>? AND u.active=1 AND (u.eight_hour_limit=0 OR s.created_at>?)",
+      [
+        hash(token),
+        now(),
+        new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+        new Date(Date.now() - 28800000).toISOString(),
+      ],
     );
     if (!user) return null;
     await tx.run("UPDATE sessions SET last_seen_at=? WHERE id=?", [now(), user.session_id]);
@@ -295,7 +302,7 @@ export function createApi(db, config = process.env) {
         user.id,
         hash(token),
         membership?.organization_id ?? null,
-        new Date(Date.now() + 28800000).toISOString(),
+        new Date(Date.now() + 30 * 86400000).toISOString(),
         now(),
         now(),
       ],
@@ -481,6 +488,10 @@ export function createApi(db, config = process.env) {
       cookie,
       outputHeaders,
     };
+    const securityResult = await handleAccountSecurity(tx, context);
+    if (securityResult !== undefined) return securityResult;
+    const treatmentResult = await handleTreatment(tx, context);
+    if (treatmentResult !== undefined) return treatmentResult;
     const operationsResult = await handleCareOperations(tx, context);
     if (operationsResult !== undefined) return operationsResult;
     const referralsResult = await handleConsultantReferrals(tx, context);
@@ -502,6 +513,14 @@ export function createApi(db, config = process.env) {
         ? await tx.get("SELECT * FROM organizations WHERE id=?", [actor.organization_id])
         : null;
       return {
+        securityAlerts: Number(
+          (
+            await tx.get(
+              "SELECT COUNT(*) AS count FROM signin_events WHERE user_id=? AND risk<>'normal' AND reviewed_at IS NULL",
+              [actor.id],
+            )
+          ).count,
+        ),
         user: safeUser(actor),
         role: actor.role,
         permissions: actor.permissions ?? [],
@@ -1108,6 +1127,7 @@ export function createApi(db, config = process.env) {
         "x-correlation-id": correlation,
       });
     let actor = null;
+    let submittedBody = null;
     try {
       if (!["GET", "POST", "PATCH"].includes(request.method)) fail(405, "Method not allowed.");
       let body = {};
@@ -1125,14 +1145,100 @@ export function createApi(db, config = process.env) {
         if (!body || typeof body !== "object" || Array.isArray(body))
           fail(400, "Invalid request body.");
       }
+      submittedBody = body;
+      if (path === "/auth/login" && request.method === "POST") {
+        const attemptKey = hash(
+          String(body.workspace_code ?? body.account_type ?? "legacy") +
+            ":" +
+            String(body.email ?? "")
+              .trim()
+              .toLowerCase(),
+        );
+        const count = await db.transaction(async (tx) => {
+          await tx.run(
+            "INSERT INTO signin_attempt_limits(id,attempt_count,window_ends_at) VALUES (?,1,?) ON CONFLICT(id) DO UPDATE SET attempt_count=CASE WHEN signin_attempt_limits.window_ends_at>? THEN signin_attempt_limits.attempt_count+1 ELSE 1 END,window_ends_at=CASE WHEN signin_attempt_limits.window_ends_at>? THEN signin_attempt_limits.window_ends_at ELSE excluded.window_ends_at END",
+            [attemptKey, new Date(Date.now() + 600000).toISOString(), now(), now()],
+          );
+          return (
+            await tx.get("SELECT attempt_count FROM signin_attempt_limits WHERE id=?", [attemptKey])
+          ).attempt_count;
+        });
+        if (count > 10) fail(429, "Too many attempts. Try again in ten minutes.");
+      }
       const result = await db.transaction(async (tx) => {
         actor = await session(tx, request);
-        return dispatch(tx, request, path, request.method, body, actor, correlation, headers);
+        const result = await dispatch(
+          tx,
+          request,
+          path,
+          request.method,
+          body,
+          actor,
+          correlation,
+          headers,
+        );
+        const sessionToken = headers.get("set-cookie")?.match(/^hp_session=([a-f0-9]+)/)?.[1];
+        if (sessionToken && path.startsWith("/auth/"))
+          await recordSignin(tx, request, headers, secure, sessionToken);
+        if (request.method !== "GET") {
+          const current = actor?.id
+            ? actor
+            : sessionToken
+              ? await tx.get("SELECT user_id AS id FROM sessions WHERE token_hash=?", [
+                  hash(sessionToken),
+                ])
+              : null;
+          if (current)
+            await tx.run(
+              "INSERT INTO account_activity(id,user_id,action,created_at) VALUES (?,?,?,?)",
+              [
+                randomUUID(),
+                current.id,
+                path
+                  .split("/")
+                  .filter((part) => part && !/^[0-9a-f-]{20,}$/.test(part))
+                  .join(" · "),
+                now(),
+              ],
+            );
+        }
+        return result;
       });
       if (request.method !== "GET") await deliverPatientEmails(db, config).catch(() => {});
       return new Response(JSON.stringify(result), { status: 200, headers });
     } catch (error) {
       const status = error.status ?? 500;
+      if (path === "/auth/login" && status === 401 && submittedBody?.email)
+        await db
+          .transaction(async (tx) => {
+            const email = String(submittedBody.email).trim().toLowerCase();
+            const user = submittedBody.workspace_code
+              ? await tx.get(
+                  "SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id JOIN organizations o ON o.id=m.organization_id WHERE COALESCE(u.login_email,u.email)=? AND o.workspace_code=?",
+                  [email, String(submittedBody.workspace_code).toUpperCase()],
+                )
+              : await tx.get(
+                  "SELECT id FROM users WHERE COALESCE(login_email,email)=? AND account_scope='patient'",
+                  [email],
+                );
+            if (user) {
+              const info = signinContext(request);
+              await tx.run(
+                "INSERT INTO signin_events(id,user_id,action,device_label,country,ip_hash,risk,created_at) VALUES (?,?,?,?,?,?,?,?)",
+                [
+                  randomUUID(),
+                  user.id,
+                  "failed_signin",
+                  info.label,
+                  info.country,
+                  info.ip ? hash("healthpass-ip:" + info.ip) : null,
+                  "failed_password",
+                  now(),
+                ],
+              );
+            }
+          })
+          .catch(() => {});
       // Failed transaction rolls back. Persist denial separately, without submitted clinical content.
       if (status === 401 || status === 403)
         await db

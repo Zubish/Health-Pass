@@ -20,11 +20,14 @@ export type CareVisit = {
 };
 export type VisitObservation = {
   id: string;
+  observations?: string;
   values: Record<string, number>;
   observed_at: string;
   author_name?: string;
 };
 export type VisitFollowUp = {
+  updated_at?: string;
+  resolution_reason?: string;
   id: string;
   author_id?: string;
   author_name?: string;

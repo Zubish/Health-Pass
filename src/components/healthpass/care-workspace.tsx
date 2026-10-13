@@ -1,3 +1,5 @@
+import { TreatmentRecords } from "./treatment-records";
+import { AccountSecurity } from "./account-security";
 import { AdmissionCare } from "./admission-care";
 import { ConsultantReferrals } from "./consultant-referrals";
 import { useNavigate, useSearch } from "@tanstack/react-router";
@@ -98,6 +100,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
         ["admissions", "My care episodes", Stethoscope],
         ["referrals", "Consultant referrals", Stethoscope],
         ["audit", "Access history", History],
+        ["security", "Session management", ShieldCheck],
       ] as const)
     : ([
         ...(can("visits.view") ? [["today", "Today's work", ClipboardList] as const] : []),
@@ -117,6 +120,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           ? [["relationships", "Care relationships", ShieldCheck] as const]
           : []),
         ...(can("audit.view") ? [["audit", "Activity & audit", History] as const] : []),
+        ["security", "Session management", ShieldCheck],
       ] as const);
   async function loadRegistry() {
     if (canRegistry) {
@@ -577,6 +581,11 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                   </div>
                   <span className="hp-chip blue">{chart.encounters.length} encounters</span>
                 </div>
+                <TreatmentRecords
+                  me={me}
+                  patientId={chart.patient.id}
+                  accessScope={chart.accessScope}
+                />
                 {chart.encounters.map((encounter) => (
                   <EncounterCard
                     key={encounter.id}
@@ -852,6 +861,14 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           />
         )}
         {tab === "relationships" && <CareRelationships me={me} />}
+        {!!me.securityAlerts && tab !== "security" && (
+          <p className="hp-notice">
+            <a href="/workspace?tab=security">
+              Review recent sign-in activity in Session management.
+            </a>
+          </p>
+        )}
+        {tab === "security" && <AccountSecurity onLogout={onLogout} />}
         {tab === "admissions" && <AdmissionCare me={me} />}
         {tab === "referrals" && <ConsultantReferrals me={me} />}
         {tab === "careteam" && <CareResponsibilities me={me} />}

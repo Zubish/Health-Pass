@@ -3109,8 +3109,67 @@ button.hp-patient-row:hover {
   }
 }
 
-.hp-workspace-signin-link { display: block; overflow-wrap: anywhere; margin-bottom: 1rem; }
+.hp-workspace-signin-link {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-bottom: 1rem;
+}
 
-.hp-care-episode-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,340px),1fr)); gap: 18px; }
-.hp-individual-access { margin-block: 12px; }
-.hp-care-episode-grid h2 { overflow-wrap: anywhere; }
+.hp-care-episode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 18px;
+}
+.hp-individual-access {
+  margin-block: 12px;
+}
+.hp-care-episode-grid h2 {
+  overflow-wrap: anywhere;
+}
+
+.hp-treatment,
+.hp-security-panel {
+  padding: clamp(1rem, 3vw, 1.5rem);
+  margin-block: 1rem;
+  min-width: 0;
+}
+.hp-treatment > h3 {
+  margin-block: 1.5rem 0.75rem;
+}
+.hp-treatment .hp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 0.75rem;
+}
+.hp-treatment .hp-grant {
+  margin-block: 0.75rem;
+}
+.hp-treatment-table {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.hp-treatment-table table {
+  min-width: 780px;
+  width: 100%;
+  border-collapse: collapse;
+}
+.hp-treatment-table th,
+.hp-treatment-table td {
+  padding: 0.65rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--hp-line, #dce4e8);
+}
+.hp-treatment-table th:first-child,
+.hp-treatment-table td:first-child {
+  min-width: 160px;
+}
+.hp-treatment-table th:last-child,
+.hp-treatment-table td:last-child {
+  min-width: 180px;
+  overflow-wrap: anywhere;
+}
+.hp-security-panel h2 {
+  margin-bottom: 1rem;
+}
