@@ -45,7 +45,8 @@ type Episode = {
 };
 type Observation = {
   id: string;
-  admission_id: string;
+  admission_id: string | null;
+  source?: string;
   discipline: string;
   values: Record<string, number>;
   observations: string;
@@ -64,6 +65,13 @@ type Decision = {
   physician_name: string;
 };
 type Data = {
+  visitHistory: {
+    id: string;
+    action: string;
+    reason: string;
+    created_at: string;
+    actor_name: string;
+  }[];
   orders: Order[];
   episodes: Episode[];
   observations: Observation[];
@@ -316,7 +324,7 @@ export function TreatmentRecords({
             </article>
           ))}
           {!data.orders.length && <p className="hp-muted">No prescriptions available.</p>}
-          <h3>Longitudinal ward observations</h3>
+          <h3>Vital records & ward observations</h3>
           <label>
             Trend measurement
             <select value={metric} onChange={(e) => setMetric(e.target.value)}>
@@ -371,7 +379,7 @@ export function TreatmentRecords({
                     <td>
                       {date(o.observed_at)}
                       <br />
-                      {o.author_name}
+                      {o.author_name} · {o.source === "visit" ? "Visit" : "Ward"}
                       <br />
                       <small>Recorded {date(o.created_at)}</small>
                     </td>
@@ -387,6 +395,17 @@ export function TreatmentRecords({
           {!data.observations.length && <p className="hp-muted">No ward observations available.</p>}
           <details>
             <summary>Treatment history</summary>
+            {data.visitHistory?.map((h) => (
+              <p key={h.id}>
+                {h.action.replaceAll(".", " · ")} · {h.actor_name} · {date(h.created_at)}
+                {h.reason && (
+                  <>
+                    <br />
+                    {h.reason}
+                  </>
+                )}
+              </p>
+            ))}
             {data.history.map((h) => (
               <p key={h.id}>
                 {h.action.replaceAll(".", " · ")} · {h.actor_name} · {date(h.created_at)}

@@ -629,3 +629,44 @@ test("durable sign-in attempt limits cannot be bypassed by workspace code letter
     await f.db.close();
   }
 });
+test("patient treatment view includes outpatient vitals, observation comments and cancellation reason outside audit", async () => {
+  const f = await fixture();
+  try {
+    const v = await f.visit();
+    await f.ok(
+      f.gp(`/visits/${v.id}/observations`, "POST", {
+        values: { pulse: 75, temperature: 37 },
+        observations: "Synthetic outpatient observation",
+        client_request_id: randomUUID(),
+      }),
+    );
+    await f.ok(
+      f.gp(`/visits/${v.id}`, "PATCH", {
+        version: v.version,
+        status: "cancelled",
+        reason: "Synthetic appointment cancelled at patient request",
+      }),
+    );
+    const chart = await f.ok(f.patient(base));
+    assert.ok(
+      chart.observations.some(
+        (o) =>
+          o.source === "visit" &&
+          o.observations === "Synthetic outpatient observation" &&
+          o.created_at &&
+          o.author_name,
+      ),
+    );
+    assert.ok(
+      chart.visitHistory.some(
+        (e) =>
+          e.action === "visit.cancelled" &&
+          e.reason === "Synthetic appointment cancelled at patient request" &&
+          e.actor_name &&
+          e.created_at,
+      ),
+    );
+  } finally {
+    await f.db.close();
+  }
+});

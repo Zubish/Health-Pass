@@ -640,6 +640,9 @@ export function Visits({
                 await careApi(`/visits/${visit.id}/observations`, "POST", {
                   values,
                   observations: String(fields.get("observations") || ""),
+                  ...(fields.get("observed_at")
+                    ? { observed_at: new Date(String(fields.get("observed_at"))).toISOString() }
+                    : {}),
                   client_request_id: observationRequest,
                 });
                 setObserving(false);
@@ -655,6 +658,10 @@ export function Visits({
                 </label>
               ))}
             </div>
+            <label>
+              Measurement time (leave blank for now)
+              <input type="datetime-local" name="observed_at" />
+            </label>
             <label>
               Observations / comments
               <textarea name="observations" maxLength={2000} />

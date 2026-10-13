@@ -122,6 +122,16 @@ export async function handleTreatment(tx, c) {
       `SELECT o.id,o.admission_id,o.discipline,o.values_json,o.observations,o.observed_at,o.created_at,u.name AS author_name FROM ward_observations o JOIN users u ON u.id=o.author_id WHERE ${where.replaceAll("patient_id", "o.patient_id").replaceAll("organization_id", "o.organization_id")} ORDER BY observed_at DESC LIMIT 200`,
       args,
     );
+    const outpatient = await tx.all(
+      `SELECT o.id,NULL AS admission_id,o.visit_id,o.discipline,o.values_json,o.observations,o.observed_at,o.created_at,u.name AS author_name,org.name AS facility_name FROM visit_observations o JOIN care_visits v ON v.id=o.visit_id JOIN users u ON u.id=o.author_id JOIN organizations org ON org.id=v.organization_id WHERE ${where.replaceAll("patient_id", "v.patient_id").replaceAll("organization_id", "v.organization_id")} ORDER BY o.observed_at DESC LIMIT 200`,
+      args,
+    );
+    const visitHistory = policy.scopes.includes("general")
+      ? await tx.all(
+          `SELECT e.id,e.action,e.reason,e.created_at,u.name AS actor_name FROM visit_events e JOIN care_visits v ON v.id=e.visit_id JOIN users u ON u.id=e.actor_id WHERE ${where.replaceAll("patient_id", "v.patient_id").replaceAll("organization_id", "v.organization_id")} ORDER BY e.created_at DESC LIMIT 100`,
+          args,
+        )
+      : [];
     const episodes = await tx.all(
       `SELECT a.id,a.kind,a.status,a.branch_id,ar.name AS area_name,a.created_at,a.ended_at FROM care_admissions a JOIN care_areas ar ON ar.id=a.care_area_id WHERE ${where.replaceAll("patient_id", "a.patient_id").replaceAll("organization_id", "a.organization_id")} ORDER BY a.created_at DESC LIMIT 100`,
       args,
@@ -133,6 +143,7 @@ export async function handleTreatment(tx, c) {
     const visible = new Set(
       [
         ...orders,
+        ...orders.flatMap((o) => o.administrations),
         ...decisions,
         ...observations.filter((o) => policy.scopes.includes(o.discipline)),
       ].map((o) => o.id),
@@ -141,7 +152,13 @@ export async function handleTreatment(tx, c) {
       orders,
       decisions,
       episodes,
-      observations: observations
+      visitHistory,
+      observations: [
+        ...observations.map((o) => ({ ...o, source: "ward" })),
+        ...outpatient.map((o) => ({ ...o, source: "visit" })),
+      ]
+        .sort((a, b) => b.observed_at.localeCompare(a.observed_at))
+        .slice(0, 200)
         .filter((o) => policy.scopes.includes(o.discipline))
         .map(({ values_json, ...o }) => ({ ...o, values: JSON.parse(values_json) })),
       history: history.filter((e) => visible.has(e.object_id)),
