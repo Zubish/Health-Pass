@@ -1,3 +1,4 @@
+import { Departments } from "./departments";
 import { TreatmentRecords } from "./treatment-records";
 import { AccountSecurity } from "./account-security";
 import { AdmissionCare } from "./admission-care";
@@ -94,6 +95,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     ? ([
         ["overview", "My health", LayoutDashboard],
         ["patients", "My record", FileHeart],
+        ["departments", "Tests & medicines", ClipboardList],
         ["sharing", "Sharing", ShieldCheck],
         ["relationships", "Care relationships", Users],
         ["careteam", "My care team", Stethoscope],
@@ -105,6 +107,15 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     : ([
         ...(can("visits.view") ? [["today", "Today's work", ClipboardList] as const] : []),
         ["overview", "Overview", LayoutDashboard],
+        ...([
+          "diagnostics.order",
+          "prescriptions.create",
+          "laboratory.work",
+          "radiology.work",
+          "pharmacy.review",
+        ].some(can)
+          ? [["departments", "Department work", ClipboardList] as const]
+          : []),
         ...(can("admissions.view") || can("admissions.manage")
           ? [["admissions", "Admissions & care teams", Stethoscope] as const]
           : []),
@@ -581,6 +592,16 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
                   </div>
                   <span className="hp-chip blue">{chart.encounters.length} encounters</span>
                 </div>
+                {(isPatient ||
+                  [
+                    "diagnostics.order",
+                    "prescriptions.create",
+                    "laboratory.work",
+                    "radiology.work",
+                    "pharmacy.review",
+                  ].some(can)) && (
+                  <Departments key={chart.patient.id} me={me} patientId={chart.patient.id} />
+                )}
                 <TreatmentRecords
                   me={me}
                   patientId={chart.patient.id}
@@ -868,6 +889,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
             </a>
           </p>
         )}
+        {tab === "departments" && <Departments me={me} />}
         {tab === "security" && <AccountSecurity onLogout={onLogout} />}
         {tab === "admissions" && <AdmissionCare me={me} />}
         {tab === "referrals" && <ConsultantReferrals me={me} />}

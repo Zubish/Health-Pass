@@ -14,8 +14,10 @@ const scopeNames: Record<AccessScope, string> = {
   general: "General care notes",
   nursing: "Nursing care notes",
   medication: "Medication review notes",
+  laboratory: "Laboratory requests and results",
+  radiology: "Imaging requests and reports",
 };
-const allScopes: AccessScope[] = ["general", "nursing", "medication"];
+const allScopes: AccessScope[] = ["general", "nursing", "medication", "laboratory", "radiology"];
 function Choice({
   children,
   checked,

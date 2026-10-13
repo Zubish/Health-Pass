@@ -188,11 +188,20 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
       const scope = permissions.some((key) => clinicalPermissions.has(key))
         ? body.clinical_scope
         : null;
-      if (scope && !["general", "nursing", "medication"].includes(scope))
+      if (scope && !["general", "nursing", "medication", "laboratory", "radiology"].includes(scope))
         fail(400, "Choose a supported clinical scope.");
       if (permissions.some((key) => clinicalPermissions.has(key)) && !scope)
         fail(400, "Clinical permissions require a clinical scope.");
       const dependencies = {
+        "diagnostics.order": "records.view",
+        "laboratory.work": "records.view",
+        "laboratory.report": "laboratory.work",
+        "laboratory.release": "laboratory.report",
+        "radiology.work": "records.view",
+        "radiology.report": "radiology.work",
+        "radiology.release": "radiology.report",
+        "pharmacy.review": "records.view",
+        "pharmacy.fulfil": "pharmacy.review",
         "admissions.decide": "records.view",
         "prescriptions.create": "records.view",
         "medication.administer": "records.view",

@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { upgradeVisitRoles, upgradePrimaryRoles, upgradeCareResponsibilities } from "./roles.mjs";
+import {
+  upgradeVisitRoles,
+  upgradePrimaryRoles,
+  upgradeCareResponsibilities,
+  roleTemplates,
+} from "./roles.mjs";
 
 export async function openDatabase(config = process.env, dependencies = {}) {
   let engine, pool;
@@ -92,9 +97,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   };
   if (config.NODE_ENV === "production" && config.HEALTHPASS_RUN_MIGRATIONS !== "1") {
     await db.transaction(async (tx) => {
-      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='014'")))
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='015'")))
         throw new Error(
-          "Apply schema migrations 001 through 014 using the migration identity before starting the API.",
+          "Apply schema migrations 001 through 015 using the migration identity before starting the API.",
         );
     });
     return db;
@@ -181,12 +186,43 @@ export async function openDatabase(config = process.env, dependencies = {}) {
     ["012", "012-care-responsibilities.sql"],
     ["013", "013-care-operations.sql"],
     ["014", "014-clinical-treatment-security.sql"],
+    ["015", "015-department-workflows.sql"],
   ]) {
     await db.transaction(async (tx) => {
       if (!(await tx.get("SELECT version FROM schema_migrations WHERE version=?", [version]))) {
         const schema = readFileSync(new URL("./migrations/" + file, import.meta.url), "utf8");
         if (engine === "sqlite") pool.exec(schema);
         else await tx.run(schema);
+        if (version === "015") {
+          for (const org of await tx.all("SELECT id FROM organizations")) {
+            for (const role of roleTemplates.filter((r) =>
+              ["laboratory", "radiology", "radiographer"].includes(r.key),
+            )) {
+              await tx.run(
+                "INSERT INTO workspace_roles(id,organization_id,name,description,template_key,clinical_scope,permissions) VALUES (?,?,?,?,?,?,?) ON CONFLICT(organization_id,name) DO NOTHING",
+                [
+                  "role-" + org.id + "-" + role.key,
+                  org.id,
+                  role.name,
+                  role.description,
+                  role.key,
+                  role.clinical_scope,
+                  JSON.stringify(role.permissions),
+                ],
+              );
+            }
+          }
+          for (const table of ["department_events", "department_reports"]) {
+            if (engine === "sqlite")
+              pool.exec(
+                `CREATE TRIGGER ${table}_no_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'Department history is immutable'); END; CREATE TRIGGER ${table}_no_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'Department history is immutable'); END;`,
+              );
+            else
+              await tx.run(
+                `CREATE TRIGGER ${table}_immutable BEFORE UPDATE OR DELETE ON ${table} FOR EACH ROW EXECUTE FUNCTION hp_immutable()`,
+              );
+          }
+        }
         if (version === "008") {
           await upgradeVisitRoles(tx);
           for (const table of ["visit_events", "visit_observations"]) {

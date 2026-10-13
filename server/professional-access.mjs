@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { hasPermission, resolveMembership } from "./roles.mjs";
 
 const now = () => new Date().toISOString();
-const categories = ["general", "nursing", "medication"];
+const categories = ["general", "nursing", "medication", "laboratory", "radiology"];
 const union = (arrays) => [...new Set(arrays.flat())];
 const scopesOf = (grant) => JSON.parse(grant.scopes_json);
 const branchMatches = (member, grant) =>

@@ -1,3 +1,4 @@
+import { handleDepartments } from "./departments.mjs";
 import { handleAccountSecurity, recordSignin, signinContext } from "./account-security.mjs";
 import { handleTreatment } from "./treatment.mjs";
 import { handleCareOperations } from "./care-operations.mjs";
@@ -186,13 +187,22 @@ export function createApi(db, config = process.env) {
     if (!patient) fail(404, "Patient unavailable.");
     const legacyPolicy = {
       restricted: false,
-      scopes: ["general", "nursing", "medication"],
+      scopes: ["general", "nursing", "medication", "laboratory", "radiology"],
       includeProfile: true,
       canContribute: true,
       canEditProfile: true,
       contributionScopes: actor.clinicalScopes ?? [],
       grantId: null,
     };
+    if (
+      !actor.patient_id &&
+      actor.clinicalScopes?.length &&
+      actor.clinicalScopes.every((s) => ["laboratory", "radiology"].includes(s))
+    ) {
+      legacyPolicy.scopes = [...actor.clinicalScopes];
+      legacyPolicy.includeProfile = false;
+      legacyPolicy.canEditProfile = false;
+    }
     if (actor.patient_id === patientId && !write)
       return { patient, consent: null, accessPolicy: legacyPolicy };
     if (!hasPermission(actor, "records.view")) fail(403, "Clinical access is not permitted.");
@@ -276,7 +286,7 @@ export function createApi(db, config = process.env) {
       consent: grant?.id ?? null,
       accessPolicy: {
         ...legacyPolicy,
-        includeProfile,
+        includeProfile: includeProfile && legacyPolicy.includeProfile,
         canEditProfile: includeProfile && legacyPolicy.canEditProfile,
       },
     };
@@ -494,6 +504,8 @@ export function createApi(db, config = process.env) {
     };
     const securityResult = await handleAccountSecurity(tx, context);
     if (securityResult !== undefined) return securityResult;
+    const departmentResult = await handleDepartments(tx, context);
+    if (departmentResult !== undefined) return departmentResult;
     const treatmentResult = await handleTreatment(tx, context);
     if (treatmentResult !== undefined) return treatmentResult;
     const operationsResult = await handleCareOperations(tx, context);

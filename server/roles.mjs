@@ -1,4 +1,21 @@
 export const permissionCatalog = [
+  { key: "laboratory.report", label: "Sign and amend laboratory results", category: "clinical" },
+  { key: "radiology.report", label: "Interpret imaging and sign reports", category: "clinical" },
+  { key: "diagnostics.order", label: "Request laboratory tests and imaging", category: "clinical" },
+  {
+    key: "laboratory.work",
+    label: "Process laboratory orders and sign results",
+    category: "clinical",
+  },
+  { key: "laboratory.release", label: "Release laboratory results", category: "clinical" },
+  { key: "radiology.work", label: "Perform imaging and sign reports", category: "clinical" },
+  { key: "radiology.release", label: "Release imaging reports", category: "clinical" },
+  {
+    key: "pharmacy.review",
+    label: "Review prescriptions and request clarification",
+    category: "clinical",
+  },
+  { key: "pharmacy.fulfil", label: "Record prescription fulfilment", category: "clinical" },
   {
     key: "admissions.decide",
     label: "Record physician admission and discharge decisions",
@@ -258,6 +275,39 @@ export async function upgradeVisitRoles(tx) {
     ]);
   }
 }
+roleTemplates.push(
+  ...[
+    ["laboratory", "Laboratory scientist"],
+    ["radiology", "Radiologist"],
+  ].map(([key, name]) => ({
+    key,
+    name,
+    description:
+      "Department orders and reports within reviewed scope; no automatic access to other clinical categories.",
+    clinical_scope: key,
+    permissions: [
+      "registry.view",
+      "records.view",
+      "audit.view",
+      key + ".work",
+      key + ".report",
+      key + ".release",
+    ],
+  })),
+);
+roleTemplates.push({
+  key: "radiographer",
+  name: "Radiographer",
+  description:
+    "Perform requested imaging examinations; interpretation and report release require separately reviewed permissions.",
+  clinical_scope: "radiology",
+  permissions: ["registry.view", "records.view", "audit.view", "radiology.work"],
+});
+for (const role of roleTemplates) {
+  if (["gp", "consultant", "clinician"].includes(role.key))
+    role.permissions.push("diagnostics.order");
+  if (role.key === "pharmacist") role.permissions.push("pharmacy.review", "pharmacy.fulfil");
+}
 export const clinicalPermissions = new Set(
   permissionCatalog.filter((p) => p.category === "clinical").map((p) => p.key),
 );
@@ -284,6 +334,15 @@ export async function createDefaultRoles(tx, organization) {
     );
 }
 export const permissionDependencies = {
+  "diagnostics.order": "records.view",
+  "laboratory.work": "records.view",
+  "laboratory.report": "laboratory.work",
+  "laboratory.release": "laboratory.report",
+  "radiology.work": "records.view",
+  "radiology.report": "radiology.work",
+  "radiology.release": "radiology.report",
+  "pharmacy.review": "records.view",
+  "pharmacy.fulfil": "pharmacy.review",
   "admissions.decide": "records.view",
   "prescriptions.create": "records.view",
   "medication.administer": "records.view",

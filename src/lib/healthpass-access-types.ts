@@ -1,4 +1,4 @@
-export type AccessScope = "general" | "nursing" | "medication";
+export type AccessScope = "general" | "nursing" | "medication" | "laboratory" | "radiology";
 export type ProfessionalGrant = {
   id: string;
   parent_id: string | null;

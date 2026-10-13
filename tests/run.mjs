@@ -21,6 +21,7 @@ for (const engine of ["sqlite", "postgres"]) {
     "tests/care-responsibilities.test.mjs",
     "tests/care-operations.test.mjs",
     "tests/treatment-security.test.mjs",
+    "tests/departments.test.mjs",
   ]) {
     const result = spawnSync(process.execPath, [file], {
       stdio: "inherit",
