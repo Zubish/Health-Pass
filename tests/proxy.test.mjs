@@ -83,3 +83,27 @@ test("compressed role settings survive both proxy HTTP hops with session and req
     await close(origin);
   }
 });
+test("combined function-host cookies are delivered as separate session and device cookies", async () => {
+  const origin = createServer((req, res) => {
+    res.writeHead(200, {
+      "content-type": "application/json",
+      "set-cookie":
+        "hp_session=synthetic-session; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000, hp_device=synthetic-device; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000",
+    });
+    res.end("{}");
+  });
+  const port = await listen(origin);
+  try {
+    const response = await fetchHealthpassOrigin(
+      new Request("http://proxy.example/auth/login"),
+      new URL("http://127.0.0.1:" + port + "/auth/login"),
+      new Headers(),
+    );
+    assert.deepEqual(response.headers.getSetCookie(), [
+      "hp_session=synthetic-session; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000",
+      "hp_device=synthetic-device; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000",
+    ]);
+  } finally {
+    await close(origin);
+  }
+});

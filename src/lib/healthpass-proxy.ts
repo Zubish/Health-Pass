@@ -15,6 +15,14 @@ export async function fetchHealthpassOrigin(
       : {}),
   });
   const outgoing = new Headers(response.headers);
+  // Some function hosts combine Set-Cookie values. These two HealthPass cookies
+  // contain no commas in their values; split only at our known cookie names.
+  const cookies = response.headers
+    .getSetCookie()
+    .flatMap((value) => value.split(/,\s*(?=hp_(?:session|device)=)/));
+  outgoing.delete("set-cookie");
+  for (const cookie of cookies) outgoing.append("set-cookie", cookie);
+
   outgoing.delete("content-encoding");
   outgoing.delete("content-length");
   outgoing.delete("transfer-encoding");
