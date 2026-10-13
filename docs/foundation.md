@@ -210,3 +210,5 @@ Clinical treatment/session release verified: implementation `262d7e0` is pushed 
 ## Department workflows — 13 October 2026
 
 CONFIRMED: Build frontend and backend workflows for the healthcare departments, extending the current care journey. [Department workflows](department-workflows.md) records the implemented laboratory, imaging and pharmacy request/work/report boundaries, separate diagnostic scopes and role permissions, patient release and unchanged RxLedger responsibilities. It distinguishes current implementation from billing, PACS/analyser integrations and repeated pharmacy dispensing, which are not included in this release. Migration 015 is required before the new API starts.
+
+Department release verified: implementation `71b1dd1` is live at the canonical HealthPass alias with Neon API 18 and migration 015. Full regression, additional department tests, complete synthetic browser journeys and hosted metadata-only checks passed. The existing GP testing profile includes the new department capabilities without administrative grants. See [department-workflows.md](department-workflows.md) for exact verification evidence and integration boundaries.
