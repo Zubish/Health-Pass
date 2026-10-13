@@ -162,7 +162,10 @@ The owner-approved registration and primary-care contract is recorded in [patien
 
 **CONFIRMED consultant accountability:** administrators assign the responsible consultant for a patient's ongoing management, including ward/inpatient care, while authorised GPs continue their own care work. This responsibility is distinct from the current visit assignee. The implemented foundation and its specialty-review/access boundaries are recorded in [care-responsibilities.md](care-responsibilities.md); full admission/bed/discharge operations remain separate.
 
-
 ## Owner-approved extension — 12 October 2026
 
 Reusable workspace role defaults now have individual denial overrides and department/ward scopes. Inpatient/observation care uses recorded episodes, an accountable consultant and supporting doctors/nurses; outpatient referrals distinguish advice from transfer with consultant acceptance, scheduling and required decline reasons. See [care-operations.md](care-operations.md) for the implementation contract and administrator configuration boundaries. Full bed/discharge management, calendar capacity, external verification and notification delivery are not claimed by this extension.
+
+### Implemented extension — 13 October 2026
+
+Physician admission/discharge decisions with reasons and times, signed inpatient/outpatient prescriptions, inpatient dose-outcome charting, ward/visit vital records with comments and source times, patient read-only treatment visibility and action history are now implemented. Every active account has session management: fixed thirty-minute inactivity and thirty-day expiry, an optional eight-hour limit, private device/country sign-in review and session revocation. Existing role customisations are preserved. This supersedes earlier “not implemented” labels for these workflows; automated medication advice, interaction checking, dispensing and precise-location monitoring remain separate. Verified release details are in [clinical-treatment-and-sessions.md](clinical-treatment-and-sessions.md).
