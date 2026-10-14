@@ -1,3 +1,4 @@
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { careApi } from "@/lib/healthpass-client";
 import { date, type Me } from "@/lib/healthpass-types";
@@ -45,7 +46,7 @@ export function CareResponsibilities({ me }: { me: Me }) {
   const [ending, setEnding] = useState<Responsibility | null>(null);
   const [branch, setBranch] = useState(me.branch?.id ?? "");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const setNotice = useSuccessFeedback();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
@@ -142,11 +143,7 @@ export function CareResponsibilities({ me }: { me: Me }) {
           {error}
         </p>
       )}
-      {notice && (
-        <p className="hp-notice" role="status">
-          {notice}
-        </p>
-      )}
+
       {loading && <p role="status">Loading care responsibilities…</p>}
       {!loading && (
         <>

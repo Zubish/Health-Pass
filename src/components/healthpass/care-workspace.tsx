@@ -1,3 +1,4 @@
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { Departments } from "./departments";
 import { TreatmentRecords } from "./treatment-records";
 import { AccountSecurity } from "./account-security";
@@ -11,7 +12,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  Check,
   ClipboardList,
   FileHeart,
   History,
@@ -61,7 +61,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
   } | null>(null);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const setNotice = useSuccessFeedback();
   const [busy, setBusy] = useState(false);
   const [register, setRegister] = useState(false);
   const [activationPatient, setActivationPatient] = useState<string | null>(null);
@@ -108,7 +108,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
         ["admissions", "My care episodes", Stethoscope],
         ["referrals", "Consultant referrals", Stethoscope],
         ["audit", "Access history", History],
-        ["security", "Session management", ShieldCheck],
+        ["security", "Settings & security", ShieldCheck],
       ] as const)
     : ([
         ...(can("visits.view") ? [["today", "Today's work", ClipboardList] as const] : []),
@@ -137,7 +137,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           ? [["relationships", "Care relationships", ShieldCheck] as const]
           : []),
         ...(can("audit.view") ? [["audit", "Activity & audit", History] as const] : []),
-        ["security", "Session management", ShieldCheck],
+        ["security", "Settings & security", ShieldCheck],
       ] as const);
   const loadRegistry = useCallback(async () => {
     if (canRegistry) {
@@ -270,12 +270,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
             </button>
           </div>
         )}
-        {notice && (
-          <div className="hp-success" role="status">
-            <Check size={16} />
-            {notice}
-          </div>
-        )}
+
         {tab === "workspace" && can("workspace.view") && (
           <WorkspaceSettings permissions={me.permissions ?? []} userId={me.user.id} />
         )}

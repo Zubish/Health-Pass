@@ -25,6 +25,12 @@ export async function careApi<T = any>(path: string, method = "GET", body?: unkn
   if (!response.ok) {
     throw new Error(data.error || "The request failed. Please retry.");
   }
+  if (data.preferences) {
+    window.dispatchEvent(new CustomEvent("healthpass-preferences", { detail: data.preferences }));
+  }
+  if (path === "/auth/logout") {
+    window.dispatchEvent(new Event("healthpass-signed-out"));
+  }
   if (method !== "GET") {
     window.dispatchEvent(new Event("healthpass-work-updated"));
   }

@@ -1,3 +1,4 @@
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { careApi } from "@/lib/healthpass-client";
 import { date } from "@/lib/healthpass-types";
@@ -103,7 +104,7 @@ export function PatientProfessionalAccess({
     }
   }, [ready, data.restricted, onChanged]);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+  const setNotice = useSuccessFeedback();
   async function revoke(grant: ProfessionalGrant) {
     if (
       !window.confirm(
@@ -184,11 +185,7 @@ export function PatientProfessionalAccess({
               {error}
             </p>
           )}
-          {notice && (
-            <p className="hp-success" role="status">
-              {notice}
-            </p>
-          )}
+
           <GrantForm
             restricted={data.restricted}
             onSaved={async () => {
@@ -224,7 +221,7 @@ export function ProfessionalAccess({
   const { data, error, setError, loading, ready, reload } = useAccess(patientId);
   const [selected, setSelected] = useState<ProfessionalGrant | null>(null);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+  const setNotice = useSuccessFeedback();
   async function changed() {
     await reload();
     await onChanged?.();
@@ -281,11 +278,7 @@ export function ProfessionalAccess({
           {error}
         </p>
       )}
-      {notice && (
-        <p className="hp-success" role="status">
-          {notice}
-        </p>
-      )}
+
       {loading ? (
         <p role="status">Loading access…</p>
       ) : !ready ? (

@@ -1,3 +1,4 @@
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { CareAreaSettings } from "./care-area-settings";
 import type { CareArea } from "./individual-access";
 import { type JobRole, type Permission, type RoleTemplate } from "@/lib/healthpass-role-types";
@@ -27,7 +28,7 @@ export function WorkspaceSettings({
   const [data, setData] = useState<Settings | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+  const setNotice = useSuccessFeedback();
   async function load() {
     const settings = await careApi<
       Omit<Settings, "roles"> & {
@@ -73,11 +74,7 @@ export function WorkspaceSettings({
           {error}
         </p>
       )}
-      {notice && (
-        <p className="hp-notice" role="status">
-          {notice}
-        </p>
-      )}
+
       {!data ? (
         <p role="status">Loading workspace…</p>
       ) : (
@@ -101,7 +98,7 @@ export function WorkspaceSettings({
                   workspaceSigninPath(data.organization.name, data.organization.workspace_code);
                 void navigator.clipboard?.writeText(link).then(
                   () => setNotice("Facility sign-in link copied."),
-                  () => setNotice("Select the facility sign-in link to copy it."),
+                  () => setError("Select the facility sign-in link to copy it."),
                 );
               }}
             >

@@ -1,3 +1,5 @@
+import { UserPreferences } from "./user-preferences";
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { useCallback, useEffect, useState } from "react";
 import { careApi } from "@/lib/healthpass-client";
 import { date } from "@/lib/healthpass-types";
@@ -28,6 +30,7 @@ function activityLabel(action: string) {
     "auth · login": "Signed in",
     "auth · mfa · skip": "Continued to workspace",
     "auth · logout": "Signed out",
+    "account · preferences": "Appearance or sound updated",
     "account · security": "Session settings updated",
     "account · security · sessions · revoke": "Session signed out",
     "account · security · events · review": "Sign-in reviewed",
@@ -84,7 +87,7 @@ export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> })
   const [data, setData] = useState<Security | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+  const setNotice = useSuccessFeedback();
   const [showAllActivity, setShowAllActivity] = useState(false);
   const load = useCallback(async () => setData(await careApi<Security>("/account/security")), []);
   useEffect(() => {
@@ -106,7 +109,7 @@ export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> })
   return (
     <>
       <div className="hp-page-heading">
-        <h1>Session management & security</h1>
+        <h1>Settings & security</h1>
         <p>Manage your sessions and review sign-ins.</p>
       </div>
       {error && (
@@ -114,10 +117,11 @@ export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> })
           {error}
         </p>
       )}
-      {notice && <p role="status">{notice}</p>}
+
       {!data && !error && <p role="status">Loading security settings…</p>}
       {data && (
         <div className="hp-security-grid">
+          <UserPreferences />
           <section className="hp-panel hp-security-panel">
             <h2>Session limits</h2>
             <p>
@@ -173,6 +177,7 @@ export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> })
                         "POST",
                         {},
                       );
+                      setNotice("Session signed out.");
                       if (result.current) {
                         await onLogout();
                       }
@@ -237,6 +242,7 @@ export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> })
                     onClick={() =>
                       void act(async () => {
                         await careApi(`/account/security/events/${e.id}/review`, "POST", {});
+                        setNotice("Sign-in reviewed.");
                       })
                     }
                   >

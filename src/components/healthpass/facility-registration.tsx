@@ -1,3 +1,4 @@
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { careApi } from "@/lib/healthpass-client";
 import type { Me } from "@/lib/healthpass-types";
@@ -161,7 +162,7 @@ export function FacilityActivation({
   } | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+  const setNotice = useSuccessFeedback();
   const refresh = useCallback(async () => {
     setData(await careApi(`/patient-activation?patient_id=${encodeURIComponent(patientId)}`));
   }, [patientId]);
@@ -175,11 +176,7 @@ export function FacilityActivation({
           {error}
         </p>
       )}
-      {notice && (
-        <p className="hp-notice" role="status">
-          {notice}
-        </p>
-      )}
+
       {!data && !error && <p role="status">Checking account status…</p>}
       {data && (
         <>

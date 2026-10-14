@@ -1,3 +1,4 @@
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { useCallback, useEffect, useState } from "react";
 import { careApi } from "@/lib/healthpass-client";
 import { date, type Me, type AccessScope } from "@/lib/healthpass-types";
@@ -99,7 +100,7 @@ export function TreatmentRecords({
 }) {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const setNotice = useSuccessFeedback();
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<{
     type: "admit" | "discharge" | "prescribe" | "observe" | "administer" | "stop";
@@ -223,7 +224,7 @@ export function TreatmentRecords({
           {error}
         </p>
       )}
-      {notice && <p role="status">{notice}</p>}
+
       {data && (
         <>
           <div className="hp-actions">

@@ -1,3 +1,4 @@
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { useEffect, useState } from "react";
 import { careApi } from "@/lib/healthpass-client";
 import { date } from "@/lib/healthpass-types";
@@ -34,7 +35,7 @@ export function PatientLinking() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
+  const success = useSuccessFeedback();
   async function load() {
     setInvitations((await careApi("/patient-link-invitations")).invitations);
   }
@@ -119,7 +120,6 @@ export function PatientLinking() {
           onSubmit={(e) => {
             e.preventDefault();
             void action(async () => {
-              setCopied(false);
               setIssued(
                 await careApi("/patient-link-invitations", "POST", {
                   workspace_code: workspaceCode.trim(),
@@ -127,6 +127,7 @@ export function PatientLinking() {
                   acknowledge_registration: acknowledged,
                 }),
               );
+              success("Registration code created.");
               await load();
             });
           }}
@@ -192,13 +193,13 @@ export function PatientLinking() {
             onClick={() => {
               void navigator.clipboard
                 .writeText(issued.code)
-                .then(() => setCopied(true))
+                .then(() => success("Registration code copied."))
                 .catch(() =>
                   setError("Copy is unavailable. Select the visible code and copy it manually."),
                 );
             }}
           >
-            {copied ? "Code copied" : "Copy registration code"}
+            Copy registration code
           </button>
           <button className="hp-text-button" onClick={() => setIssued(null)}>
             Hide code
@@ -231,6 +232,7 @@ export function PatientLinking() {
                 onClick={() =>
                   void action(async () => {
                     await careApi(`/patient-link-invitations/${i.id}/revoke`, "POST", {});
+                    success("Invitation revoked.");
                     if (issued?.invitation.id === i.id) {
                       setIssued(null);
                     }
@@ -255,6 +257,7 @@ export function FacilityLinking({
   onClose: () => void;
   onLinked: (patientId: string) => void;
 }) {
+  const success = useSuccessFeedback();
   const [code, setCode] = useState("");
   const [review, setReview] = useState<Review | null>(null);
   const [reference, setReference] = useState("");
@@ -332,6 +335,7 @@ export function FacilityLinking({
                 review_reference: reference.trim(),
                 duplicate_reviewed: duplicatesReviewed,
               });
+              success("Patient identity confirmed and linked.");
               onLinked(result.id);
             });
           }}

@@ -1,3 +1,4 @@
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { careApi } from "@/lib/healthpass-client";
 import { date, type Me } from "@/lib/healthpass-types";
@@ -75,6 +76,7 @@ type Order = {
   }[];
 };
 export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
+  const success = useSuccessFeedback();
   const isPatient = me.role === "patient";
   const hasPermission = (p: string) => me.permissions?.includes(p) ?? false;
   const generation = useRef(0);
@@ -175,6 +177,7 @@ export function Departments({ me, patientId }: { me: Me; patientId?: string }) {
             : {}),
         });
       }
+      success(creating ? "Department request created." : "Department action completed.");
       setCreating(false);
       setAction(null);
       await load();

@@ -1,3 +1,4 @@
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, Plus, RefreshCw } from "lucide-react";
@@ -57,7 +58,7 @@ export function Visits({
   const [mine, setMine] = useState(!can("visits.manage"));
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const setNotice = useSuccessFeedback();
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [checkIn, setCheckIn] = useState(false);
@@ -216,11 +217,7 @@ export function Visits({
           </button>
         </p>
       )}
-      {notice && (
-        <p className="hp-success" role="status">
-          {notice}
-        </p>
-      )}
+
       {loading ? (
         <p role="status">Loading visits…</p>
       ) : !visitId ? (

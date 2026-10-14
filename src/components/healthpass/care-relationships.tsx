@@ -1,3 +1,4 @@
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { useEffect, useState, useCallback } from "react";
 import { careApi } from "@/lib/healthpass-client";
 import { date, type Me } from "@/lib/healthpass-types";
@@ -25,7 +26,7 @@ export function CareRelationships({ me }: { me: Me }) {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const setNotice = useSuccessFeedback();
   const [approved, setApproved] = useState<Record<string, boolean>>({});
   const [profiles, setProfiles] = useState<Record<string, boolean>>({});
   const branchId = me.branch?.id;
@@ -214,11 +215,7 @@ export function CareRelationships({ me }: { me: Me }) {
           {error}
         </p>
       )}
-      {notice && (
-        <p className="hp-notice" role="status">
-          {notice}
-        </p>
-      )}
+
       {loading && <p role="status">Loading care relationships…</p>}
       {!loading && (
         <div className="hp-relationship-grid">

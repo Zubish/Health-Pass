@@ -102,10 +102,29 @@ export async function recordSignin(tx, request, headers, secure, sessionToken) {
 }
 export async function handleAccountSecurity(tx, context) {
   const { path, method, actor, body, fail } = context;
-  if (!path.startsWith("/account/security")) {
+  if (!path.startsWith("/account/security") && path !== "/account/preferences") {
     return;
   }
   context.strong(actor);
+  if (path === "/account/preferences") {
+    if (method === "PATCH") {
+      if (
+        !["system", "light", "dark"].includes(body.theme) ||
+        typeof body.soundEnabled !== "boolean"
+      ) {
+        fail(400, "Choose an appearance and whether to play completion sounds.");
+      }
+      await tx.run("UPDATE users SET theme=?,sound_enabled=? WHERE id=?", [
+        body.theme,
+        Number(body.soundEnabled),
+        actor.id,
+      ]);
+      return { preferences: { theme: body.theme, soundEnabled: body.soundEnabled } };
+    }
+    if (method === "GET") {
+      return { preferences: { theme: actor.theme, soundEnabled: !!actor.sound_enabled } };
+    }
+  }
   const events = () =>
     tx.all(
       "SELECT id,action,device_label,country,risk,created_at,reviewed_at FROM signin_events WHERE user_id=? ORDER BY created_at DESC LIMIT 100",

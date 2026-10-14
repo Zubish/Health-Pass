@@ -1,3 +1,4 @@
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { careApi } from "@/lib/healthpass-client";
@@ -38,7 +39,7 @@ export function VisitHandoff({
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const setNotice = useSuccessFeedback();
   const [recipient, setRecipient] = useState("");
   const [source, setSource] = useState("");
   const request = useRef<{ signature: string; id: string; version: number } | null>(null);
@@ -48,7 +49,7 @@ export function VisitHandoff({
     setSource("");
     setNotice("");
     request.current = null;
-  }, [visit.id]);
+  }, [visit.id, setNotice]);
   useEffect(() => {
     let current = true;
     setLoading(true);
@@ -220,11 +221,7 @@ export function VisitHandoff({
           {error}
         </p>
       )}
-      {notice && (
-        <p className="hp-success" role="status">
-          {notice}
-        </p>
-      )}
+
       {loading ? (
         <p role="status">Loading handoff information…</p>
       ) : !loaded ? (

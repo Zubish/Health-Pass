@@ -216,3 +216,7 @@ Department release verified: implementation `71b1dd1` is live at the canonical H
 ## Task alerts and clear patient linking — 14 October 2026
 
 CONFIRMED: Add an in-app notification bell and sidebar task counts for patients and professionals, and clarify where registration codes are entered and what the identity-check note means. [Task notifications](task-notifications.md) defines the current sources, permission boundaries, completion-based counts and passive refresh that preserves inactivity expiry. No schema migration or external notification channel is introduced.
+
+### Completion feedback and appearance — 14 October 2026
+
+Confirmed and implemented: successful actions use a centered, nonblocking confirmation that disappears after three seconds. A quiet 350 ms completion tone can be disabled under **Settings & security → Appearance & sound**. Appearance supports light, dark and the device setting. These preferences belong to each account and persist across sign-ins; migration 016 stores them. Errors and actionable instructions remain visible. See `docs/feedback-and-appearance.md` for the shared implementation and validation.

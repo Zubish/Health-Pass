@@ -1,3 +1,4 @@
+import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { useCallback, useEffect, useState } from "react";
 import { careApi } from "@/lib/healthpass-client";
 import { date, type Me, type Patient } from "@/lib/healthpass-types";
@@ -41,7 +42,7 @@ export function ConsultantReferrals({ me }: { me: Me }) {
   const [requestId, setRequestId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const setNotice = useSuccessFeedback();
   const [loading, setLoading] = useState(true);
   const [sources, setSources] = useState<
     Record<string, { source: Record<string, string>; version: number }>
@@ -173,11 +174,7 @@ export function ConsultantReferrals({ me }: { me: Me }) {
           {error}
         </p>
       )}
-      {notice && (
-        <p className="hp-notice" role="status">
-          {notice}
-        </p>
-      )}
+
       {loading ? (
         <p role="status">Loading referrals…</p>
       ) : !rows.length ? (

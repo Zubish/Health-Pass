@@ -622,6 +622,7 @@ export function createApi(db, config = process.env) {
             )
           ).count,
         ),
+        preferences: { theme: actor.theme, soundEnabled: !!actor.sound_enabled },
         user: safeUser(actor),
         role: actor.role,
         permissions: actor.permissions ?? [],
