@@ -220,3 +220,7 @@ CONFIRMED: Add an in-app notification bell and sidebar task counts for patients 
 ### Completion feedback and appearance — 14 October 2026
 
 Confirmed and implemented: successful actions use a centered, nonblocking confirmation that disappears after three seconds. A quiet 350 ms completion tone can be disabled under **Settings & security → Appearance & sound**. Appearance supports light, dark and the device setting. These preferences belong to each account and persist across sign-ins; migration 016 stores them. Errors and actionable instructions remain visible. See `docs/feedback-and-appearance.md` for the shared implementation and validation.
+
+### Facility branding — 14 October 2026
+
+Confirmed: administrators can upload, replace or remove a facility logo in Settings & security. PNG, JPEG and WebP originals up to 5 MB are supported, with a preview and explicit save. Clicking the sidebar facility image/initials opens those settings for administrators. Removing the image restores two-letter initials. The expanded sidebar retains only the HealthPass wordmark; the collapsed sidebar retains only the facility branding, without the HealthPass graphic icon. See `docs/workspace-branding.md`.

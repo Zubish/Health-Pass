@@ -1,5 +1,6 @@
 export type Me = {
   securityAlerts?: number;
+  canManageWorkspaceLogo?: boolean;
   user: { id: string; name: string; email: string; patient_id: string | null };
   role: string;
   permissions?: string[];

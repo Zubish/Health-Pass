@@ -2726,10 +2726,6 @@ button.hp-patient-row:hover {
   height: auto;
   object-fit: contain;
 }
-.hp-navigation-mark {
-  display: none;
-  object-fit: contain;
-}
 .hp-navigation-toggle,
 .hp-navigation-menu {
   display: inline-flex;
@@ -2961,9 +2957,7 @@ button.hp-patient-row:hover {
 .hp-navigation-collapsed .hp-navigation-wordmark {
   display: none;
 }
-.hp-navigation-collapsed .hp-navigation-mark {
-  display: block;
-}
+
 .hp-navigation-collapsed .hp-navigation-scroll {
   padding: 16px 10px;
 }
@@ -3725,7 +3719,53 @@ button.hp-patient-row:hover {
 }
 
 /* Keep the supplied burgundy artwork legible on dark surfaces. */
-.dark :is(.hp-wordmark, .hp-navigation-wordmark, .hp-navigation-mark) {
+.dark :is(.hp-wordmark, .hp-navigation-wordmark) {
   background: #ffffff;
   border-radius: 5px;
+}
+
+/* Facility branding remains visible in both panel sizes. */
+.hp-navigation-context-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.hp-workspace-logo-button {
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+}
+.hp-workspace-logo-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.hp-workspace-logo-preview {
+  width: 96px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+  background: var(--secondary);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.hp-workspace-logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.hp-logo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-block: 16px;
+}
+#facility-logo-file {
+  width: 100%;
+  min-width: 0;
 }

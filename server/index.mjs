@@ -10,7 +10,7 @@ const server = createServer(async (req, res) => {
     const chunks = [];
     for await (const chunk of req) {
       size += chunk.length;
-      if (size > 40000) {
+      if (size > (req.url?.split("?")[0] === "/api/healthpass/workspace/logo" ? 610000 : 40000)) {
         res.writeHead(413);
         res.end();
         return;

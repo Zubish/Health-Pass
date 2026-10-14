@@ -1,3 +1,4 @@
+import { useWorkspaceLogo, workspaceInitials } from "@/lib/healthpass-workspace-logo";
 import { useTaskNotifications } from "@/lib/healthpass-notifications";
 import { TaskNotifications } from "./task-notifications";
 import { useEffect, useState, type ReactNode } from "react";
@@ -30,6 +31,7 @@ function NavigationPanel({
   onToggle,
   onLogout,
 }: PanelProps) {
+  const logo = useWorkspaceLogo(me);
   const patient = me.role === "patient";
   const accountRoles = patient
     ? "Patient account"
@@ -43,27 +45,22 @@ function NavigationPanel({
   return (
     <>
       <div className="hp-navigation-header">
-        <a
-          href="/"
-          className="hp-navigation-brand"
-          aria-label="HealthPass home"
-          title="HealthPass home"
-        >
-          <img
-            className="hp-navigation-wordmark"
-            src="/healthpass-wordmark.png"
-            alt="HealthPass"
-            width={150}
-            height={50}
-          />
-          <img
-            className="hp-navigation-mark"
-            src="/healthpass-icon.png"
-            alt=""
-            width={36}
-            height={36}
-          />
-        </a>
+        {(!collapsed || mobile) && (
+          <a
+            href="/"
+            className="hp-navigation-brand"
+            aria-label="HealthPass home"
+            title="HealthPass home"
+          >
+            <img
+              className="hp-navigation-wordmark"
+              src="/healthpass-wordmark.png"
+              alt="HealthPass"
+              width={150}
+              height={50}
+            />
+          </a>
+        )}
         <button
           className="hp-navigation-toggle"
           type="button"
@@ -94,9 +91,31 @@ function NavigationPanel({
               : `${me.organization?.name} · ${me.branch?.name ?? "Facility workspace"}`
           }
         >
-          <span className="hp-navigation-context-icon" aria-hidden="true">
-            {patient ? "HP" : "WS"}
-          </span>
+          {me.canManageWorkspaceLogo ? (
+            <button
+              className="hp-navigation-context-icon hp-workspace-logo-button"
+              type="button"
+              aria-label={logo.data?.logo ? "Change facility logo" : "Upload facility logo"}
+              title="Manage facility logo"
+              onClick={() => onNavigate("security")}
+            >
+              {logo.data?.logo ? (
+                <img src={logo.data.logo} alt="" />
+              ) : (
+                workspaceInitials(me.organization?.name || "Workspace")
+              )}
+            </button>
+          ) : (
+            <span className="hp-navigation-context-icon" aria-hidden="true">
+              {!patient && logo.data?.logo ? (
+                <img src={logo.data.logo} alt="" />
+              ) : patient ? (
+                "HP"
+              ) : (
+                workspaceInitials(me.organization?.name || "Workspace")
+              )}
+            </span>
+          )}
           <div className="hp-navigation-context-text">
             <strong>{patient ? "Patient workspace" : me.organization?.name}</strong>
             <span>

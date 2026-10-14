@@ -1,3 +1,4 @@
+import { canManageWorkspaceLogo, normalizeWorkspaceLogo } from "./workspace-logo.mjs";
 import {
   createDefaultRoles,
   hasPermission,
@@ -138,6 +139,38 @@ export function workspaceRoutes({ fail, text, emailValue, audit, makeSession, co
         fail(403, "This action is not permitted by your workspace roles.");
       }
     };
+    if (path === "/workspace/logo") {
+      if (method === "GET") {
+        const row = await tx.get("SELECT image_data FROM workspace_logos WHERE organization_id=?", [
+          org,
+        ]);
+        return { logo: row?.image_data ?? null };
+      }
+      if (method === "POST") {
+        if (!canManageWorkspaceLogo(actor, hasPermission)) {
+          fail(403, "Only a workspace administrator can change the facility logo.");
+        }
+        if (body.logo === null) {
+          await tx.run("DELETE FROM workspace_logos WHERE organization_id=?", [org]);
+        } else {
+          const logo = normalizeWorkspaceLogo(body.logo, fail);
+          await tx.run(
+            "INSERT INTO workspace_logos(organization_id,image_data,updated_at) VALUES (?,?,?) ON CONFLICT(organization_id) DO UPDATE SET image_data=excluded.image_data,updated_at=excluded.updated_at",
+            [org, logo, new Date().toISOString()],
+          );
+        }
+        await audit(
+          tx,
+          actor,
+          body.logo === null ? "workspace.logo.removed" : "workspace.logo.updated",
+          "allow",
+          null,
+          org,
+          correlation,
+        );
+        return { saved: true };
+      }
+    }
     if (path === "/workspace/settings" && method === "GET") {
       requirePermission("workspace.view");
       return {

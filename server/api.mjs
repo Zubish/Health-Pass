@@ -1,3 +1,4 @@
+import { canManageWorkspaceLogo } from "./workspace-logo.mjs";
 import { handleNotifications } from "./notifications.mjs";
 import { handleDepartments } from "./departments.mjs";
 import { handleAccountSecurity, recordSignin, signinContext } from "./account-security.mjs";
@@ -624,6 +625,7 @@ export function createApi(db, config = process.env) {
         ),
         preferences: { theme: actor.theme, soundEnabled: !!actor.sound_enabled },
         user: safeUser(actor),
+        canManageWorkspaceLogo: canManageWorkspaceLogo(actor, hasPermission),
         role: actor.role,
         permissions: actor.permissions ?? [],
         jobRoles: actor.jobRoles ?? [],
@@ -1295,7 +1297,7 @@ export function createApi(db, config = process.env) {
           fail(415, "Use application/json.");
         }
         const raw = await request.text();
-        if (raw.length > 40000) {
+        if (raw.length > (path === "/workspace/logo" ? 610000 : 40000)) {
           fail(413, "Request too large.");
         }
         try {

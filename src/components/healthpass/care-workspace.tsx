@@ -896,7 +896,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           </p>
         )}
         {tab === "departments" && <Departments me={me} />}
-        {tab === "security" && <AccountSecurity onLogout={onLogout} />}
+        {tab === "security" && <AccountSecurity me={me} onLogout={onLogout} />}
         {tab === "admissions" && <AdmissionCare me={me} />}
         {tab === "referrals" && <ConsultantReferrals me={me} />}
         {tab === "careteam" && <CareResponsibilities me={me} />}

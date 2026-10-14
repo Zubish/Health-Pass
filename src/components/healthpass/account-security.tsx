@@ -1,3 +1,5 @@
+import type { Me } from "@/lib/healthpass-types";
+import { WorkspaceLogoSettings } from "./workspace-logo-settings";
 import { UserPreferences } from "./user-preferences";
 import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { useCallback, useEffect, useState } from "react";
@@ -30,6 +32,7 @@ function activityLabel(action: string) {
     "auth · login": "Signed in",
     "auth · mfa · skip": "Continued to workspace",
     "auth · logout": "Signed out",
+    "workspace · logo": "Facility logo changed",
     "account · preferences": "Appearance or sound updated",
     "account · security": "Session settings updated",
     "account · security · sessions · revoke": "Session signed out",
@@ -83,7 +86,7 @@ function activityLabel(action: string) {
       .join(" · ") || "Account activity"
   );
 }
-export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> }) {
+export function AccountSecurity({ me, onLogout }: { me: Me; onLogout: () => Promise<void> }) {
   const [data, setData] = useState<Security | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -121,6 +124,7 @@ export function AccountSecurity({ onLogout }: { onLogout: () => Promise<void> })
       {!data && !error && <p role="status">Loading security settings…</p>}
       {data && (
         <div className="hp-security-grid">
+          {me.canManageWorkspaceLogo && <WorkspaceLogoSettings me={me} />}
           <UserPreferences />
           <section className="hp-panel hp-security-panel">
             <h2>Session limits</h2>
