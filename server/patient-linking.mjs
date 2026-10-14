@@ -248,7 +248,12 @@ export async function handlePatientLinking(tx, context) {
     if (body.identity_confirmed !== true) {
       fail(400, "Confirm you checked the patient's identity with them.");
     }
-    const reference = text(body.review_reference, "identity review reference", 500, true);
+    const reference = text(
+      body.review_reference,
+      "how you confirmed the patient’s identity",
+      500,
+      true,
+    );
     if (review.possible_duplicates.length && body.duplicate_reviewed !== true) {
       fail(
         409,

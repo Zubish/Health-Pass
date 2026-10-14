@@ -1,3 +1,5 @@
+import { useTaskNotifications } from "@/lib/healthpass-notifications";
+import { TaskNotifications } from "./task-notifications";
 import { useEffect, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, X, type LucideIcon } from "lucide-react";
@@ -9,6 +11,7 @@ type PanelProps = {
   items: readonly NavigationItem[];
   active: string;
   collapsed: boolean;
+  counts: Record<string, number> | null;
   mobile?: boolean;
   busy: boolean;
   onNavigate: (id: string) => void;
@@ -20,6 +23,7 @@ function NavigationPanel({
   items,
   active,
   collapsed,
+  counts,
   mobile,
   busy,
   onNavigate,
@@ -114,13 +118,21 @@ function NavigationPanel({
                     type="button"
                     className={`hp-navigation-item${active === id ? " active" : ""}`}
                     key={id}
-                    aria-label={label}
+                    aria-label={`${label}, ${counts ? `${counts[id] ?? 0} pending tasks` : "task count unavailable"}`}
                     aria-current={active === id ? "page" : undefined}
-                    title={label}
+                    title={`${label} · ${counts ? `${counts[id] ?? 0} pending tasks` : "Task count unavailable"}`}
                     onClick={() => onNavigate(id)}
                   >
                     <Icon size={20} aria-hidden="true" />
                     <span className="hp-navigation-item-label">{label}</span>
+                    <span
+                      className={`hp-task-count${counts?.[id] ? "" : " hp-task-count-quiet"}`}
+                      aria-label={
+                        counts ? `${counts[id] ?? 0} pending tasks` : "Task count unavailable"
+                      }
+                    >
+                      {counts ? ((counts[id] ?? 0) > 99 ? "99+" : (counts[id] ?? 0)) : "–"}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -170,7 +182,10 @@ export function WorkspaceShell({
   onNavigate,
   onLogout,
   children,
-}: Omit<PanelProps, "collapsed" | "mobile" | "onToggle"> & { children: ReactNode }) {
+}: Omit<PanelProps, "collapsed" | "mobile" | "onToggle" | "counts"> & { children: ReactNode }) {
+  const notifications = useTaskNotifications(
+    `${me.user.id}:${me.organization?.id ?? "patient"}:${me.branch?.id ?? "all"}:${me.permissions?.join(",") ?? ""}`,
+  );
   const [collapsed, setCollapsed] = useState(false);
   const [open, setOpen] = useState(false);
   const preferenceKey = `healthpass-side-panel:v1:${me.user.id}`;
@@ -206,6 +221,7 @@ export function WorkspaceShell({
     items,
     active: active === "visits" ? "today" : active,
     busy,
+    counts: notifications.data?.counts ?? null,
     onNavigate,
     onLogout,
   };
@@ -235,6 +251,7 @@ export function WorkspaceShell({
                   : (me.branch?.name ?? "Facility workspace")}
               </small>
             </div>
+            <TaskNotifications {...notifications} onNavigate={onNavigate} />
           </header>
           {children}
         </div>

@@ -1,3 +1,4 @@
+import { handleNotifications } from "./notifications.mjs";
 import { handleDepartments } from "./departments.mjs";
 import { handleAccountSecurity, recordSignin, signinContext } from "./account-security.mjs";
 import { handleTreatment } from "./treatment.mjs";
@@ -156,7 +157,10 @@ export function createApi(db, config = process.env) {
     if (!user) {
       return null;
     }
-    await tx.run("UPDATE sessions SET last_seen_at=? WHERE id=?", [now(), user.session_id]);
+    // Passive task refresh must never extend the thirty-minute inactivity limit.
+    if (new URL(request.url).pathname.replace(/^\/api\/healthpass/, "") !== "/notifications") {
+      await tx.run("UPDATE sessions SET last_seen_at=? WHERE id=?", [now(), user.session_id]);
+    }
     if (user.organization_id) {
       const membership = await tx.get(
         "SELECT * FROM memberships WHERE user_id=? AND organization_id=?",
@@ -557,6 +561,10 @@ export function createApi(db, config = process.env) {
       cookie,
       outputHeaders,
     };
+    const notificationResult = await handleNotifications(tx, context);
+    if (notificationResult !== undefined) {
+      return notificationResult;
+    }
     const securityResult = await handleAccountSecurity(tx, context);
     if (securityResult !== undefined) {
       return securityResult;

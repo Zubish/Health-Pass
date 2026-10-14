@@ -171,6 +171,11 @@ export function PatientLinking() {
       {issued && (
         <div className="hp-notice" role="status">
           <strong>Your registration code</strong>
+          <p>
+            Give this code to the facility’s registration staff. In their professional workspace,
+            they open <strong>Patient registry → Link existing account</strong> and paste it into
+            <strong> Patient registration code</strong>.
+          </p>
           <p style={{ fontFamily: "monospace", overflowWrap: "anywhere" }}>{issued.code}</p>
           <p>
             Show this code privately to {issued.invitation.facility_name} ·{" "}
@@ -370,15 +375,21 @@ export function FacilityLinking({
             </div>
           )}
           <label>
-            Identity review reference
-            <input
+            How did you confirm the patient’s identity?
+            <textarea
+              rows={3}
               required
               maxLength={500}
               value={reference}
-              placeholder="Reference to your identity check, without document numbers"
+              placeholder="Example: Confirmed full name and date of birth at reception"
+              aria-describedby="identity-check-help"
               onChange={(e) => setReference(e.target.value)}
             />
           </label>
+          <p id="identity-check-help" className="hp-fine">
+            Write a short note about the checks you actually performed. This is not another code. Do
+            not enter ID document numbers or passwords.
+          </p>
           <label style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
             <input
               type="checkbox"

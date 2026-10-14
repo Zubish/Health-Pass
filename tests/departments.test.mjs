@@ -305,3 +305,151 @@ test("radiographers hand completed examinations to reporting professionals witho
   assert.equal(o.assigned_to, "radiology");
   assert.equal(o.events.find((e) => e.action === "complete").actor_name, "Synthetic radiographer");
 });
+
+test("notification tasks follow department transitions, permissions and workspace boundaries", async (t) => {
+  const f = await fixture(t);
+  const { id } = await f.order();
+  const tasks = async (client) => await f.ok(client("/notifications"));
+  assert.equal((await tasks(f.laboratory)).counts.departments, 1);
+  assert.equal((await tasks(f.radiology)).counts.departments ?? 0, 0);
+  assert.equal((await tasks(f.foreign)).counts.departments ?? 0, 0);
+  assert.equal((await tasks(f.admin)).counts.departments ?? 0, 0);
+  const summary = await tasks(f.laboratory);
+  assert.equal(JSON.stringify(summary).includes("patient-ade"), false);
+  assert.equal(JSON.stringify(summary).includes("Synthetic investigation"), false);
+  await f.ok(f.act(f.laboratory, id, "accept"));
+  await f.ok(f.act(f.laboratory, id, "start", { reference: "Synthetic sample" }));
+  assert.equal((await tasks(f.laboratory)).counts.departments, 1);
+  await f.ok(
+    f.act(f.laboratory, id, "report", {
+      report: "Synthetic normal result",
+      reference: "Synthetic method",
+      confirmed: true,
+    }),
+  );
+  assert.equal((await tasks(f.laboratory)).counts.departments, 1);
+  await f.ok(f.act(f.laboratory, id, "release"));
+  assert.equal((await tasks(f.laboratory)).counts.departments, 0);
+  assert.equal((await tasks(f.gp)).counts.departments, 1);
+  await f.ok(f.act(f.gp, id, "acknowledge", { reason: "Synthetic result reviewed" }));
+  assert.equal((await tasks(f.gp)).counts.departments, 0);
+  await f.order();
+  await f.db.transaction((tx) =>
+    tx.run("DELETE FROM membership_roles WHERE membership_id='laboratory'"),
+  );
+  assert.equal((await tasks(f.laboratory)).counts.departments ?? 0, 0);
+});
+
+test("registration notifications match patient and receiving branch, expire and resolve", async (t) => {
+  const f = await fixture(t);
+  const invitation = await f.ok(
+    f.patient("/patient-link-invitations", "POST", {
+      workspace_code: "HP-ORG-LAGOS",
+      acknowledge_registration: true,
+      branch_id: "main-org-lagos",
+    }),
+  );
+  const patientTasks = await f.ok(f.patient("/notifications"));
+  assert.equal(patientTasks.counts.sharing, 1);
+  assert.equal((await f.ok(f.gp("/notifications"))).counts.patients, 1);
+  assert.equal((await f.ok(f.foreign("/notifications"))).counts.patients ?? 0, 0);
+  assert.equal(JSON.stringify(patientTasks).includes(invitation.code), false);
+  await f.db.transaction((tx) =>
+    tx.run("UPDATE patient_link_invitations SET expires_at=?", [
+      new Date(Date.now() - 1000).toISOString(),
+    ]),
+  );
+  assert.equal((await f.ok(f.patient("/notifications"))).counts.sharing, 0);
+  assert.equal((await f.ok(f.gp("/notifications"))).counts.patients, 0);
+  const nextInvitation = await f.ok(
+    f.patient("/patient-link-invitations", "POST", {
+      workspace_code: "HP-ORG-LAGOS",
+      branch_id: "main-org-lagos",
+      acknowledge_registration: true,
+    }),
+  );
+  assert.equal((await f.ok(f.gp("/notifications"))).counts.patients, 1);
+  await f.ok(
+    f.gp("/patient-link-invitations/redeem", "POST", {
+      code: nextInvitation.code,
+      identity_confirmed: true,
+      review_reference: "Synthetic patient present; confirmed full name and date of birth.",
+    }),
+  );
+  assert.equal((await f.ok(f.patient("/notifications"))).counts.sharing, 0);
+  assert.equal((await f.ok(f.gp("/notifications"))).counts.patients, 0);
+
+  await f.db.transaction(async (tx) => {
+    const at = new Date().toISOString();
+    await tx.run(
+      "INSERT INTO facility_access_requests(id,patient_id,organization_id,branch_id,requested_by,purpose,status,created_at,expires_at) VALUES ('notification-request','patient-ade','org-lagos','main-org-lagos','doctor-lagos','Synthetic request','pending',?,?)",
+      [at, new Date(Date.now() + 3600000).toISOString()],
+    );
+  });
+  assert.equal((await f.ok(f.patient("/notifications"))).counts.relationships, 1);
+  await f.db.transaction((tx) =>
+    tx.run("UPDATE facility_access_requests SET status='declined' WHERE id='notification-request'"),
+  );
+  assert.equal((await f.ok(f.patient("/notifications"))).counts.relationships, 0);
+});
+
+test("background task refresh cannot renew an idle session and counts exceed a UI page", async (t) => {
+  const f = await fixture(t);
+  const { id } = await f.order();
+  await f.db.transaction(async (tx) => {
+    for (let index = 0; index < 101; index++) {
+      await tx.run(
+        "INSERT INTO department_orders(id,patient_id,organization_id,branch_id,department,requested_by,service,indication,priority,status,version,created_at,updated_at,request_key,request_payload) SELECT ?,patient_id,organization_id,branch_id,department,requested_by,service,indication,priority,status,version,created_at,updated_at,?,request_payload FROM department_orders WHERE id=?",
+        ["notification-order-" + index, "notification-key-" + index, id],
+      );
+    }
+  });
+  assert.equal((await f.ok(f.laboratory("/notifications"))).counts.departments, 102);
+  const idle = new Date(Date.now() - 29 * 60000).toISOString();
+  await f.db.transaction((tx) =>
+    tx.run("UPDATE sessions SET last_seen_at=? WHERE user_id='laboratory'", [idle]),
+  );
+  await f.ok(f.laboratory("/notifications"));
+  assert.equal(
+    (
+      await f.db.transaction((tx) =>
+        tx.get("SELECT last_seen_at FROM sessions WHERE user_id='laboratory'"),
+      )
+    ).last_seen_at,
+    idle,
+  );
+  await f.db.transaction((tx) =>
+    tx.run("UPDATE sessions SET last_seen_at=? WHERE user_id='laboratory'", [
+      new Date(Date.now() - 31 * 60000).toISOString(),
+    ]),
+  );
+  assert.equal((await f.laboratory("/notifications")).status, 401);
+});
+
+test("administrative task counts respect job permissions and care-area restrictions", async (t) => {
+  const f = await fixture(t);
+  await f.db.transaction(async (tx) => {
+    await tx.run(
+      "INSERT INTO care_areas(id,organization_id,branch_id,name,kind) VALUES ('notification-ward','org-lagos','main-org-lagos','Synthetic ward','ward')",
+    );
+    await tx.run(
+      "INSERT INTO care_admissions(id,patient_id,organization_id,branch_id,care_area_id,kind,created_by,created_at,request_key,request_payload) VALUES ('notification-admission','patient-ade','org-lagos','main-org-lagos','notification-ward','inpatient','admin',?,'notification-admit-key','{}')",
+      [new Date().toISOString()],
+    );
+    await tx.run(
+      "INSERT INTO primary_care_requests(id,patient_id,organization_id,created_at,expires_at) VALUES ('notification-primary','patient-ade','org-lagos',?,?)",
+      [new Date().toISOString(), new Date(Date.now() + 3600000).toISOString()],
+    );
+  });
+  const adminTasks = await f.ok(f.admin("/notifications"));
+  assert.equal(adminTasks.counts.careteam, 1);
+  assert.equal(adminTasks.counts.relationships, 1);
+  assert.equal((await f.ok(f.gp("/notifications"))).counts.careteam ?? 0, 0);
+  assert.equal((await f.ok(f.foreign("/notifications"))).counts.careteam ?? 0, 0);
+  await f.db.transaction((tx) =>
+    tx.run(
+      "UPDATE memberships SET care_area_restricted=1,care_area_ids='[]' WHERE user_id='admin'",
+    ),
+  );
+  assert.equal((await f.ok(f.admin("/notifications"))).counts.careteam, 0);
+});

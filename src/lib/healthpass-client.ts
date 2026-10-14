@@ -25,5 +25,8 @@ export async function careApi<T = any>(path: string, method = "GET", body?: unkn
   if (!response.ok) {
     throw new Error(data.error || "The request failed. Please retry.");
   }
+  if (method !== "GET") {
+    window.dispatchEvent(new Event("healthpass-work-updated"));
+  }
   return data;
 }
