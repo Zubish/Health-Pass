@@ -34,7 +34,7 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
@@ -78,10 +78,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Health Pass — The Patient-First Health Passport" },
-      { name: "description", content: "Health Pass is a patient-owned EMR. Carry your medical records, prescriptions and refills across every facility — even the ones that don't use Health Pass." },
+      {
+        name: "description",
+        content:
+          "Health Pass is a patient-owned EMR. Carry your medical records, prescriptions and refills across every facility — even the ones that don't use Health Pass.",
+      },
       { name: "author", content: "Health Pass" },
       { property: "og:title", content: "Health Pass — The Patient-First Health Passport" },
-      { property: "og:description", content: "One passport for every clinic, pharmacy and hospital visit. Owned by the patient." },
+      {
+        property: "og:description",
+        content:
+          "One passport for every clinic, pharmacy and hospital visit. Owned by the patient.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -89,7 +97,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap",
+      },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
