@@ -3727,7 +3727,5 @@ button.hp-patient-row:hover {
 /* Keep the supplied burgundy artwork legible on dark surfaces. */
 .dark :is(.hp-wordmark, .hp-navigation-wordmark, .hp-navigation-mark) {
   background: #ffffff;
-  padding: 5px;
   border-radius: 5px;
-  object-fit: contain;
 }
