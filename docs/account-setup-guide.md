@@ -20,3 +20,11 @@ Proxy management is not implemented in the underlying app. The patient guide exp
 Migration 018 adds `account_setup`, keyed by user and workspace scope, with reviewed steps, permanent dismissal, snooze expiry and the pending/active presentation phase. `/account/setup` derives allowed steps from the authenticated account and permissions. It does not accept a target user/workspace. Writes serialize the state row so concurrent devices do not overwrite each other’s reviews or dismissal. Runtime grants are limited to SELECT, INSERT and UPDATE on the setup table.
 
 Pending professionals may change their own appearance/sound preferences; this does not enable session administration or clinical routes. The guide uses Radix focus trapping, keyboard dismissal and a bounded scrolling dialog for small screens. No patient data or guide progress is stored in browser storage.
+
+## Release verification — 15 October 2026
+
+Implementation `982a99d559adbc5f6f2650994d23a9500c64d536` is pushed to `feat/healthpass-foundation`. Migration 018 is applied to production; Neon API deployment 23 is completed. Vercel deployment `dpl_4SCJVyV3P3ZY8T41vWE44dkX6ccZ` is ready and the canonical `https://health-pass-psi.vercel.app/` alias points to it.
+
+All 176 automated checks passed across SQLite and PostgreSQL, including concurrent setup updates, cross-session persistence, role filtering, pending-access restrictions and approval transitions. TypeScript, formatting and the production build passed; lint has no errors and six pre-existing UI Fast Refresh warnings.
+
+Local Chromium checks exercised patient, administrator, GP and pending-professional accounts at widths 320, 390, 768, 1024 and 1440. Dismissal, reopening, explicit review, navigation without false completion, keyboard close and overflow checks passed. Additional checks verified the failed-save escape and dark appearance; mobile screenshots were visually reviewed. Hosted synthetic administrator and GP accounts successfully signed in on the canonical URL and verified permission-specific steps, saved dismissal after reload and manual reopening. No real patient records or personal credentials were used. These browser checks do not claim testing every physical device or Safari.
