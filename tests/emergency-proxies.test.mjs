@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { openTestDatabase } from "./database.mjs";
 import { seed } from "../server/seed.mjs";
 import { createApi } from "../server/api.mjs";
-import { proxyPolicyVersion } from "../server/emergency-proxies.mjs";
+import { proxyPolicyVersion, verifyProxyEvidence } from "../server/emergency-proxies.mjs";
 
 test("emergency proxy authority, approval, expiry, revocation, scope and immutable patient history", async (t) => {
   const db = await openTestDatabase();
@@ -301,6 +301,18 @@ test("emergency proxy authority, approval, expiry, revocation, scope and immutab
     assert.equal(e.hash, createHash("sha256").update(JSON.stringify(payload)).digest("hex"));
     previous = e.hash;
   }
+  const ordered = [...history].reverse();
+  const head = { sequence: ordered.at(-1).sequence, hash: ordered.at(-1).hash };
+  assert.equal(verifyProxyEvidence(ordered, head), true);
+  assert.equal(verifyProxyEvidence(ordered.slice(0, -1), head), false, "detect missing tail");
+  assert.equal(
+    verifyProxyEvidence(
+      ordered.map((e, i) => (i === 0 ? { ...e, action: "changed" } : e)),
+      head,
+    ),
+    false,
+    "detect altered evidence",
+  );
   await assert.rejects(() =>
     db.transaction((tx) => tx.run("UPDATE proxy_events SET action='changed'")),
   );

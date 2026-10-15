@@ -9,6 +9,34 @@ const parseScopes = (row) => JSON.parse(row.scopes_json);
 export const proxyPolicy =
   "Emergency sharing only: when you cannot consent and waiting could jeopardise care, your accepted proxy may approve the selected record categories for the named requesting professional for one hour. A primary care facility may approve when treating you itself, but a different authorised clinician must decide. No response gives no access. Proxies cannot read records through this appointment. Selected notes may contain sensitive information; line-by-line redaction is not available. You can revoke the appointment and active emergency access at any time. Requests, decisions and record views remain in your history. There is no single-person emergency override.";
 
+export function verifyProxyEvidence(events, head) {
+  let previous = "";
+  let sequence = 0;
+  for (const row of events) {
+    const event = {
+      id: row.id,
+      patient_id: row.patient_id,
+      sequence: row.sequence,
+      resource_id: row.resource_id,
+      actor_id: row.actor_id,
+      organization_id: row.organization_id,
+      action: row.action,
+      details: row.details,
+      created_at: row.created_at,
+      previous_hash: row.previous_hash,
+    };
+    if (
+      row.sequence !== ++sequence ||
+      row.previous_hash !== previous ||
+      createHash("sha256").update(JSON.stringify(event)).digest("hex") !== row.hash
+    ) {
+      return false;
+    }
+    previous = row.hash;
+  }
+  return sequence === head.sequence && previous === head.hash;
+}
+
 async function lockPatient(tx, patientId) {
   await tx.run(
     "INSERT INTO proxy_event_heads(patient_id) VALUES (?) ON CONFLICT(patient_id) DO NOTHING",
@@ -524,6 +552,17 @@ export async function handleEmergencyProxies(tx, context) {
   }
   if (path === "/proxies/history" && method === "GET") {
     patientOnly();
+    await lockPatient(tx, actor.patient_id);
+    const evidence = await tx.all(
+      "SELECT * FROM proxy_events WHERE patient_id=? ORDER BY sequence",
+      [actor.patient_id],
+    );
+    const head = await tx.get("SELECT sequence,hash FROM proxy_event_heads WHERE patient_id=?", [
+      actor.patient_id,
+    ]);
+    if (!verifyProxyEvidence(evidence, head)) {
+      fail(503, "Emergency history integrity could not be verified. Contact HealthPass support.");
+    }
     const before = Number(searchParams.get("before") || 2147483647);
     if (!Number.isSafeInteger(before) || before < 1) {
       fail(400, "Invalid history cursor.");
