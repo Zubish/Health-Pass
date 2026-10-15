@@ -69,6 +69,12 @@ export async function handleAccountSetup(tx, context) {
         status: primary?.organization_id ? "done" : request ? "pending" : "todo",
       });
       review(
+        "proxies",
+        "Choose your emergency proxy",
+        "Invite an existing HealthPass user or your primary care facility. Read the emergency-sharing policy and choose their authority.",
+        "proxies",
+      );
+      review(
         "sharing",
         "Review who can see your records",
         "Choose facilities, professionals and the information you share. Keeping your records private is a valid choice.",

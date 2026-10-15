@@ -1,3 +1,4 @@
+import { proxyGuards } from "./proxy-schema.mjs";
 import { readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -109,9 +110,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   };
   if (config.NODE_ENV === "production" && config.HEALTHPASS_RUN_MIGRATIONS !== "1") {
     await db.transaction(async (tx) => {
-      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='018'"))) {
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='019'"))) {
         throw new Error(
-          "Apply schema migrations 001 through 018 using the migration identity before starting the API.",
+          "Apply schema migrations 001 through 019 using the migration identity before starting the API.",
         );
       }
     });
@@ -221,6 +222,7 @@ export async function openDatabase(config = process.env, dependencies = {}) {
     ["016", "016-user-preferences.sql"],
     ["017", "017-workspace-logos.sql"],
     ["018", "018-account-setup.sql"],
+    ["019", "019-emergency-proxies.sql"],
   ]) {
     await db.transaction(async (tx) => {
       if (!(await tx.get("SELECT version FROM schema_migrations WHERE version=?", [version]))) {
@@ -329,6 +331,20 @@ export async function openDatabase(config = process.env, dependencies = {}) {
                 `CREATE TRIGGER ${table}_immutable BEFORE UPDATE OR DELETE ON ${table} FOR EACH ROW EXECUTE FUNCTION hp_immutable()`,
               );
             }
+          }
+        }
+        if (version === "019") {
+          const roles = await tx.all(
+            "SELECT id,permissions FROM workspace_roles WHERE template_key IN ('gp','consultant','clinician','nurse')",
+          );
+          for (const role of roles) {
+            await tx.run("UPDATE workspace_roles SET permissions=? WHERE id=?", [
+              JSON.stringify([...new Set([...JSON.parse(role.permissions), "emergency.request"])]),
+              role.id,
+            ]);
+          }
+          for (const sql of proxyGuards(engine)) {
+            await tx.run(sql);
           }
         }
         await tx.run("INSERT INTO schema_migrations(version) VALUES (?)", [version]);

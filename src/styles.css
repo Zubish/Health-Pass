@@ -3777,7 +3777,11 @@ button.hp-patient-row:hover {
   z-index: 90;
   background: #10182088;
 }
-.hp-setup-dialog {
+.hp-setup-dialog.hp-shell {
+  display: block;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
   position: fixed;
   left: 50%;
   top: 50%;
@@ -3814,5 +3818,47 @@ button.hp-patient-row:hover {
 @media (max-width: 480px) {
   .hp-setup-dialog {
     padding: 20px;
+  }
+}
+
+.hp-proxy-page {
+  width: 100%;
+  max-width: 1100px;
+  margin-inline: auto;
+  min-width: 0;
+}
+.hp-proxy-panel {
+  padding: 24px;
+  margin-block: 20px;
+}
+.hp-proxy-item {
+  border-top: 1px solid var(--border);
+  padding-block: 18px;
+  overflow-wrap: anywhere;
+}
+.hp-proxy-item:first-of-type {
+  border-top: 0;
+}
+.hp-proxy-form,
+.hp-proxy-panel form {
+  display: grid;
+  gap: 18px;
+  margin-block: 16px;
+}
+.hp-proxy-scopes {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+.hp-record-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+  .hp-proxy-panel {
+    padding: 16px;
   }
 }

@@ -239,6 +239,7 @@ export function AccountSetup({ me, onNavigate }: { me: Me; onNavigate: (tab: str
                             >
                               {(
                                 {
+                                  proxies: "Choose proxy",
                                   patients: "View my record",
                                   relationships: "Choose facility",
                                   sharing: "Review sharing",
@@ -265,11 +266,6 @@ export function AccountSetup({ me, onNavigate }: { me: Me; onNavigate: (tab: str
                     </section>
                   ))}
                 </div>
-              )}
-              {data.patient && (
-                <p className="hp-fine">
-                  Proxy management is planned. No proxy access is enabled by this guide.
-                </p>
               )}
               <label className="hp-choice">
                 <input

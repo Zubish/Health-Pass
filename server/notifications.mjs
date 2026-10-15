@@ -1,3 +1,4 @@
+import { proxyTasks } from "./emergency-proxies.mjs";
 import { hasPermission } from "./roles.mjs";
 import { careAreaAllows } from "./care-area-access.mjs";
 
@@ -65,6 +66,13 @@ export async function handleNotifications(tx, context) {
       "SELECT COUNT(*) AS count FROM signin_events WHERE user_id=? AND risk<>'normal' AND reviewed_at IS NULL",
       [actor.id],
     ),
+  );
+
+  add(
+    "proxy-tasks",
+    "proxies",
+    "Proxy invitations and emergency updates",
+    await proxyTasks(tx, actor),
   );
 
   if (actor.patient_id) {

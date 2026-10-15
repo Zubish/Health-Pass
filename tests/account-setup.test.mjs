@@ -49,7 +49,8 @@ test("setup respects account roles, persists review/dismissal across sessions an
   let setup = (await patient("/account/setup")).data;
   assert.equal(setup.showAutomatically, true);
   assert.ok(setup.steps.some((step) => step.id === "primary"));
-  assert.ok(!setup.steps.some((step) => step.id === "roles" || step.id === "proxy"));
+  assert.ok(setup.steps.some((step) => step.id === "proxies"));
+  assert.ok(!setup.steps.some((step) => step.id === "roles"));
   assert.equal(
     (await patient("/account/setup", "POST", { action: "review", step: "primary" })).status,
     400,

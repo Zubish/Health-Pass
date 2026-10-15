@@ -1,4 +1,14 @@
 export const permissionCatalog = [
+  {
+    key: "emergency.request",
+    label: "Request temporary emergency record access",
+    category: "clinical",
+  },
+  {
+    key: "emergency.approve",
+    label: "Respond as the facility’s appointed emergency proxy",
+    category: "clinical",
+  },
   { key: "laboratory.report", label: "Sign and amend laboratory results", category: "clinical" },
   { key: "radiology.report", label: "Interpret imaging and sign reports", category: "clinical" },
   { key: "diagnostics.order", label: "Request laboratory tests and imaging", category: "clinical" },
@@ -327,6 +337,9 @@ export const clinicalPermissions = new Set(
   permissionCatalog.filter((p) => p.category === "clinical").map((p) => p.key),
 );
 for (const template of roleTemplates) {
+  if (["gp", "consultant", "clinician", "nurse"].includes(template.key)) {
+    template.permissions.push("emergency.request");
+  }
   if (["gp", "consultant", "clinician"].includes(template.key)) {
     template.permissions.push("admissions.decide", "prescriptions.create", "ward.observations");
   }
@@ -352,6 +365,8 @@ export async function createDefaultRoles(tx, organization) {
   }
 }
 export const permissionDependencies = {
+  "emergency.request": "records.view",
+  "emergency.approve": "records.view",
   "diagnostics.order": "records.view",
   "laboratory.work": "records.view",
   "laboratory.report": "laboratory.work",

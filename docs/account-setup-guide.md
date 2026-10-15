@@ -13,7 +13,7 @@ The first eligible workspace visit introduces the guide. This also gives existin
 
 Review steps have an explicit “I’ve reviewed this” action. Merely opening a destination never implies completion. Primary designation and stored logos are checked against actual state on reopening. Completed steps are removed from the unfinished list. Workspace access labels show only the signed-in professional’s current permissions; patient sharing and care-area restrictions still apply.
 
-Proxy management is not implemented in the underlying app. The patient guide explains that it is planned and offers no unusable proxy button or implied proxy access. Authenticator onboarding remains in the existing optional authentication flow; this guide does not add a nonexistent authenticator-management screen or require enrollment.
+Superseded on 15 October 2026: the patient guide now links to implemented emergency proxy appointments. See `emergency-proxies.md` for explicit consent, scope and approval rules. Authenticator onboarding remains in the existing optional authentication flow; this guide does not add a nonexistent authenticator-management screen or require enrollment.
 
 ## Persistence and boundaries
 

@@ -228,3 +228,7 @@ Confirmed: administrators can upload, replace or remove a facility logo in Setti
 ### Optional account setup — 15 October 2026
 
 Confirmed: offer a floating, account-specific setup guide with a persistent “Don’t show this again” choice and manual reopening from Settings & security. Patient steps cover details, primary care, sharing and personal settings; professional and administrator steps reflect actual workspace permissions. Pending professionals can set personal appearance and sound without clinical access. Later snoozes reminders for seven days. Guide progress never grants consent, authority or workspace access. Proxy management remains planned until its underlying workflow exists. See [account-setup-guide.md](account-setup-guide.md).
+
+### Emergency proxy authority and setup dialog — 15 October 2026
+
+CONFIRMED: implement the agreed existing-user and primary-facility proxy workflow, explicit versioned sharing-policy acceptance, emergency requests, limited approval/decline, revocation and patient-visible history. Facility self-treatment requires a different authorised clinician's approval; no single-person override is defined. Read-only access lasts one hour, with a new approval for extension. Administrators designate clinical proxy responders through role permissions. The setup guide must render vertically at desktop and mobile widths. See [emergency-proxies.md](emergency-proxies.md) for implemented boundaries and the verified six-hour recovery-history/disabled scheduled-backup limitation.

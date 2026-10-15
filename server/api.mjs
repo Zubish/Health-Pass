@@ -1,3 +1,4 @@
+import { handleEmergencyProxies } from "./emergency-proxies.mjs";
 import { handleAccountSetup } from "./account-setup.mjs";
 import { canManageWorkspaceLogo } from "./workspace-logo.mjs";
 import { handleNotifications } from "./notifications.mjs";
@@ -566,6 +567,10 @@ export function createApi(db, config = process.env) {
     const notificationResult = await handleNotifications(tx, context);
     if (notificationResult !== undefined) {
       return notificationResult;
+    }
+    const proxyResult = await handleEmergencyProxies(tx, context);
+    if (proxyResult !== undefined) {
+      return proxyResult;
     }
     const setupResult = await handleAccountSetup(tx, context);
     if (setupResult !== undefined) {

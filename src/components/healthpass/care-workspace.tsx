@@ -1,3 +1,4 @@
+import { EmergencyProxies } from "./emergency-proxies";
 import { AccountSetup } from "./account-setup";
 import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { Departments } from "./departments";
@@ -101,6 +102,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
   const nav = isPatient
     ? ([
         ["overview", "My health", LayoutDashboard],
+        ["proxies", "Proxies & emergency sharing", ShieldCheck],
         ["patients", "My record", FileHeart],
         ["departments", "Tests & medicines", ClipboardList],
         ["sharing", "Sharing", ShieldCheck],
@@ -114,6 +116,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
     : ([
         ...(can("visits.view") ? [["today", "Today's work", ClipboardList] as const] : []),
         ["overview", "Overview", LayoutDashboard],
+        ["proxies", "Proxies & emergency sharing", ShieldCheck],
         ...([
           "diagnostics.order",
           "prescriptions.create",
@@ -901,6 +904,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
             <a href="/workspace?tab=security">Review sign-in activity</a>
           </p>
         )}
+        {tab === "proxies" && <EmergencyProxies me={me} />}
         {tab === "departments" && <Departments me={me} />}
         {tab === "security" && <AccountSecurity me={me} onLogout={onLogout} />}
         {tab === "admissions" && <AdmissionCare me={me} />}
