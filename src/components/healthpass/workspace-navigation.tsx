@@ -137,21 +137,22 @@ function NavigationPanel({
                     type="button"
                     className={`hp-navigation-item${active === id ? " active" : ""}`}
                     key={id}
-                    aria-label={`${label}, ${counts ? `${counts[id] ?? 0} pending tasks` : "task count unavailable"}`}
+                    aria-label={
+                      (counts?.[id] ?? 0) > 0 ? `${label}, ${counts![id]} pending tasks` : label
+                    }
                     aria-current={active === id ? "page" : undefined}
-                    title={`${label} · ${counts ? `${counts[id] ?? 0} pending tasks` : "Task count unavailable"}`}
+                    title={
+                      (counts?.[id] ?? 0) > 0 ? `${label} · ${counts![id]} pending tasks` : label
+                    }
                     onClick={() => onNavigate(id)}
                   >
                     <Icon size={20} aria-hidden="true" />
                     <span className="hp-navigation-item-label">{label}</span>
-                    <span
-                      className={`hp-task-count${counts?.[id] ? "" : " hp-task-count-quiet"}`}
-                      aria-label={
-                        counts ? `${counts[id] ?? 0} pending tasks` : "Task count unavailable"
-                      }
-                    >
-                      {counts ? ((counts[id] ?? 0) > 99 ? "99+" : (counts[id] ?? 0)) : "–"}
-                    </span>
+                    {(counts?.[id] ?? 0) > 0 && (
+                      <span className="hp-task-count" aria-hidden="true">
+                        {counts![id] > 99 ? "99+" : counts![id]}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

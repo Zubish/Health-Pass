@@ -108,6 +108,40 @@ async function canRespond(tx, actor, appointment, request = null) {
     ))
   );
 }
+async function canReadEmergency(tx, actor, request, appointment) {
+  if (
+    request.requester_id !== actor.id ||
+    request.organization_id !== actor.organization_id ||
+    (request.branch_id ?? null) !== (actor.branch_id ?? null) ||
+    !qualified(actor, "emergency.request") ||
+    request.status !== "approved" ||
+    !request.access_until ||
+    request.access_until <= now() ||
+    !(await currentAppointment(tx, appointment))
+  ) {
+    return false;
+  }
+  const approver = await tx.get("SELECT * FROM users WHERE id=? AND active=1", [
+    request.decided_by,
+  ]);
+  if (!approver) {
+    return false;
+  }
+  if (appointment.proxy_organization_id) {
+    const membership = await tx.get(
+      "SELECT * FROM memberships WHERE user_id=? AND organization_id=? AND active=1",
+      [approver.id, appointment.proxy_organization_id],
+    );
+    if (!membership) {
+      return false;
+    }
+    approver.organization_id = appointment.proxy_organization_id;
+    await resolveMembership(tx, membership, approver);
+    return canRespond(tx, approver, appointment, request);
+  }
+  return true;
+}
+
 const appointmentSelect = `SELECT p.*,pt.name AS patient_name,pt.healthpass_id,u.name AS proxy_name,o.name AS proxy_facility FROM patient_proxies p JOIN patients pt ON pt.id=p.patient_id LEFT JOIN users u ON u.id=p.proxy_user_id LEFT JOIN organizations o ON o.id=p.proxy_organization_id`;
 const requestSelect = `SELECT r.*,pt.name AS patient_name,pt.healthpass_id,u.name AS requester_name,o.name AS facility_name,b.name AS branch_name,d.name AS decision_by_name FROM emergency_requests r JOIN patients pt ON pt.id=r.patient_id JOIN users u ON u.id=r.requester_id JOIN organizations o ON o.id=r.organization_id LEFT JOIN branches b ON b.id=r.branch_id LEFT JOIN users d ON d.id=r.decided_by`;
 export async function proxyTasks(tx, actor) {
@@ -142,15 +176,19 @@ export async function proxyTasks(tx, actor) {
       ).count,
     );
   }
-  if (actor.organization_id) {
-    count += Number(
-      (
-        await tx.get(
-          "SELECT COUNT(*) AS count FROM emergency_requests WHERE requester_id=? AND organization_id=? AND status='approved' AND access_until>?",
-          [actor.id, actor.organization_id, now()],
-        )
-      ).count,
+  if (qualified(actor, "emergency.request")) {
+    const unread = await tx.all(
+      "SELECT r.* FROM emergency_requests r WHERE r.requester_id=? AND r.organization_id=? AND r.status='approved' AND r.access_until>? AND NOT EXISTS (SELECT 1 FROM proxy_events e WHERE e.resource_id=r.id AND e.actor_id=? AND e.action='Emergency records viewed')",
+      [actor.id, actor.organization_id, now(), actor.id],
     );
+    for (const request of unread) {
+      const appointment = await tx.get("SELECT * FROM patient_proxies WHERE id=?", [
+        request.appointment_id,
+      ]);
+      if (await canReadEmergency(tx, actor, request, appointment)) {
+        count++;
+      }
+    }
   }
   return count;
 }
@@ -345,13 +383,7 @@ export async function handleEmergencyProxies(tx, context) {
         ...r,
         scopes: parseScopes(r),
         can_respond: respond && effective && r.status === "pending" && r.expires_at > now(),
-        can_read:
-          requester &&
-          qualified(actor, "emergency.request") &&
-          effective &&
-          r.status === "approved" &&
-          r.access_until > now() &&
-          (actor.branch_id ?? null) === (r.branch_id ?? null),
+        can_read: await canReadEmergency(tx, actor, r, p),
         can_cancel:
           (requester || actor.patient_id === r.patient_id) &&
           ["pending", "approved"].includes(r.status),
@@ -466,35 +498,8 @@ export async function handleEmergencyProxies(tx, context) {
     const p = await tx.get("SELECT * FROM patient_proxies WHERE id=?", [r.appointment_id]);
     const action = match[2];
     if (action === "records" && method === "GET") {
-      if (
-        r.requester_id !== actor.id ||
-        r.organization_id !== actor.organization_id ||
-        (r.branch_id ?? null) !== (actor.branch_id ?? null) ||
-        !qualified(actor, "emergency.request") ||
-        r.status !== "approved" ||
-        r.access_until <= now() ||
-        !(await currentAppointment(tx, p))
-      ) {
+      if (!(await canReadEmergency(tx, actor, r, p))) {
         fail(403, "No active emergency access for this account and workspace.");
-      }
-      // Recheck the approver's authority on every read, including staff suspension and role changes.
-      const approver = await tx.get("SELECT * FROM users WHERE id=? AND active=1", [r.decided_by]);
-      if (!approver) {
-        fail(403, "Proxy authority is no longer available.");
-      }
-      if (p.proxy_organization_id) {
-        const membership = await tx.get(
-          "SELECT * FROM memberships WHERE user_id=? AND organization_id=? AND active=1",
-          [approver.id, p.proxy_organization_id],
-        );
-        if (!membership) {
-          fail(403, "Proxy authority is no longer available.");
-        }
-        approver.organization_id = p.proxy_organization_id;
-        await resolveMembership(tx, membership, approver);
-        if (!(await canRespond(tx, approver, p, r))) {
-          fail(403, "Proxy authority is no longer available.");
-        }
       }
       const scopes = parseScopes(r);
       const notes = await tx.all(

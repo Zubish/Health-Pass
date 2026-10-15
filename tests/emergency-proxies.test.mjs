@@ -166,7 +166,13 @@ test("emergency proxy authority, approval, expiry, revocation, scope and immutab
     403,
     "decision proxy still cannot view records",
   );
+  assert.equal((await gp("/notifications")).data.counts.proxies, 1);
   const records = await gp("/emergency/" + request + "/records");
+  assert.equal(
+    (await gp("/notifications")).data.counts.proxies,
+    0,
+    "viewed emergency approval is no longer unread",
+  );
   assert.equal(records.status, 200, JSON.stringify(records));
   assert.equal(records.data.records.length, 1);
   assert.equal(records.data.profile, null);
@@ -193,11 +199,22 @@ test("emergency proxy authority, approval, expiry, revocation, scope and immutab
   assert.equal((await gp("/emergency/" + request + "/records")).status, 403);
   const second = (await gp("/emergency", "POST", { ...req, scopes: ["medication"] })).data.id;
   await foreign("/emergency/" + second + "/approve", "POST", { reason: "Synthetic approval" });
+  assert.equal((await gp("/notifications")).data.counts.proxies, 1);
   const medicationRecords = await gp("/emergency/" + second + "/records");
   assert.equal(medicationRecords.data.records.length, 0);
   assert.equal(medicationRecords.data.summaries[0].title, "Prescription");
+  const unreadRequest = (await gp("/emergency", "POST", req)).data.id;
+  await foreign("/emergency/" + unreadRequest + "/approve", "POST", {
+    reason: "Synthetic unread approval",
+  });
+  assert.equal((await gp("/notifications")).data.counts.proxies, 1);
   assert.equal((await patient("/proxies/" + id + "/revoke", "POST", {})).status, 200);
   assert.equal((await gp("/emergency/" + second + "/records")).status, 403);
+  assert.equal(
+    (await gp("/notifications")).data.counts.proxies,
+    0,
+    "revoked access leaves no requester alert",
+  );
   // Facility proxy decisions must come from an authorised clinician other than the requester.
   const facility = (await patient("/proxies", "POST", { ...input, kind: "facility" })).data.id;
   assert.equal(

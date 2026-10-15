@@ -31,7 +31,7 @@ export async function careApi<T = any>(path: string, method = "GET", body?: unkn
   if (path === "/auth/logout") {
     window.dispatchEvent(new Event("healthpass-signed-out"));
   }
-  if (method !== "GET") {
+  if (method !== "GET" || /^\/emergency\/[^/]+\/records$/.test(path)) {
     window.dispatchEvent(new Event("healthpass-work-updated"));
   }
   return data;

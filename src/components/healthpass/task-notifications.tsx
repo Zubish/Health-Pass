@@ -56,8 +56,8 @@ export function TaskNotifications({
           </div>
           <div className="hp-padded">
             <Dialog.Description id="notification-description">
-              Pending tasks and active work in your account. Counts update when work is completed,
-              not when you open this panel.
+              Alerts clear when you mark updates as read or resolve the related task. Opening this
+              panel alone does not complete a task.
             </Dialog.Description>
             <button
               className="hp-button secondary"
