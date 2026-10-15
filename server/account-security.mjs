@@ -105,7 +105,9 @@ export async function handleAccountSecurity(tx, context) {
   if (!path.startsWith("/account/security") && path !== "/account/preferences") {
     return;
   }
-  context.strong(actor);
+  if (!(path === "/account/preferences" && actor?.pendingMembership)) {
+    context.strong(actor);
+  }
   if (path === "/account/preferences") {
     if (method === "PATCH") {
       if (

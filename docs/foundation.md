@@ -224,3 +224,7 @@ Confirmed and implemented: successful actions use a centered, nonblocking confir
 ### Facility branding — 14 October 2026
 
 Confirmed: administrators can upload, replace or remove a facility logo in Settings & security. PNG, JPEG and WebP originals up to 5 MB are supported, with a preview and explicit save. Clicking the sidebar facility image/initials opens those settings for administrators. Removing the image restores two-letter initials. The expanded sidebar retains only the HealthPass wordmark; the collapsed sidebar retains only the facility branding, without the HealthPass graphic icon. See `docs/workspace-branding.md`.
+
+### Optional account setup — 15 October 2026
+
+Confirmed: offer a floating, account-specific setup guide with a persistent “Don’t show this again” choice and manual reopening from Settings & security. Patient steps cover details, primary care, sharing and personal settings; professional and administrator steps reflect actual workspace permissions. Pending professionals can set personal appearance and sound without clinical access. Later snoozes reminders for seven days. Guide progress never grants consent, authority or workspace access. Proxy management remains planned until its underlying workflow exists. See [account-setup-guide.md](account-setup-guide.md).

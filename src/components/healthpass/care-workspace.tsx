@@ -1,3 +1,4 @@
+import { AccountSetup } from "./account-setup";
 import { useSuccessFeedback } from "@/lib/healthpass-preferences";
 import { Departments } from "./departments";
 import { TreatmentRecords } from "./treatment-records";
@@ -253,6 +254,11 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
       onNavigate={setTab}
       onLogout={() => void act(onLogout, "")}
     >
+      <AccountSetup
+        key={`${me.user.id}:${me.organization?.id || "patient"}`}
+        me={me}
+        onNavigate={setTab}
+      />
       <main className="hp-content">
         {isPatient && tab !== "relationships" && (
           <PatientRelationshipNotice key={tab} onOpen={() => setTab("relationships")} />

@@ -1,3 +1,5 @@
+import { AccountSetup, OpenAccountSetup } from "@/components/healthpass/account-setup";
+import { UserPreferences } from "@/components/healthpass/user-preferences";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readSigninPreference } from "@/lib/healthpass-signin";
@@ -243,6 +245,17 @@ function Workspace() {
         <div className="hp-auth-card">
           <Mark />
           <h1>{me.accessExpired ? "Workspace access expired" : "Workspace access requested"}</h1>
+          {me.pendingMembership && !me.accessExpired && (
+            <AccountSetup
+              key={me.user.id}
+              me={me}
+              onNavigate={() =>
+                document
+                  .getElementById("pending-preferences")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
+            />
+          )}
           <p>{me.organization?.name}</p>
           <p>
             {me.accessExpired
@@ -252,6 +265,14 @@ function Workspace() {
           <button className="hp-button primary" onClick={() => void refresh()}>
             Check approval status
           </button>
+          {me.pendingMembership && !me.accessExpired && (
+            <>
+              <OpenAccountSetup />
+              <div id="pending-preferences">
+                <UserPreferences />
+              </div>
+            </>
+          )}
           <button
             className="hp-text-button"
             onClick={async () => {

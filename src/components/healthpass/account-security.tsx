@@ -1,3 +1,4 @@
+import { OpenAccountSetup } from "./account-setup";
 import type { Me } from "@/lib/healthpass-types";
 import { WorkspaceLogoSettings } from "./workspace-logo-settings";
 import { UserPreferences } from "./user-preferences";
@@ -33,6 +34,7 @@ function activityLabel(action: string) {
     "auth · mfa · skip": "Continued to workspace",
     "auth · logout": "Signed out",
     "workspace · logo": "Facility logo changed",
+    "account · setup": "Account setup updated",
     "account · preferences": "Appearance or sound updated",
     "account · security": "Session settings updated",
     "account · security · sessions · revoke": "Session signed out",
@@ -124,6 +126,7 @@ export function AccountSecurity({ me, onLogout }: { me: Me; onLogout: () => Prom
       {!data && !error && <p role="status">Loading security settings…</p>}
       {data && (
         <div className="hp-security-grid">
+          <OpenAccountSetup />
           {me.canManageWorkspaceLogo && <WorkspaceLogoSettings me={me} />}
           <UserPreferences />
           <section className="hp-panel hp-security-panel">

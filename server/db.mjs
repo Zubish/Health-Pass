@@ -109,9 +109,9 @@ export async function openDatabase(config = process.env, dependencies = {}) {
   };
   if (config.NODE_ENV === "production" && config.HEALTHPASS_RUN_MIGRATIONS !== "1") {
     await db.transaction(async (tx) => {
-      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='017'"))) {
+      if (!(await tx.get("SELECT version FROM schema_migrations WHERE version='018'"))) {
         throw new Error(
-          "Apply schema migrations 001 through 017 using the migration identity before starting the API.",
+          "Apply schema migrations 001 through 018 using the migration identity before starting the API.",
         );
       }
     });
@@ -220,6 +220,7 @@ export async function openDatabase(config = process.env, dependencies = {}) {
     ["015", "015-department-workflows.sql"],
     ["016", "016-user-preferences.sql"],
     ["017", "017-workspace-logos.sql"],
+    ["018", "018-account-setup.sql"],
   ]) {
     await db.transaction(async (tx) => {
       if (!(await tx.get("SELECT version FROM schema_migrations WHERE version=?", [version]))) {

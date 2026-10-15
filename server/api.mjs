@@ -1,3 +1,4 @@
+import { handleAccountSetup } from "./account-setup.mjs";
 import { canManageWorkspaceLogo } from "./workspace-logo.mjs";
 import { handleNotifications } from "./notifications.mjs";
 import { handleDepartments } from "./departments.mjs";
@@ -565,6 +566,10 @@ export function createApi(db, config = process.env) {
     const notificationResult = await handleNotifications(tx, context);
     if (notificationResult !== undefined) {
       return notificationResult;
+    }
+    const setupResult = await handleAccountSetup(tx, context);
+    if (setupResult !== undefined) {
+      return setupResult;
     }
     const securityResult = await handleAccountSecurity(tx, context);
     if (securityResult !== undefined) {
