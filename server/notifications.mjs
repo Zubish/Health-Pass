@@ -1,3 +1,4 @@
+import { canConfigureManagement, canManageLocation } from "./ward-management.mjs";
 import { proxyTasks } from "./emergency-proxies.mjs";
 import { hasPermission } from "./roles.mjs";
 import { careAreaAllows } from "./care-area-access.mjs";
@@ -95,6 +96,27 @@ export async function handleNotifications(tx, context) {
       ),
     );
   } else {
+    if (canConfigureManagement(actor) || actor.managementGrants?.length) {
+      add(
+        "ward-placement",
+        "wards",
+        "Admitted patients awaiting a room or bed",
+        await eligibleCount(
+          `SELECT id,care_area_id,branch_id FROM care_admissions WHERE ${branchWhere} AND status='active' AND unit_id IS NULL`,
+          branchArgs,
+          async (row) => {
+            const area = await tx.get("SELECT department_id,active FROM care_areas WHERE id=?", [
+              row.care_area_id,
+            ]);
+            return (
+              area?.active &&
+              careAreaAllows(actor, row.care_area_id) &&
+              canManageLocation(actor, row.branch_id, area.department_id, "placement")
+            );
+          },
+        ),
+      );
+    }
     if (can("registry.create")) {
       add(
         "registration-invitations",

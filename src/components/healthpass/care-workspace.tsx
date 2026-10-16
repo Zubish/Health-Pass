@@ -1,3 +1,4 @@
+import { WardManagement } from "./ward-management";
 import { EmergencyProxies } from "./emergency-proxies";
 import { AccountSetup } from "./account-setup";
 import { useSuccessFeedback } from "@/lib/healthpass-preferences";
@@ -114,6 +115,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
         ["security", "Settings & security", ShieldCheck],
       ] as const)
     : ([
+        ...(me.canManageWards ? [["wards", "Wards & departments", Users] as const] : []),
         ...(can("visits.view") ? [["today", "Today's work", ClipboardList] as const] : []),
         ["overview", "Overview", LayoutDashboard],
         ["proxies", "Proxies & emergency sharing", ShieldCheck],
@@ -280,6 +282,7 @@ export function CareWorkspace({ me, onLogout }: { me: Me; onLogout: () => Promis
           </div>
         )}
 
+        {tab === "wards" && me.canManageWards && <WardManagement />}
         {tab === "workspace" && can("workspace.view") && (
           <WorkspaceSettings permissions={me.permissions ?? []} userId={me.user.id} />
         )}

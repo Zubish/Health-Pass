@@ -465,6 +465,25 @@ export async function resolveMembership(tx, membership, user) {
         )
       ).map((a) => a.id)
     : [];
+  user.wardAssignmentRequired = !!membership.ward_assignment_required;
+  user.wardAssignments = user.wardAssignmentRequired
+    ? await tx.all(
+        "SELECT s.care_area_id,s.unit_id,s.duty FROM ward_staff_assignments s JOIN care_areas a ON a.id=s.care_area_id JOIN branches b ON b.id=a.branch_id LEFT JOIN ward_units u ON u.id=s.unit_id WHERE s.user_id=? AND s.organization_id=? AND s.active=1 AND a.active=1 AND b.active=1 AND (s.unit_id IS NULL OR u.active=1) AND (CAST(? AS TEXT) IS NULL OR a.branch_id=?)",
+        [user.id, user.organization_id, membership.branch_id ?? null, membership.branch_id ?? null],
+      )
+    : [];
+  user.managementGrants =
+    support || expired || !membership.active
+      ? []
+      : await tx.all(
+          "SELECT g.* FROM management_grants g JOIN branches b ON b.id=g.branch_id LEFT JOIN facility_departments d ON d.id=g.department_id WHERE g.user_id=? AND g.organization_id=? AND g.active=1 AND b.active=1 AND (g.department_id IS NULL OR d.active=1) AND (CAST(? AS TEXT) IS NULL OR g.branch_id=?)",
+          [
+            user.id,
+            user.organization_id,
+            membership.branch_id ?? null,
+            membership.branch_id ?? null,
+          ],
+        );
   user.permissions = !membership.active || expired ? [] : [...permissions];
   user.jobRoles = roles.map((r) => ({ id: r.id, name: r.name, clinical_scope: r.clinical_scope }));
   user.clinicalScopes = support || expired ? [] : [...new Set(scopes)];

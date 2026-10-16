@@ -232,3 +232,7 @@ Confirmed: offer a floating, account-specific setup guide with a persistent “D
 ### Emergency proxy authority and setup dialog — 15 October 2026
 
 CONFIRMED: implement the agreed existing-user and primary-facility proxy workflow, explicit versioned sharing-policy acceptance, emergency requests, limited approval/decline, revocation and patient-visible history. Facility self-treatment requires a different authorised clinician's approval; no single-person override is defined. Read-only access lasts one hour, with a new approval for extension. Administrators designate clinical proxy responders through role permissions. The setup guide must render vertically at desktop and mobile widths. See [emergency-proxies.md](emergency-proxies.md) for implemented boundaries and the verified six-hour recovery-history/disabled scheduled-backup limitation.
+
+### Scoped managers and ward units — 16 October 2026
+
+CONFIRMED: implement branch managers and department heads with administrator-selected, scope-limited management controls; departments, wards and named rooms/beds; doctor/nurse coverage and inpatient placement/transfers. Clinical permissions, patient sharing, physician decisions and consultant responsibility remain distinct. Migration 020 extends existing care areas and episodes without rewriting them. See [Ward management](ward-management.md) for workflows, coverage restriction semantics and release evidence.

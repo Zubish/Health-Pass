@@ -304,6 +304,12 @@ export async function handleCareOperations(tx, context) {
     for (const row of rows) {
       delete row.request_key;
       delete row.request_payload;
+      row.unit = row.unit_id
+        ? await tx.get(
+            "SELECT u.id,u.name,u.kind,p.name AS room_name FROM ward_units u LEFT JOIN ward_units p ON p.id=u.parent_id WHERE u.id=?",
+            [row.unit_id],
+          )
+        : null;
       row.team = await tx.all(
         "SELECT t.id,t.user_id,t.duty,t.active,t.version,u.name FROM admission_team_members t JOIN users u ON u.id=t.user_id WHERE t.admission_id=? ORDER BY t.active DESC,u.name LIMIT 100",
         [row.id],
@@ -412,7 +418,7 @@ export async function handleCareOperations(tx, context) {
         fail(400, "Move only within this admission’s branch to a ward or observation area.");
       }
       await tx.run(
-        "UPDATE care_admissions SET care_area_id=?,kind=?,version=version+1 WHERE id=?",
+        "UPDATE care_admissions SET unit_id=NULL,care_area_id=?,kind=?,version=version+1 WHERE id=?",
         [targetArea.id, targetArea.kind === "observation" ? "observation" : "inpatient", row.id],
       );
       await workflowEvent(tx, context, row, "admission.moved", {

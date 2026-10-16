@@ -5,6 +5,7 @@ export type Me = {
   role: string;
   permissions?: string[];
   deniedPermissions?: string[];
+  canManageWards?: boolean;
   careAreaRestricted?: boolean;
   careAreaIds?: string[];
   jobRoles?: { id: string; name: string; clinical_scope: string | null }[];

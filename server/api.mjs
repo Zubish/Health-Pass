@@ -1,3 +1,4 @@
+import { handleWardManagement, canConfigureManagement } from "./ward-management.mjs";
 import { handleEmergencyProxies } from "./emergency-proxies.mjs";
 import { handleAccountSetup } from "./account-setup.mjs";
 import { canManageWorkspaceLogo } from "./workspace-logo.mjs";
@@ -253,7 +254,7 @@ export function createApi(db, config = process.env) {
     }
     let episodeScopes = null;
     const admission = await tx.get(
-      "SELECT id FROM care_admissions WHERE patient_id=? AND organization_id=? AND status='active'",
+      "SELECT id,care_area_id,unit_id FROM care_admissions WHERE patient_id=? AND organization_id=? AND status='active'",
       [patientId, actor.organization_id],
     );
     if (admission && !assignmentCheck) {
@@ -265,8 +266,21 @@ export function createApi(db, config = process.env) {
         "SELECT id FROM care_responsibilities WHERE admission_id=? AND consultant_id=? AND status='active'",
         [admission.id, actor.id],
       );
+      const assignedUnit = admission.unit_id
+        ? await tx.get("SELECT parent_id FROM ward_units WHERE id=?", [admission.unit_id])
+        : null;
+      const coverageScopes = (actor.wardAssignments ?? [])
+        .filter(
+          (a) =>
+            a.care_area_id === admission.care_area_id &&
+            (!a.unit_id ||
+              a.unit_id === admission.unit_id ||
+              a.unit_id === assignedUnit?.parent_id),
+        )
+        .map((a) => (a.duty === "doctor" ? "general" : "nursing"));
       episodeScopes = [
         ...new Set([
+          ...coverageScopes,
           ...(team
             ? [{ doctor: "general", nurse: "nursing", medication: "medication" }[team.duty]]
             : []),
@@ -588,6 +602,10 @@ export function createApi(db, config = process.env) {
     if (treatmentResult !== undefined) {
       return treatmentResult;
     }
+    const wardResult = await handleWardManagement(tx, context);
+    if (wardResult !== undefined) {
+      return wardResult;
+    }
     const operationsResult = await handleCareOperations(tx, context);
     if (operationsResult !== undefined) {
       return operationsResult;
@@ -641,6 +659,7 @@ export function createApi(db, config = process.env) {
         jobRoles: actor.jobRoles ?? [],
         clinicalScopes: actor.clinicalScopes ?? [],
         deniedPermissions: actor.deniedPermissions ?? [],
+        canManageWards: canConfigureManagement(actor) || !!actor.managementGrants?.length,
         careAreaRestricted: !!actor.careAreaRestricted,
         careAreaIds: actor.careAreaIds ?? [],
         isOwner: !!actor.isOwner,

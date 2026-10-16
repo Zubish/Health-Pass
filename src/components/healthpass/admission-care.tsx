@@ -14,6 +14,7 @@ type Episode = {
   branch_name: string;
   care_area_id: string;
   area_name: string;
+  unit?: { name: string; kind: string; room_name: string | null } | null;
   kind: string;
   status: string;
   created_at: string;
@@ -178,7 +179,13 @@ export function AdmissionCare({ me }: { me: Me }) {
                   </p>
                 )}
                 <p>
-                  <strong>{row.area_name}</strong> · Opened {date(row.created_at)}
+                  <strong>
+                    {row.area_name}
+                    {row.unit
+                      ? ` · ${row.unit.room_name ? row.unit.room_name + " / " : ""}${row.unit.name}`
+                      : ""}
+                  </strong>{" "}
+                  · Opened {date(row.created_at)}
                 </p>
               </div>
               <p>

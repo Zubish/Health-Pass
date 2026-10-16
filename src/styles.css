@@ -3862,3 +3862,21 @@ button.hp-patient-row:hover {
     padding: 16px;
   }
 }
+
+/* Keep ward cards readable from a narrow phone to a desktop roster. */
+.hp-ward-unit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 1rem;
+}
+.hp-ward-unit-grid > article {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.hp-ward-management > .hp-panel {
+  margin-bottom: 20px;
+}
+.hp-ward-unit-grid .hp-text-button {
+  display: block;
+  margin-top: 12px;
+}
