@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WorkspaceRouteImport } from './routes/workspace'
+import { Route as WFacilityWorkspaceCodeRouteImport } from './routes/w/$facility.$workspaceCode'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkspaceRoute = WorkspaceRouteImport.update({
+  id: '/workspace',
+  path: '/workspace',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WFacilityWorkspaceCodeRoute = WFacilityWorkspaceCodeRouteImport.update({
+  id: '/w/$facility/$workspaceCode',
+  path: '/w/$facility/$workspaceCode',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/workspace': typeof WorkspaceRoute
+  '/w/$facility/$workspaceCode': typeof WFacilityWorkspaceCodeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/workspace': typeof WorkspaceRoute
+  '/w/$facility/$workspaceCode': typeof WFacilityWorkspaceCodeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/workspace': typeof WorkspaceRoute
+  '/w/$facility/$workspaceCode': typeof WFacilityWorkspaceCodeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/workspace' | '/w/$facility/$workspaceCode'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/workspace' | '/w/$facility/$workspaceCode'
+  id: '__root__' | '/' | '/workspace' | '/w/$facility/$workspaceCode'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  WorkspaceRoute: typeof WorkspaceRoute
+  WFacilityWorkspaceCodeRoute: typeof WFacilityWorkspaceCodeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workspace': {
+      id: '/workspace'
+      path: '/workspace'
+      fullPath: '/workspace'
+      preLoaderRoute: typeof WorkspaceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/w/$facility/$workspaceCode': {
+      id: '/w/$facility/$workspaceCode'
+      path: '/w/$facility/$workspaceCode'
+      fullPath: '/w/$facility/$workspaceCode'
+      preLoaderRoute: typeof WFacilityWorkspaceCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  WorkspaceRoute: WorkspaceRoute,
+  WFacilityWorkspaceCodeRoute: WFacilityWorkspaceCodeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

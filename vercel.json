@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "health-pass-(?!psi\\.vercel\\.app$)[a-z0-9-]+\\.vercel\\.app"
+        }
+      ],
+      "destination": "https://health-pass-psi.vercel.app/:path*",
+      "permanent": true
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+CREATE TABLE facility_departments (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id), branch_id TEXT NOT NULL REFERENCES branches(id), name TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(branch_id,name));
+ALTER TABLE care_areas ADD COLUMN department_id TEXT REFERENCES facility_departments(id);
+CREATE TABLE management_grants (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id), branch_id TEXT NOT NULL REFERENCES branches(id), department_id TEXT REFERENCES facility_departments(id), user_id TEXT NOT NULL REFERENCES users(id), capabilities TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX management_grants_user ON management_grants(organization_id,user_id,active);
+CREATE TABLE ward_units (id TEXT PRIMARY KEY, care_area_id TEXT NOT NULL REFERENCES care_areas(id), parent_id TEXT REFERENCES ward_units(id), kind TEXT NOT NULL CHECK(kind IN ('room','bed')), name TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(care_area_id,name));
+ALTER TABLE care_admissions ADD COLUMN unit_id TEXT REFERENCES ward_units(id);
+CREATE UNIQUE INDEX occupied_ward_unit ON care_admissions(unit_id) WHERE status='active' AND unit_id IS NOT NULL;
+ALTER TABLE memberships ADD COLUMN ward_assignment_required INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE ward_staff_assignments (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id), care_area_id TEXT NOT NULL REFERENCES care_areas(id), unit_id TEXT REFERENCES ward_units(id), user_id TEXT NOT NULL REFERENCES users(id), duty TEXT NOT NULL CHECK(duty IN ('doctor','nurse')), active INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX ward_staff_scope ON ward_staff_assignments(organization_id,user_id,active);
+CREATE UNIQUE INDEX active_management_scope ON management_grants(organization_id,user_id,branch_id,COALESCE(department_id,'')) WHERE active=1;

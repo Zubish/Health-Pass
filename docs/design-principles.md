@@ -1,0 +1,40 @@
+# Ecosystem design principles — applied to HealthPass
+
+Saved 11 October 2026. These principles recover the portable approach already documented in [RxLedger's skill library](https://github.com/Zubish/RxLedger/blob/5c9aea652147123921ae9a433fab0b573c5eda27/docs/SKILL_LIBRARY.md), combined with the owner's explicit HealthPass decisions. They are reusable product/engineering guidance, not new clinical access policy or approval of every proposed module.
+
+1. **Start with the person's job.** Identify the role, moment of work and object; map before/during/after before drawing a page. An arrival queue must help reception receive a patient; a consultant screen must help complete care.
+2. **Give each work surface one main task.** Landing pages build understanding/trust. Authenticated screens are calm, compact and operational. Use actionable queues instead of decorative cards and invented metrics.
+3. **Make context visible.** Show the active facility and branch, then patient/visit context where relevant. Confirm workspace codes before professional sign-in. Never identify professional authority from email alone.
+4. **Match authority to real responsibilities.** Separate job title, administration, reviewed clinical scope and patient relationship. Enforce the whole boundary on the API, including returned data, not only the navigation.
+5. **Preserve history.** Role changes, expiry, plan changes and revocation limit future access; they do not silently delete care or audit records. Signed records change through versioned amendments. Clear means the current work surface unless explicitly named otherwise.
+6. **Design for interrupted work.** Show whether work is unsaved, saving, saved or conflicted. Network failure retains current input; retries must not duplicate final actions. Do not copy a POS draft's ten-minute disposal rule into a clinical record.
+7. **Make navigation predictable.** Back returns to the prior view, forward restores it, refresh preserves the current view after authentication, and idle expiry returns to sign-in. Never store note text or credentials in URLs.
+8. **Remember deliberate preferences at the right scope.** User/workspace preferences belong to that authenticated context and should survive devices where requested. Optional prompts should have a clear Continue action and a remembered dismissal. A preference must not be misrepresented as verified authentication.
+9. **Build the smallest important screen early.** Use natural mobile scroll, labelled aligned controls and at least 44px touch targets. Put long tables in their own scroll wrapper. Keep context and exits reachable. Check phone and desktop, including expanded/error states.
+10. **Use branding as a useful system.** HealthPass's burgundy accent is shared with RxLedger/Rai. Pair it with white/slate, teal and blue; reserve warning/danger/success colours for meaningful states. Use the supplied logo assets and readable labels.
+11. **Prefer reliable automation before AI.** Use templates, validated rules, search and reminders first. Add Rai where its benefit can be demonstrated. Models cannot sign, prescribe, grant access or silently change records.
+12. **Load what the person needs.** Scope and paginate history on the server, load summaries first and aggregate metrics there. Never fetch complete facility/patient databases just to hide most of them in the UI.
+13. **Keep ecosystem responsibilities clear.** HealthPass manages care and access; RxLedger manages pharmacy operations; Rai provides controlled assistance. Integrate via explicit contracts with provenance rather than duplicating products or assuming universal permission.
+14. **Describe the feature honestly.** Distinguish implemented, planned, unavailable, unknown and not checked. A missing check is not a safe result; a job role with no tools is not a functional module. Preserve confirmed/recommended/open labels.
+15. **Verify the real outcome.** Validate API permissions, persistence and failure states, then use the browser and check the canonical deployment. A build success or deployment status alone does not prove the user can complete the task.
+16. **Save stable decisions.** Update the product definition and decision register after the owner settles a rule. Keep reusable lessons here; keep clinical/product-specific policies in their own reviewed specifications. Apply corrections without repeatedly asking for already authorised routine work.
+
+Before implementation, answer: who is acting; what are they trying to finish; which object changes; what context grants authority; what must be preserved; what happens on failure/expiry; what happens on a phone; and what evidence proves completion?
+
+Sources inspected: RxLedger `docs/skill-library/product-workflow-design.md`, `ui-ux-design.md`, `responsive-mobile-ux.md`, `data-business-rules.md`, `industry-adaptation.md`, `ai-collaboration.md`; HealthPass owner's decisions in [foundation.md](foundation.md). The detailed [product definition and build plan](product-definition.md) applies these principles without importing pharmacy-specific workflows.
+
+## HealthPass side panel — owner decision, 12 October 2026
+
+Apply RxLedger's fixed side-panel pattern across patient and professional workspaces. Desktop navigation remains open during navigation and supports an explicitly chosen compact rail, remembered per account on the current device. Phones and smaller tablets use a modal side drawer that closes after selecting a destination, with focus containment, Escape/outside close and a visible menu button. Facility/branch context, account identity and exits stay reachable; the sidebar remains full viewport height while page content scrolls. Professional destinations continue to derive from the current server-returned administrator-assigned permissions, while the API remains authoritative. Patient and professional screens retain their existing care workflows. Use the supplied HealthPass wordmark, neutral surfaces, teal context and burgundy active accents.
+
+## Reduce sign-in fatigue without obscuring context — 12 October 2026
+
+Use verified facility links as the convenient entry and workspace codes as an alternative. A remembered workspace is a device preference with a 30-day expiry, not authentication. Keep the facility name visible before password submission and throughout professional work. Explicit links take precedence over remembered context; a link for another facility must never silently open the current session's workspace. Preserve separate identities and permissions per facility. Offer a clear way to forget or switch the workspace, and keep inactivity logout independent of convenience preferences.
+
+## Reusable role defaults with deliberate individual limits — 12 October 2026
+
+Select a staff member's job roles to inherit reusable workspace permissions. Put exceptions in a separate Individual restrictions section; disabling a permission must override every role and survive later role edits. A job title is not credential evidence. Use a recorded department/ward assignment to constrain patient context, separately from disabling a task such as charting. Keep inpatient team accountability separate from outpatient referrals and each professional's authored records. Allow administrators to configure their facility's operation using supported controls while identity, consent, credential gates, workflow transitions and immutable history remain application rules.
+
+## Shared workspace controls — 13 October 2026
+
+Use defined shared button, heading, form-grid and choice-row styles rather than introducing unstyled class names. Keep checkboxes/radios intrinsically sized beside their labels. Group settings into bounded cards that stack on smaller screens; retain readable clinical context without repeated implementation explanations or promotional copy. Show concise sidebar role summaries with full details available, and translate internal activity identifiers into user-facing labels. Verify populated screens and dialogs, not only empty workspaces or absence of horizontal overflow.
