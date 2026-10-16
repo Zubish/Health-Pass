@@ -43,3 +43,7 @@ Hosted verification passed synthetic professional sign-in, the summary API, all 
 ## Badge visibility correction — 15 October 2026
 
 Positive counts remain visible, including a single pending item; zero badges are removed on desktop, collapsed navigation and mobile. The bell already followed this rule. Emergency records viewing now refreshes task counts immediately. Requester alerts use the same current-authority check as record access, excluding already-viewed and invalid approvals. Other tasks retain their existing review/completion rules. No migration is needed.
+
+Release verification — 16 October 2026: implementation `a994c46bdc8f973094da94cad8b4b6fd9ff5c63c` is deployed as Neon API 26 (completed) and Vercel production `dpl_5VZgSYjTNQNMx34cTF6WkEJHb3Dh` (READY). The canonical `health-pass-psi.vercel.app` alias points to this deployment. Schema remains 019.
+
+Type checking, production build and lint passed (six existing UI Fast Refresh warnings). Focused emergency-proxy tests passed on SQLite and PostgreSQL/PGlite, including viewed approvals and revoked unread approvals; all ten PostgreSQL department/notification checks passed. Local desktop/mobile badge transitions passed. Hosted synthetic professional sign-in and the real notification-summary endpoint passed. Hosted desktop and mobile UI checks used intercepted summary responses to verify counts of one and two appear and zero removes all badges after refresh; no real clinical data was changed.
