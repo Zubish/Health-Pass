@@ -19,3 +19,7 @@ Migration 021 adds `remembered_at` and `forgotten_at` to `login_devices`. Existi
 ## Verification
 
 Four new integration scenarios pass on both SQLite and PostgreSQL/PGlite: familiar-browser/location behaviour; reviewed-event, explicit-confirmation and account ownership gates; Not now and forgetting; and credentials/inactivity/thirty-day expiry independence. The existing eleven treatment/security checks pass on both engines, and all three proxy/cookie transport checks pass. Type checking, build and lint pass (six existing UI Fast Refresh warnings). Browser and deployment evidence follow below.
+
+Release verified — 18 October 2026: implementation `33b2428d3a21877a2e061b8eb33a04722aa9268a` is pushed and deployed as Neon API 28 (completed), schema 021 and Vercel production `dpl_FVnJQuyg1y3DYsWnJpQPuWwwFUFZ` (READY). The canonical `health-pass-psi.vercel.app` alias points to this build. No additional runtime grants were required.
+
+Local browser verification passed review, Not now, explicit ownership confirmation, remember/forget persistence and repeat-sign-in behaviour at 320, 390, 768 and 1440px. Hosted verification with the existing synthetic professional account passed the same workflow, including a normal sign-in after remembering and a new-device alert after forgetting. The final synthetic alert was reviewed; no patient or clinical data was changed. Phone/tablet/desktop modal overflow checks passed. Recognition does not suppress separate failed-password or unusual-location/browser alerts.
