@@ -48,8 +48,11 @@ export async function recordSignin(tx, request, headers, secure, sessionToken) {
   );
   const risk =
     [
-      !device && previous ? "new_device" : null,
-      previous?.country && signInContext.country && previous.country !== signInContext.country
+      (!device || device.forgotten_at) && previous ? "new_device" : null,
+      device && device.device_label !== signInContext.label ? "device_changed" : null,
+      (device?.country || (!device && previous?.country)) &&
+      signInContext.country &&
+      (device?.country || previous?.country) !== signInContext.country
         ? "country_changed"
         : null,
     ]
@@ -129,7 +132,7 @@ export async function handleAccountSecurity(tx, context) {
   }
   const events = () =>
     tx.all(
-      "SELECT id,action,device_label,country,risk,created_at,reviewed_at FROM signin_events WHERE user_id=? ORDER BY created_at DESC LIMIT 100",
+      "SELECT e.id,e.action,e.device_label,e.country,e.risk,e.created_at,e.reviewed_at,d.remembered_at,CASE WHEN e.action='signed_in' AND d.remembered_at IS NULL AND e.id=(SELECT latest.id FROM signin_events latest WHERE latest.device_id=e.device_id AND latest.action='signed_in' ORDER BY latest.created_at DESC,latest.id DESC LIMIT 1) THEN 1 ELSE 0 END AS can_remember FROM signin_events e LEFT JOIN login_devices d ON d.id=e.device_id WHERE e.user_id=? ORDER BY e.created_at DESC,e.id DESC LIMIT 100",
       [actor.id],
     );
   if (path === "/account/security" && method === "GET") {
@@ -149,6 +152,10 @@ export async function handleAccountSecurity(tx, context) {
       mandatoryDays: 30,
       currentSession: actor.session_id,
       sessions,
+      devices: await tx.all(
+        "SELECT d.id,d.device_label,d.country,d.remembered_at,d.last_seen_at,CASE WHEN s.device_id=d.id THEN 1 ELSE 0 END AS current FROM login_devices d LEFT JOIN sessions s ON s.id=? AND s.user_id=d.user_id WHERE d.user_id=? AND d.remembered_at IS NOT NULL AND d.forgotten_at IS NULL ORDER BY d.last_seen_at DESC",
+        [actor.session_id, actor.id],
+      ),
       events: await events(),
       activity: await tx.all(
         "SELECT id,action,created_at FROM account_activity WHERE user_id=? ORDER BY created_at DESC LIMIT 100",
@@ -209,22 +216,96 @@ export async function handleAccountSecurity(tx, context) {
     );
     return { revoked: true, current: session.id === actor.session_id };
   }
-  const review = path.match(/^\/account\/security\/events\/([^/]+)\/review$/);
+
+  const review = path.match(/^\/account\/security\/events\/([^/]+)\/(review|remember-device)$/);
   if (review && method === "POST") {
-    if (
-      !(await tx.get("SELECT id FROM signin_events WHERE id=? AND user_id=?", [
-        review[1],
-        actor.id,
-      ]))
-    ) {
-      fail(404, "Sign-in event unavailable.");
-    }
-    await tx.run("UPDATE signin_events SET reviewed_at=? WHERE id=? AND user_id=?", [
-      now(),
+    // Account row lock orders review, remembering and forgetting from concurrent sessions.
+    await tx.run("UPDATE users SET name=name WHERE id=?", [actor.id]);
+    const event = await tx.get("SELECT * FROM signin_events WHERE id=? AND user_id=?", [
       review[1],
       actor.id,
     ]);
-    return { reviewed: true };
+    if (!event) {
+      fail(404, "Sign-in event unavailable.");
+    }
+    const device = event.device_id
+      ? await tx.get("SELECT * FROM login_devices WHERE id=? AND user_id=?", [
+          event.device_id,
+          actor.id,
+        ])
+      : null;
+    const eligible =
+      event.action === "signed_in" &&
+      device &&
+      device.device_label === event.device_label &&
+      device.country === event.country;
+    if (review[2] === "remember-device") {
+      if (body.confirmed !== true) {
+        fail(400, "Confirm this is a personal device you own and control.");
+      }
+      if (!event.reviewed_at || !eligible) {
+        fail(409, "Review the latest successful sign-in for this device before remembering it.");
+      }
+      await tx.run(
+        "UPDATE login_devices SET remembered_at=?,forgotten_at=NULL WHERE id=? AND user_id=?",
+        [now(), device.id, actor.id],
+      );
+      // Confirming this device resolves earlier device-only alerts, not country changes or failed attempts.
+      await tx.run(
+        "UPDATE signin_events SET reviewed_at=? WHERE user_id=? AND device_id=? AND risk='new_device' AND reviewed_at IS NULL AND created_at<=?",
+        [now(), actor.id, device.id, event.created_at],
+      );
+      await context.audit(
+        tx,
+        actor,
+        "security.device.remembered",
+        "allow",
+        null,
+        device.id,
+        context.correlation,
+      );
+      return { remembered: true };
+    }
+    await tx.run("UPDATE signin_events SET reviewed_at=? WHERE id=? AND user_id=?", [
+      now(),
+      event.id,
+      actor.id,
+    ]);
+    return {
+      reviewed: true,
+      device: eligible
+        ? {
+            label: device.device_label,
+            country: device.country,
+            remembered: !!device.remembered_at && !device.forgotten_at,
+          }
+        : null,
+    };
+  }
+  const forget = path.match(/^\/account\/security\/devices\/([^/]+)\/forget$/);
+  if (forget && method === "POST") {
+    await tx.run("UPDATE users SET name=name WHERE id=?", [actor.id]);
+    const device = await tx.get("SELECT id FROM login_devices WHERE id=? AND user_id=?", [
+      forget[1],
+      actor.id,
+    ]);
+    if (!device) {
+      fail(404, "Device unavailable.");
+    }
+    await tx.run(
+      "UPDATE login_devices SET remembered_at=NULL,forgotten_at=? WHERE id=? AND user_id=?",
+      [now(), device.id, actor.id],
+    );
+    await context.audit(
+      tx,
+      actor,
+      "security.device.forgotten",
+      "allow",
+      null,
+      device.id,
+      context.correlation,
+    );
+    return { forgotten: true };
   }
   fail(404, "Security action unavailable.");
 }

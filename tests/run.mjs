@@ -33,6 +33,7 @@ for (const engine of ["sqlite", "postgres"]) {
     "tests/account-setup.test.mjs",
     "tests/emergency-proxies.test.mjs",
     "tests/ward-management.test.mjs",
+    "tests/remembered-devices.test.mjs",
   ]) {
     const result = spawnSync(process.execPath, [file], {
       stdio: "inherit",

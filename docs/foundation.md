@@ -236,3 +236,7 @@ CONFIRMED: implement the agreed existing-user and primary-facility proxy workflo
 ### Scoped managers and ward units — 16 October 2026
 
 CONFIRMED: implement branch managers and department heads with administrator-selected, scope-limited management controls; departments, wards and named rooms/beds; doctor/nurse coverage and inpatient placement/transfers. Clinical permissions, patient sharing, physician decisions and consultant responsibility remain distinct. Migration 020 extends existing care areas and episodes without rewriting them. See [Ward management](ward-management.md) for workflows, coverage restriction semantics and release evidence.
+
+### Remembered devices and sign-in alerts — 16 October 2026
+
+CONFIRMED: retain familiar-browser recognition, compare location against each device's history, offer an optional personal-device confirmation after This was me, and manage remembered devices in Settings & security. Neither recognition nor remembering bypasses credentials, thirty-minute inactivity logout or mandatory thirty-day reauthentication. Migration 021 adds explicit remembered/forgotten state without trusting existing devices automatically. See [Remembered devices](remembered-devices.md).
