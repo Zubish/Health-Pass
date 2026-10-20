@@ -240,3 +240,9 @@ CONFIRMED: implement branch managers and department heads with administrator-sel
 ### Remembered devices and sign-in alerts — 16 October 2026
 
 CONFIRMED: retain familiar-browser recognition, compare location against each device's history, offer an optional personal-device confirmation after This was me, and manage remembered devices in Settings & security. Neither recognition nor remembering bypasses credentials, thirty-minute inactivity logout or mandatory thirty-day reauthentication. Migration 021 adds explicit remembered/forgotten state without trusting existing devices automatically. See [Remembered devices](remembered-devices.md).
+
+### 2026-10-20 — Hover navigation (confirmed, implemented)
+
+Desktop navigation now starts as an 80px icon rail and expands to 252px on mouse hover or keyboard focus. The desktop toggle and saved collapse preference are retired. Expansion overlays content without moving the page; short entry/exit delays prevent flicker and reduced-motion preferences are respected. Mouse clicks do not pin the panel open. The HealthPass wordmark appears only when expanded; facility identity and permission-filtered destinations remain intact.
+
+Phones, smaller tablets and large touch-only screens retain the accessible menu drawer. Positive task badges retain their existing lifecycle. Verification: patient and professional browser journeys covered hover, leaving after a click, keyboard focus, unchanged content position, 390/768px drawers and 1280px touch-only navigation. Typecheck and production build passed; lint has no errors and six existing shared-UI warnings.

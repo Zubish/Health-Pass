@@ -1,9 +1,9 @@
 import { useWorkspaceLogo, workspaceInitials } from "@/lib/healthpass-workspace-logo";
 import { useTaskNotifications } from "@/lib/healthpass-notifications";
 import { TaskNotifications } from "./task-notifications";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, X, type LucideIcon } from "lucide-react";
+import { LogOut, Menu, X, type LucideIcon } from "lucide-react";
 import type { Me } from "@/lib/healthpass-types";
 
 export type NavigationItem = readonly [id: string, label: string, icon: LucideIcon];
@@ -16,7 +16,7 @@ type PanelProps = {
   mobile?: boolean;
   busy: boolean;
   onNavigate: (id: string) => void;
-  onToggle: () => void;
+  onToggle?: () => void;
   onLogout: () => void;
 };
 function NavigationPanel({
@@ -61,26 +61,17 @@ function NavigationPanel({
             />
           </a>
         )}
-        <button
-          className="hp-navigation-toggle"
-          type="button"
-          onClick={onToggle}
-          aria-label={
-            mobile ? "Close navigation" : collapsed ? "Expand side panel" : "Collapse side panel"
-          }
-          title={
-            mobile ? "Close navigation" : collapsed ? "Expand side panel" : "Collapse side panel"
-          }
-          aria-expanded={mobile ? undefined : !collapsed}
-        >
-          {mobile ? (
+        {mobile && (
+          <button
+            className="hp-navigation-toggle"
+            type="button"
+            onClick={onToggle}
+            aria-label="Close navigation"
+            title="Close navigation"
+          >
             <X size={20} />
-          ) : collapsed ? (
-            <PanelLeftOpen size={20} />
-          ) : (
-            <PanelLeftClose size={20} />
-          )}
-        </button>
+          </button>
+        )}
       </div>
       <div className="hp-navigation-scroll">
         <div
@@ -206,36 +197,37 @@ export function WorkspaceShell({
   const notifications = useTaskNotifications(
     `${me.user.id}:${me.organization?.id ?? "patient"}:${me.branch?.id ?? "all"}:${me.permissions?.join(",") ?? ""}`,
   );
-  const [collapsed, setCollapsed] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [open, setOpen] = useState(false);
-  const preferenceKey = `healthpass-side-panel:v1:${me.user.id}`;
-  useEffect(() => {
-    try {
-      setCollapsed(localStorage.getItem(preferenceKey) === "collapsed");
-    } catch {
-      /* Navigation still works when device storage is unavailable. */
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const collapsed = !hovered && !focused;
+  const clearHoverTimer = () => {
+    if (hoverTimer.current !== null) {
+      clearTimeout(hoverTimer.current);
     }
-  }, [preferenceKey]);
+    hoverTimer.current = null;
+  };
+  const scheduleHover = (expanded: boolean) => {
+    clearHoverTimer();
+    hoverTimer.current = setTimeout(() => setHovered(expanded), expanded ? 120 : 220);
+  };
   useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px)");
-    const closeOnDesktop = () => {
+    const media = window.matchMedia("(min-width: 1024px) and (hover: hover) and (pointer: fine)");
+    const updateNavigation = () => {
+      clearHoverTimer();
+      setHovered(false);
+      setFocused(false);
       if (media.matches) {
         setOpen(false);
       }
     };
-    closeOnDesktop();
-    media.addEventListener("change", closeOnDesktop);
-    return () => media.removeEventListener("change", closeOnDesktop);
+    media.addEventListener("change", updateNavigation);
+    return () => {
+      clearHoverTimer();
+      media.removeEventListener("change", updateNavigation);
+    };
   }, []);
-  const toggle = () => {
-    const next = !collapsed;
-    setCollapsed(next);
-    try {
-      localStorage.setItem(preferenceKey, next ? "collapsed" : "expanded");
-    } catch {
-      /* Keep the current layout usable without storing a preference. */
-    }
-  };
   const panelProps = {
     me,
     items,
@@ -248,8 +240,26 @@ export function WorkspaceShell({
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <div className={`hp-shell hp-app-shell${collapsed ? " hp-navigation-collapsed" : ""}`}>
-        <aside className="hp-navigation hp-navigation-desktop" aria-label="Workspace side panel">
-          <NavigationPanel {...panelProps} collapsed={collapsed} onToggle={toggle} />
+        <aside
+          className="hp-navigation hp-navigation-desktop"
+          aria-label="Workspace side panel"
+          onPointerEnter={(event) => {
+            if (event.pointerType === "mouse") {
+              scheduleHover(true);
+            }
+          }}
+          onPointerLeave={() => scheduleHover(false)}
+          onFocusCapture={(event) => {
+            // Mouse clicks should not pin the panel open after the pointer leaves.
+            setFocused(event.target.matches(":focus-visible"));
+          }}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              setFocused(false);
+            }
+          }}
+        >
+          <NavigationPanel {...panelProps} collapsed={collapsed} />
         </aside>
         <div className="hp-main">
           <header className="hp-topbar hp-navigation-topbar">

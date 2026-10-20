@@ -2687,8 +2687,8 @@ button.hp-patient-row:hover {
   --hp-panel-width: 80px;
 }
 .hp-app-shell > .hp-main {
-  margin-left: var(--hp-panel-width);
-  width: calc(100% - var(--hp-panel-width));
+  margin-left: 80px;
+  width: calc(100% - 80px);
   min-width: 0;
 }
 .hp-navigation {
@@ -2702,6 +2702,9 @@ button.hp-patient-row:hover {
   inset: 0 auto 0 0;
   z-index: 35;
   width: var(--hp-panel-width);
+  overflow-x: hidden;
+  transition: width 160ms ease;
+  box-shadow: 8px 0 24px rgb(20 32 44 / 0.08);
   height: 100vh;
   height: 100dvh;
   border-right: 1px solid light-dark(#e5e9ed, var(--hp-dark-border));
@@ -3018,7 +3021,7 @@ button.hp-patient-row:hover {
   white-space: nowrap;
   border: 0;
 }
-@media (max-width: 1023px) {
+@media (max-width: 1023px), (hover: none), (pointer: coarse) {
   .hp-app-shell > .hp-main {
     margin-left: 0;
     width: 100%;
@@ -3044,7 +3047,7 @@ button.hp-patient-row:hover {
     display: none;
   }
 }
-@media (min-width: 1024px) {
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
   .hp-navigation-overlay,
   .hp-navigation-drawer.hp-shell {
     display: none;
@@ -3879,4 +3882,10 @@ button.hp-patient-row:hover {
 .hp-ward-unit-grid .hp-text-button {
   display: block;
   margin-top: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hp-navigation-desktop {
+    transition: none;
+  }
 }
