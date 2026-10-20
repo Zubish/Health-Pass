@@ -1,0 +1,821 @@
+HEALTHPASS — PRODUCT BLUEPRINT AND BUILD SPECIFICATIONS
+Prepared for Musa Ibrahim
+Version 1.0 | 9 October 2026 | Product context: Nigeria
+
+PURPOSE AND HOW TO USE THIS DOCUMENT
+
+This is a build specification for HealthPass, consolidating recovered discussions about the product and its relationship with RxLedger and Rai. It is intended for the founder, product designer, developer, clinical reviewer and AI coding agent. It describes the target product, a staged implementation, data boundaries, screens, APIs, safety controls and acceptance criteria.
+
+Evidence labels used throughout:
+CONFIRMED: a direction or requirement recovered as a user decision.
+RECOVERED PROPOSAL: an earlier assistant suggestion or concept, not proof of final approval.
+BUILD RECOMMENDATION: a concrete engineering specification added here to make the product implementable.
+OPEN: a decision that was not established by the recovered material.
+
+Conversation retrieval returned relevant excerpts rather than every complete transcript. This document does not claim exhaustive access to all past chats. No existing HealthPass repository, deployed system or working integration was inspected; implementation status is therefore unverified. Requirements below describe the intended build, not features proven to exist.
+
+CONTENTS
+01. Vision and scope
+02. Confirmed decisions and unresolved choices
+03. Product ecosystem and data ownership
+04. Roles and permissions
+05. Patient identity and emergency access
+06. Patient application
+07. Provider application and clinical records
+08. Scheduling and telemedicine
+09. Digital prescriptions and RxLedger integration
+10. Referrals and laboratory workflows
+11. HMO and financial workflows
+12. Consent, security and privacy
+13. Interface, design system and screen inventory
+14. Technical architecture and infrastructure
+15. Data model
+16. APIs, events and interoperability
+17. Rai and clinical decision support
+18. Reliability, low bandwidth and offline boundaries
+19. Implementation phases
+20. Verification and acceptance criteria
+21. Launch, operations and commercial decisions
+22. Instructions for coding agents
+23. Source register and decision checklist
+
+01. VISION AND SCOPE
+
+CONFIRMED: HealthPass is a secure EHR/EMR and patient-management platform with interoperability at its core. Its motivating problem is fragmented patient history: a patient visits another facility or arrives during an emergency and has to recreate information that already exists elsewhere.
+
+HealthPass should give each patient a persistent identity and a longitudinal view of care across participating hospitals, primary-care facilities, pharmacies, laboratories and HMOs. Access depends on identity verification, care relationship, consent or an approved emergency policy; a persistent identity does not imply unrestricted sharing.
+
+CONFIRMED: HealthPass owns appointment booking, video/voice consultations, secure doctor chat, uploads, consultation history, digital prescriptions and medication tracking/refills. RxLedger retains pharmacy operations. Secure pharmacist-to-prescriber communication can cross this boundary when linked to a prescription.
+
+Product outcomes:
+* Reduce repeated collection of patient history.
+* Make clinically relevant information accessible to authorized care teams.
+* Support in-person and remote consultations through one record workflow.
+* Connect prescribing to actual pharmacy fulfilment and follow-up.
+* Make the source, age and reliability of clinical information visible.
+* Preserve a clear audit trail of access and clinical changes.
+
+BUILD RECOMMENDATION: Begin with a web-based primary-care implementation and a responsive patient portal. Design APIs for future mobile clients. Expand into wider hospital workflows only after the core record, identity and prescription exchange are proven.
+
+Explicit staging boundaries:
+* Full inpatient care, theatre, bed allocation, imaging archives and hospital ERP are later modules, not implied first-release deliverables.
+* Cross-facility interoperability starts with consenting partners, not automatic access to every Nigerian hospital.
+* An emergency QR card is an identification aid, not an unrestricted medical-record link.
+* Medical decisions remain with authorized professionals.
+
+02. CONFIRMED DECISIONS AND UNRESOLVED CHOICES
+
+CONFIRMED DIRECTION
+HP-001: Secure EHR/EMR and patient management.
+HP-002: Interoperability and continuity of care are central.
+HP-003: Persistent patient identity across facilities and emergency-access use cases.
+HP-004: Patient and provider experiences.
+HP-005: Scheduling, video/voice, secure chat, uploads and consultation history.
+HP-006: Digital prescriptions connected to RxLedger.
+HP-007: Medication tracking, refill requests and follow-up.
+HP-008: Secure prescription-linked pharmacist/prescriber communication without exchanging personal telephone numbers.
+HP-009: Maroon and white branding aligned with the RxLedger ecosystem.
+HP-010: Secure referrals and integration direction involving EMRs, laboratories and HMOs.
+
+RECOVERED PROPOSALS TO IMPLEMENT ONLY WITH THE APPROPRIATE REVIEW
+* NIN-linked identity with an independent HealthPass ID and fallback identifiers.
+* Emergency profile, QR health card and optional wearable/lock-screen identifiers.
+* Registry, consent and audit as the first identity-focused MVP.
+* FHIR exchange APIs and facility portals.
+* Shared ecosystem authentication and a founder operations console.
+
+ECOSYSTEM CONSTRAINT TO CARRY FORWARD
+Musa has stated a preference for Nigerian patient/customer data to be stored in Nigeria in the RxLedger/Rai discussions. BUILD RECOMMENDATION: apply this as a HealthPass production design constraint unless deliberately revised. It includes primary records, replicas, backups, attachments, logs and patient-specific AI processing. Exact HealthPass vendors and deployment arrangements remain OPEN.
+
+OPEN CHOICES
+* Final technical stack and existing code to reuse.
+* First pilot facilities and clinical specialties.
+* NIN verification provider, permissions, price and whether collection is necessary.
+* Patient matching and merge governance.
+* Detailed emergency-access policy and responsible reviewer.
+* Provider/facility credential verification arrangements.
+* FHIR version/profile agreed with each partner.
+* Telemedicine provider, hosting geography and recording policy.
+* Licensed clinical data and terminology sources.
+* HMO contracts, tariffs, integration credentials and approval rules.
+* Pricing, subscriptions, consultation payments and settlement model.
+* Retention periods, consent text and reviewed legal documentation.
+
+03. PRODUCT ECOSYSTEM AND DATA OWNERSHIP
+
+HealthPass owns patient records, encounters, care plans, provider scheduling, telemedicine, signed prescription orders, referrals and record-access governance.
+
+RxLedger owns pharmacy inventory, stock batches, least sellable units/package conversions, sales, dispensing transactions, pending medications, pharmacy counselling and pharmacy-side fulfilment. HealthPass receives the relevant fulfilment events rather than reproducing the entire inventory system.
+
+Rai owns AI orchestration and explanations. It obtains only authorized context through controlled APIs. It must not have unrestricted access to either product's database or write permissions merely because it is part of the ecosystem.
+
+External EMRs and laboratories remain authoritative for their original records. HealthPass stores permitted copies or references with provenance and displays a connected timeline. HMO systems remain authoritative for eligibility and authorization decisions unless a formal contract delegates that function.
+
+BUILD RECOMMENDATION: Choose a governed hybrid record model. HealthPass stores records created in its own clinical application and authorized imported records. Each imported item retains source organization, source identifier, version and timestamp. A shared longitudinal view does not permit one facility to rewrite another facility's signed notes.
+
+Cross-product account federation may provide familiar sign-in, but permissions stay product-specific. A pharmacist's RxLedger access does not automatically authorize full HealthPass chart access.
+
+04. ROLES AND PERMISSIONS
+
+BUILD RECOMMENDATION: Enforce role permissions plus organization, care relationship, patient scope, consent, purpose and session strength. A role alone is insufficient.
+
+Patient:
+* View their released record, appointments, prescriptions, fulfilment and results.
+* Upload documents, provide history, manage sharing and request refills.
+* See a understandable record-access history.
+* Request corrections; cannot silently replace clinician-authored findings.
+
+Guardian/delegate:
+* Access an explicitly authorized dependent or delegated profile.
+* Separate identity and delegation record, with expiry and revocation.
+* No shared passwords or implied access through a shared telephone number.
+
+Doctor/authorized prescriber:
+* Access patients within permitted care scope.
+* Document encounters, orders, referrals and prescriptions.
+* Sign records and issue versioned amendments.
+* Respond to pharmacist clarification requests.
+
+Nurse/clinical support staff:
+* Record permitted triage, vitals and care observations.
+* Access relevant assigned encounters.
+* No prescription-signing authority without a separately approved permission.
+
+Pharmacist:
+* View prescription and minimum relevant clinical context.
+* Record review, dispensing and counselling in RxLedger.
+* Request clarification, report issues and communicate securely.
+* Cannot alter a signed prescriber order in place.
+
+Reception/scheduling staff:
+* Manage patient registration and appointments with limited demographics.
+* No routine access to detailed clinical notes.
+
+Laboratory staff:
+* Access assigned orders and minimum identifiers.
+* Submit verified results within authorized scope.
+
+HMO/claims staff:
+* Access minimum coverage, authorization and claim information.
+* No blanket access to consultation notes.
+
+Facility administrator:
+* Manage facility settings, staff, services, permissions and local reporting.
+* Administrative role does not itself confer unrestricted clinical access.
+
+Platform operations/support:
+* Manage infrastructure, integrations and operational metadata.
+* Clinical-record access disabled by default.
+* Any exceptional access must be authorized, time-limited and audited.
+
+Audit/privacy reviewer:
+* Review access, emergency sessions, exports and policy violations.
+* Cannot amend clinical content merely through audit privileges.
+
+Examples of required denials:
+* Staff from facility A cannot browse facility B's patients by changing an ID.
+* A patient cannot view another profile by changing a URL.
+* An HMO user cannot obtain an entire chart through an export endpoint.
+* Revoked staff sessions lose access across APIs and real-time subscriptions.
+
+05. PATIENT IDENTITY AND EMERGENCY ACCESS
+
+CONFIRMED: One persistent patient identity should help preserve history across facilities. RECOVERED PROPOSAL: NIN could anchor identity. BUILD RECOMMENDATION: generate a stable, opaque HealthPass patient ID independently of NIN, telephone number and facility record number.
+
+Identity fields:
+* Internal patient ID and user-facing HealthPass ID.
+* Name, DOB or estimated age with uncertainty, contact information and address.
+* Clinically relevant sex/gender fields with clear purpose and provenance.
+* Emergency contacts and next-of-kin relationship.
+* Facility-specific record numbers and partner-system identifiers.
+* Optional verified identity link, including NIN only where approved.
+* Verification status, method, issuer, timestamp and reviewer.
+* Guardian/delegate links and their authority.
+
+Shared phones, changed phones, newborns, unconscious patients and unknown DOB must be supported. Phone number may aid contact/matching but is not a global unique identity. NIN absence must not prevent essential care registration. Never invent an identity verification result.
+
+Patient matching:
+1. Check a verified HealthPass identifier or verified external identifier.
+2. Show possible matches using multiple approved attributes.
+3. Require authorized review before linking uncertain candidates.
+4. Record evidence, confidence and reviewer.
+5. Support audited merge and unmerge with preserved source IDs.
+6. Keep unresolved clinical records separate until resolved.
+
+Do not automatically merge solely by name, phone or an LLM similarity score. For an unidentified emergency patient, create a temporary identity and reconcile later.
+
+Emergency profile — RECOVERED PROPOSAL:
+* Allergies and reaction details.
+* Active/chronic conditions.
+* Current prescribed, dispensed and patient-reported medicines, distinctly labelled.
+* Blood group only with documented evidence; unknown remains unknown.
+* Emergency contacts, critical care flags and relevant recent findings.
+* Source, verification status and last update on every critical section.
+
+BUILD RECOMMENDATION: QR card contains an opaque, revocable identifier or short-lived verification token, not plaintext NIN or health history. A scan opens an authentication/access-request workflow. Lost-card revocation must not delete the patient's underlying record.
+
+Emergency access policy:
+* Available only to verified eligible professionals.
+* Requires patient identification attempt, reason and declared emergency.
+* Grants time-limited access to a minimum emergency dataset.
+* Records actor, facility, scope, reason, time and accessed resources.
+* Queues retrospective review and appropriate patient notification.
+* Does not enable unlimited chart export or permanent organization access.
+* Normal restrictions return automatically when the session expires.
+
+The policy requires clinical/privacy review before release. An emergency button is not proof that every use is authorized. Public access to the full chart is prohibited by the proposed design.
+
+06. PATIENT APPLICATION
+
+CONFIRMED features: appointment booking, voice/video consultation, secure chat, uploads, consultation history, prescriptions and medication tracking/refills.
+
+BUILD RECOMMENDATION screens:
+* Home: upcoming appointment, active care tasks, prescription progress and unread messages.
+* Health profile: demographics, emergency contacts, allergies, conditions and source labels.
+* Timeline: encounters, prescriptions, dispenses, tests and referrals, filtered by date/source.
+* Find care: verified participating facilities/providers and services.
+* Appointments: booking, rescheduling, cancellation and waiting-room access.
+* Consultation: audio/video controls, secure chat and permitted attachments.
+* Medicines: prescribed items, actual dispenses, pending quantities, instructions and refill requests.
+* Documents/results: uploaded documents and clinician-released findings.
+* Referrals: destination, acceptance, appointment and outcome status.
+* Sharing: active grants, recipients, scope, expiration and revoke action.
+* Health card: revocable QR credential and emergency-profile preview.
+* Settings: sessions, security, notification preferences and delegates.
+
+Medication tracking rules:
+* A prescription does not prove a medicine was supplied.
+* A dispense does not prove the medicine was taken.
+* Patient acknowledgement and self-reported adherence are distinct evidence.
+* Refill request routes to a professional workflow; it is not automatic prescribing.
+* Missing/out-of-stock medicines show a pending status rather than completed treatment.
+
+Patient-uploaded data must be labelled as such until reviewed. Correction requests create a workflow and audit trail. Patient-facing summaries use plain language without converting uncertain observations into a diagnosis.
+
+07. PROVIDER APPLICATION AND CLINICAL RECORDS
+
+BUILD RECOMMENDATION screens:
+* Workspace dashboard and daily schedule.
+* Patient search/registration and duplicate-match review.
+* Patient chart with allergies/critical information visible.
+* Encounter workspace: triage, history, findings, assessment, plan and orders.
+* Prescription composer and signing review.
+* Test orders and result inbox.
+* Referral composer, inbound referrals and outcome tracking.
+* Secure patient/team/prescriber messages.
+* Tasks and follow-up worklist.
+* Consent/access requests and emergency review.
+* Staff/integration settings and audit/reporting screens.
+
+Encounter record:
+* Patient, facility, location, participants and encounter type.
+* Start/end time, presenting complaint and history.
+* Vitals/observations with values, units, time, recorder and reference context.
+* Relevant allergies and medication reconciliation.
+* Assessment, diagnoses, plan, orders, prescriptions and follow-up.
+* Attachments and references to external findings.
+* Author, status, signature metadata and amendments.
+
+BUILD RECOMMENDATION lifecycle: draft -> in progress -> signed -> amended, with cancelled/entered-in-error paths under permission controls. Signed clinical content is immutable; amendments reference the original and explain the change. Draft autosave must show server save status and handle stale versions explicitly.
+
+The chart must distinguish negative findings from missing history. Examples: no known allergies after review, allergy history unknown, and imported allergy history not yet verified are different states.
+
+Structured data supports exchange and analytics; free text supports clinical narrative. Record units explicitly, reject impossible formats and offer clinically reviewed plausibility checks without erasing legitimate unusual findings.
+
+08. SCHEDULING AND TELEMEDICINE
+
+CONFIRMED: Video, voice and secure doctor chat belong to HealthPass.
+
+BUILD RECOMMENDATION booking flow:
+1. Choose facility/provider/service and consultation mode.
+2. See available slots, duration and any declared charge.
+3. Submit minimum relevant reason and permitted pre-visit documents.
+4. Reserve and confirm the slot atomically.
+5. Receive a generic reminder and secure link.
+6. Complete identity/consent/device checks and enter a waiting room.
+7. Clinician opens an encounter linked to the appointment.
+8. Complete consultation, sign documentation and issue reviewed outputs.
+
+Appointments: requested -> confirmed -> checked in -> in progress -> completed. Separate cancelled, rescheduled and no-show states. Store UTC instants, retain timezone context and display Africa/Lagos by default for Nigerian facilities. Concurrent bookings must not allocate the same single-capacity slot twice.
+
+Telemedicine architecture — BUILD RECOMMENDATION:
+* Use a supported WebRTC service or private media infrastructure after location/security review.
+* Server issues short-lived room access after appointment authorization.
+* Waiting rooms, room membership and session lifecycle are enforced server-side.
+* Provide camera/microphone checks, mute, camera toggle, reconnect and end-call controls.
+* Offer audio mode for low bandwidth and secure messaging when live media fails.
+* Assess media servers, TURN relays, metadata, analytics and support access for data geography.
+* Recording disabled by default. Any later recording needs explicit policy, consent, access controls and retention.
+* Do not describe media as end-to-end encrypted unless that property is verified for the actual implementation.
+
+Clinical workflow must include an approved escalation path when remote assessment is unsuitable or urgent in-person care is required. A disconnected call should preserve the encounter draft and show its incomplete status.
+
+Prescription-linked pharmacist communication:
+* Pharmacist requests clarification from the responsible prescriber through HealthPass.
+* Chat/voice/video uses professional identities rather than exposing private telephone numbers.
+* A structured clarification outcome is attached to the prescription.
+* Call audit metadata is retained; retaining metadata does not imply recording the call.
+* Unavailable prescriber triggers a task/escalation rather than unauthorized order modification.
+
+09. DIGITAL PRESCRIPTIONS AND RXLEDGER INTEGRATION
+
+CONFIRMED: HealthPass sends e-prescriptions to RxLedger and receives fulfilment feedback. Recovered concepts showed verification, digital signatures, QR verification, audit timelines, partial dispensing, counselling and patient communication.
+
+BUILD RECOMMENDATION prescription content:
+* Prescription ID, version, patient reference and encounter reference.
+* Prescriber identity, facility, professional verification and signing time.
+* Relevant indication/clinical notes within minimum necessary sharing scope.
+* Issue date, validity and refill/repeat instructions where permitted.
+* Items: normalized drug identity, formulation, strength, dose, dose unit, route, frequency, duration, quantity and dispensing unit.
+* Explicit patient instructions, substitution policy and item-level status.
+* Allergy/context snapshot and referenced safety-check results with timestamp.
+* Intended pharmacy, coverage/authorization reference and consent scope.
+* Signature/provenance evidence and API transaction/correlation identifier.
+
+Do not conflate medicine strength, prescribed dose, pack size and dispense quantity. RxLedger owns its product/package conversion and batch records. Unrecognized product mapping goes to pharmacist review, not guessed equivalence.
+
+End-to-end flow:
+1. Clinician creates a draft and reconciles medicines/allergy information.
+2. Validations/checkers run; unavailable checks remain visibly unavailable.
+3. Authorized prescriber reviews and signs a fixed version.
+4. Patient/facility chooses an eligible pharmacy under the agreed workflow.
+5. HealthPass creates a dispatch task and outbox event in one transaction.
+6. RxLedger validates sender, patient link, prescription version and authenticity.
+7. Pharmacy acknowledges receipt; HealthPass distinguishes receipt from fulfilment.
+8. Pharmacist checks medicine mapping, availability and relevant clinical issues.
+9. Clarification/substitution request returns to the prescriber if needed.
+10. RxLedger reserves stock under its own inventory rules if supported.
+11. Actual dispense records include quantities, units, pharmacist and timestamp.
+12. Signed/authenticated fulfilment events update HealthPass's medication timeline.
+13. Patient sees complete, partial or pending fulfilment and counselling.
+14. Follow-up/adherence information is captured with its own evidence type.
+
+Prescription order state is separate from transport, review and fulfilment state.
+Order: draft, active/signed, on hold, cancelled, expired, completed or entered in error.
+Transport: queued, delivered, acknowledged, failed/retry required.
+Pharmacy review: pending, accepted, clarification required, rejected.
+Fulfilment: none, partial, complete, reversed, pending availability.
+
+One prescription may have several items and dispensing events. One item may be partly supplied over multiple visits. HealthPass must show actual item-level progress. Authorized multi-pharmacy fulfilment needs shared allocation/remaining-quantity controls to prevent double supply; do not enable unrestricted duplicate dispatch in the MVP.
+
+Safety and correction rules:
+* A pharmacist may propose changes but cannot overwrite signed prescribing intent.
+* Prescriber amendments create a new signed version and invalidate/supersede affected tasks as appropriate.
+* A late event for an old version is retained and reconciled, not silently applied to the new version.
+* Cancellation after partial supply preserves what was actually dispensed and initiates review of remaining supply.
+* Dispense reversal is a new audited event, not deletion of history.
+* Stock expiry blocking belongs to RxLedger batch/transaction rules and works when Rai is down.
+* Counselling and smart labels remain professionally reviewable.
+* A QR code or drawn signature image alone is not cryptographic proof of authenticity.
+
+Pending medication ledger:
+RxLedger retains unavailable items and may emit availability notifications. HealthPass shows pending fulfilment and follow-up. Restocking does not renew an expired prescription or automatically authorize supply.
+
+10. REFERRALS AND LABORATORY WORKFLOWS
+
+CONFIRMED direction: secure referral and laboratory/EMR interoperability. BUILD RECOMMENDATION details follow.
+
+Referral includes patient, referring professional, destination, reason, urgency, relevant findings, attachments, consent/legal-access context and requested service. Share selected records rather than the whole chart by default.
+
+Referral state: draft -> sent -> acknowledged -> accepted/declined -> scheduled -> attended -> outcome returned -> closed. Cancellation and unreachable destination need visible handling. Delivery is not acceptance; acceptance is not completion.
+
+Laboratory workflow:
+* Clinician creates a test order with relevant context.
+* Authorized lab acknowledges and records specimen/workflow details as applicable.
+* Verified results include patient/order link, test code, value, units, reference context, collection/result times, status and source.
+* Clinician review and patient release are separate steps governed by facility policy.
+* Critical findings generate an assigned clinical task/escalation; notification delivery alone does not close it.
+* Corrected results preserve original versions and notify responsible teams.
+
+Start with order/result exchange or reviewed uploads. Instrument interfaces and full imaging systems are separate scoped integrations. A patient-uploaded test PDF is not automatically a verified laboratory result.
+
+11. HMO AND FINANCIAL WORKFLOWS
+
+CONFIRMED ecosystem direction: provider prescriptions can route to approved community pharmacies; hospitals receive completion feedback; patients receive notifications; fulfilment must respect agreed tariffs and authorization.
+
+BUILD RECOMMENDATION data:
+* Payer/HMO, member identifier, plan, coverage period and eligibility evidence.
+* Approved facilities/pharmacies and service/medicine tariff version.
+* Authorization reference, approved quantities/services, limits and expiry.
+* Claim lines, fulfilment evidence, status and adjudication response.
+
+Workflow:
+1. Verify eligibility through an authorized channel or documented manual review.
+2. Request authorization when the contract requires it.
+3. Route to an eligible pharmacy with approved context.
+4. Record actual dispense quantities and authorized charges.
+5. Submit claim/evidence and receive adjudication/status.
+6. Reconcile partial approvals, rejection, reversals and outstanding balances.
+
+HMO state must remain separate from clinical and dispensing state. Eligibility unknown, approval pending and rejected are distinct. A successful API request is not proof of coverage. HMOs receive minimum necessary records.
+
+OPEN: HealthPass commercial model and payment handling. Do not import RxLedger beta length or pricing as a HealthPass decision. If payments are added, use provider-hosted checkout/tokenization, verify payment callbacks server-side and reconcile duplicates. Money movements require their own ledger and permissions; financial balances must not be inferred from UI state.
+
+12. CONSENT, SECURITY AND PRIVACY
+
+CONFIRMED: Security and breach protection are important concerns. BUILD RECOMMENDATION: make authorization, audit and data minimization foundational rather than later patches.
+
+Consent/access grant contains patient, grantor authority, recipient, permitted purpose, resource categories, time window, evidence, version, status and revocation time. A consent record is an input to policy; it does not automatically authorize every recipient action. Distinguish consent from other reviewed lawful access bases.
+
+Every read, search, export, attachment fetch and real-time subscription must pass the same scope policy. Validate again on use, not only at login. Cache access decisions narrowly and invalidate on membership/consent changes.
+
+Identity/security controls:
+* Verified professional and organization onboarding; pending users cannot use privileged features.
+* MFA for clinical/administrative accounts; stronger verification for sensitive exports and emergency access.
+* Short-lived sessions, secure HttpOnly cookies, appropriate SameSite policy and CSRF controls.
+* Session/device inventory, revocation, recovery and rate-limited authentication.
+* Service credentials with narrow scopes, rotation and explicit environment separation.
+* No credentials or raw identifiers in public frontend bundles.
+
+Data protection:
+* TLS for transport and authenticated internal service communication.
+* Encryption at rest for records, attachments and backups with separately governed keys.
+* Least-privilege database roles; tenant scoping and appropriate row-level controls as defence in depth.
+* Private object storage, short-lived authorized download URLs and file-type/size validation.
+* Malware scanning and quarantine before attachments are shared.
+* Redacted operational logs; no routine full-chart/prompt logging.
+* Separate production, staging and development; synthetic data by default outside production.
+* Explicit retention and secure disposal for records, documents, audit and telemedicine metadata.
+
+Audit records:
+Actor/service identity, organization, patient reference, resource/version, action, purpose, policy decision, consent/emergency reference, timestamp and correlation ID. Log denied sensitive access as well as allowed access. Protect audit records against unauthorized change; control audit-reader access and periodically review them.
+
+Threats to test:
+Cross-tenant ID changes, stolen sessions, overbroad exports, malicious attachments, forged webhooks, replay, prescription tampering, public QR disclosure, insider browsing, insecure backups and AI prompt injection.
+
+BUILD RECOMMENDATION: Prepare a reviewed data-flow inventory, access policy, privacy notice, consent language, processor agreements, retention schedule and incident-response plan before real-patient launch. Have qualified advisers determine applicable Nigerian privacy/health rules and any foreign obligations. No HIPAA/NDPR/compliance badge should be copied from concept imagery as a proven certification. No design can promise zero breaches.
+
+Nigeria data-location constraint:
+Map database, replicas, backups, attachments, CDN caching, logs, monitoring, error tracking, support, telemedicine relays and AI destinations. Non-sensitive static frontend hosting can be separate, but avoid offshore patient-payload processing merely by calling it a frontend service. Existing US-hosted Neon data would not satisfy an all-Nigeria storage design without an explicit change or exception. Self-hosting alone is not a security or compliance guarantee.
+
+13. INTERFACE, DESIGN SYSTEM AND SCREEN INVENTORY
+
+CONFIRMED: Maroon/white direction and familiar RxLedger ecosystem styling. Maroon expresses identity in navigation, primary actions, selected states and links. Semantic success, warning and danger colors stay distinguishable.
+
+BUILD RECOMMENDATION provisional tokens, not recovered exact brand values:
+Brand maroon #7A2038; deeper maroon #5A1528; light brand surface #FAF2F5.
+White surface #FFFFFF; page background #F7F8FA; primary text #1F2937.
+Use tested green/amber/red semantic tokens with text/icons, not color alone.
+Choose one readable sans-serif family and consistent 4/8-pixel spacing increments.
+Confirm contrast, states and the final logo/palette against approved visual assets before production.
+
+Design behaviour:
+* Digital structured prescription interface, timeline and clear status chips.
+* Persistent patient identity/context on clinical screens.
+* Allergy/critical alerts visibly distinguished from routine notifications.
+* One clear primary action per workflow stage.
+* No lost input on network failure; show saved, saving, conflict and retry states.
+* Keyboard-accessible controls, visible focus, labelled inputs and readable errors.
+* Responsive layouts with touch-friendly patient controls and desktop clinical productivity.
+* Loading, empty, error, permission-denied and partial-data states for every major screen.
+* Unknown and unavailable data shown explicitly rather than as zeros or green safe badges.
+
+Core routes — proposed:
+/ : public product information, purpose, capabilities and pilot/contact CTA.
+/auth/* : registration, login, verification, recovery and MFA.
+/patient/home, /patient/profile, /patient/timeline.
+/patient/appointments, /patient/consultations/:id.
+/patient/prescriptions/:id, /patient/medicines, /patient/results.
+/patient/referrals, /patient/messages, /patient/sharing, /patient/health-card.
+/workspace/:slug/dashboard, /patients, /patients/:id.
+/workspace/:slug/appointments, /encounters/:id, /prescriptions/:id.
+/workspace/:slug/results, /referrals, /messages, /tasks.
+/workspace/:slug/settings, /integrations, /audit.
+/operations : authorized operational metadata and support workflows.
+
+Public pages must describe what actually works. Do not invent testimonials, partner hospitals, regulatory approval, uptime or live nationwide interoperability.
+
+14. TECHNICAL ARCHITECTURE AND INFRASTRUCTURE
+
+BUILD RECOMMENDATION: Start with a modular monolith and explicit integration boundaries rather than many independently deployed services.
+
+Suggested stack, subject to repository inspection:
+* Responsive React/Next.js with TypeScript for patient/provider web experiences.
+* TypeScript backend API using one established application framework.
+* PostgreSQL for transactional records and authorization data.
+* Private S3-compatible storage for attachments with approved geography.
+* Background worker and durable job/outbox tables; introduce a dedicated queue when needed.
+* Managed or privately hosted WebRTC infrastructure chosen after location/security evaluation.
+* Separate Rai service through a controlled interface when enabled.
+
+This is a recommendation, not an assertion that these technologies were finalized. Pin supported versions after checking official documentation and existing repository constraints at implementation time.
+
+Logical modules:
+Identity/authentication; organizations/memberships; patient registry; access/consent; clinical records; scheduling; telemedicine; prescriptions; referrals/results; HMO; messaging/notifications; attachments; integrations; audit; operations.
+
+Request path:
+Client -> authenticated API -> access-policy evaluation -> domain service -> scoped database/object access -> response and audit.
+
+Integration path:
+Clinical transaction -> durable outbox -> worker -> authenticated partner API -> partner acknowledgement -> reconciled local state.
+
+Deploy frontend/API, database, storage, workers and inference/media components with clear networking boundaries. Patient APIs can live in Nigeria even if a static asset bundle is delivered elsewhere, provided sensitive requests/logs do not traverse unauthorized processors. Do not publicly expose raw database or Ollama ports.
+
+Database practices:
+* Version-controlled migrations and an explicit rollback/forward-repair plan.
+* Parameterized queries and shared authorization primitives.
+* Optimistic record versions for clinical editing.
+* Transactions for signing, appointment reservation and event creation.
+* Tenant/patient/time/status indexes driven by real query plans.
+* No direct browser database access.
+* Separate identity registry privileges from facility-record privileges.
+
+Monitoring covers health checks, error rates, latency, job backlog, integration freshness, authentication anomalies and backup/restore status. Prefer metadata metrics over raw clinical payloads.
+
+15. DATA MODEL
+
+BUILD RECOMMENDATION entities and essential relationships:
+
+User: login identity, verification, MFA and status.
+Organization: facility/pharmacy/lab/HMO type, identifiers, verification and status.
+Location: branches, service locations and organization link.
+Membership: user, organization, role, scope, active period and status.
+Practitioner: professional profile and verified credentials.
+Patient: stable HealthPass identity and demographic profile.
+PatientIdentifier: identifier type, issuer, value/protected reference, verification and validity.
+PatientLink: facility-specific patient IDs, source and merge/link evidence.
+Delegate: grantor, delegate, patient, authority, scope and validity.
+ConsentGrant: recipient, scope, purpose, evidence, version and expiry/revocation.
+EmergencySession: reason, clinician, patient, scope, expiry and review outcome.
+Encounter: patient, organization, participants, type, times, status and version.
+ClinicalNote: encounter, author, structured/narrative data, signature and amendment reference.
+Observation: type, value, unit, time, source, status and encounter.
+Condition: code/text, clinical/verification status, onset and provenance.
+Allergy: substance, reaction, severity, verification and source.
+MedicationStatement: patient-reported/reconciled use and evidence.
+CarePlan/Task: clinical goals, assigned follow-up, due time and outcome.
+Appointment: service, provider, patient, slot, mode and state.
+ConsultationSession: appointment/encounter, room, participants and session metadata.
+Prescription/PrescriptionVersion: patient, encounter, prescriber, signed payload and status.
+PrescriptionItem: drug, dosing, quantity, units, repeats and substitution instructions.
+Dispatch: prescription version, pharmacy, delivery/review state and external references.
+DispenseEvent: source transaction, item, quantity/unit, pharmacist, time and reversal link.
+PendingMedication: prescription item, outstanding quantity, reason and availability event.
+Referral: source/destination, purpose, urgency, shared context, state and outcome.
+LabOrder/DiagnosticResult: order linkage, result version, release/review state and provenance.
+Coverage/Authorization/Claim: HMO/member/contract references and workflow status.
+Conversation/Message: authorized membership, patient/encounter/prescription link and attachments.
+Document: private object reference, classification, scan status, source and access policy.
+IntegrationClient: partner, scopes, credentials reference and status.
+OutboxEvent/InboundEvent: event identity, version, payload reference, delivery and deduplication.
+AuditEvent: protected access/action history.
+Notification: channel, recipient, generic template, delivery and acknowledgement where needed.
+
+Use UUIDs or comparable opaque internal IDs; external identifiers remain separately namespaced. Facility-owned entities carry organization scope. A global patient identity does not make all linked clinical rows globally visible.
+
+Critical constraints:
+* Uniqueness for trusted issuer + external event/transaction IDs.
+* No negative active dispense quantities; reversal records link to originals.
+* Required units for numeric clinical/medication quantities.
+* Prescription signing references a fixed version.
+* Fulfilment cannot exceed authorized quantity without a reviewed amendment/workflow.
+* Referential integrity across patient, encounter, order and event links.
+* Signed records retain author/source and cannot be silently overwritten.
+
+16. APIS, EVENTS AND INTEROPERABILITY
+
+CONFIRMED/RECOVERED direction: FHIR APIs connecting EMRs, pharmacies, labs and HMOs. BUILD RECOMMENDATION: negotiate and pin an exchange version/profile; R4 may be a compatibility baseline, but is not selected here as the latest or mandatory version.
+
+FHIR mapping candidates:
+Patient and RelatedPerson for patient/delegate information.
+Organization, Location, Practitioner and PractitionerRole for provider context.
+Encounter, Observation, Condition and AllergyIntolerance for clinical context.
+MedicationRequest for prescribed orders; MedicationDispense for supply events.
+MedicationStatement for reported medicine use, not proof of administration.
+Appointment, ServiceRequest, DiagnosticReport and DocumentReference for workflows.
+Consent, Provenance and AuditEvent for access/provenance representation.
+Coverage/Claim-related resources where partner contracts support them.
+
+FHIR does not replace the access-policy engine or guarantee semantic agreement. Define identifier systems, terminology, units, required fields, cardinality, provenance, extensions, search parameters, errors and supported operations. Publish a CapabilityStatement for an actual FHIR endpoint and test with partner fixtures. Legacy HL7 or custom endpoints need explicit adapters, not a general compatibility claim.
+
+Proposed native API groups under /api/v1:
+* /patients and /patients/:id/links; scoped registry/matching.
+* /patients/:id/summary and /timeline; policy-filtered records.
+* /consents and /access-requests; grants/revocation.
+* /emergency-sessions; controlled temporary access.
+* /appointments and /consultation-sessions.
+* /encounters, /observations, /conditions and /allergies.
+* /prescriptions; /:id/sign; /:id/amend; /:id/dispatch.
+* /integrations/rxledger/dispense-events and /clarifications.
+* /referrals, /lab-orders and /results.
+* /coverage, /authorizations and /claims when enabled.
+* /messages, /documents, /tasks and /audit.
+
+Contracts include request/response schemas, version, authenticated scopes, pagination, timestamp/unit conventions and structured error codes. Tenant identity comes from verified server context, not an arbitrary client field. Validate ownership for every referenced patient/order/document.
+
+BUILD RECOMMENDATION event envelope:
+event_id, event_type, schema_version, occurred_at, producer, source_organization_id, correlation_id, aggregate_id, aggregate_version, payload and integrity/authentication metadata.
+
+RxLedger payload example, conceptual rather than a finalized integration:
+event_type: dispense.recorded
+prescription_id: HP-RX-...
+prescription_version: 1
+patient_link_id: previously verified partner link
+source_transaction_id: partner's stable transaction ID
+items: prescription_item_id, mapped_product_reference, quantity, unit
+dispensed_at: timestamp
+pharmacist_reference: verified source professional
+
+Integration controls:
+* Authenticated scoped service clients and per-partner key rotation.
+* Signed webhook verification with timestamp/replay checks where supported.
+* Idempotency keys, durable inbox deduplication and transactional processing.
+* Outbox delivery with bounded exponential retry and dead-letter review.
+* Handle at-least-once transport; do not promise exactly-once network delivery.
+* Ignore duplicate effects while preserving diagnostic event metadata.
+* Reconcile out-of-order events against aggregate version and source authority.
+* Track acknowledgement separately from clinical completion.
+* Provide reconciliation reports and controlled replay tooling.
+
+Do not build integrations against invented partner APIs. Implement a documented sandbox contract first, then connect real credentials and schemas when available.
+
+17. RAI AND CLINICAL DECISION SUPPORT
+
+CONFIRMED ecosystem vision: Rai provides intelligence and safety support. Recovered Rai guidance is read-only BI first, clinical checkers later, with professional review. HealthPass core functions must work without AI.
+
+BUILD RECOMMENDATION initial uses:
+* Explain authorized aggregate operational metrics.
+* Draft a source-linked chart summary for professional review.
+* Explain evaluated checker results without changing them.
+* Draft reviewed follow-up/label wording from approved templates and context.
+
+Controls:
+* Access patient context only through policy-filtered APIs.
+* Do not send full databases, credentials or unrestricted notes to a model.
+* Backend calculates metrics and renders authoritative values.
+* References require permitted commercial ingestion/use and version tracking.
+* Missing patient inputs or references produce insufficient-information status.
+* Distinguish checked/no alert, not checked and unavailable.
+* No autonomous diagnosis, prescribing, substitution, signing or alert clearance.
+* Model content cannot grant tools, permissions or emergency access.
+* Audit model/version, approved input scope, sources and review outcome.
+* Prompt injection in uploads/notes cannot bypass code-enforced restrictions.
+
+Ollama/self-hosting context:
+The current connection.md describes local model serving, read-only RxLedger tools, RAG, licensing and guardrails. Local inference reduces external per-token charges but still requires hardware/hosting and operations. A Vercel app cannot reach Musa's laptop via localhost; that name refers to the deployed runtime itself. For shared SaaS, use a private authenticated inference service sized and tested for concurrent users. Customers do not each need Ollama installed when Rai is served centrally.
+
+Apply the Nigerian location policy to inference, embeddings, vector stores and logs. Keep silent cloud fallback disabled under the current local-first policy. Any hosted provider route needs an explicit approved processing/location policy. Exact production model, server and cost are OPEN, not established by this blueprint.
+
+18. RELIABILITY, LOW BANDWIDTH AND OFFLINE BOUNDARIES
+
+BUILD RECOMMENDATION: Online-first MVP optimized for mobile networks. Show last-sync times and partial availability. Client assets may be cached; sensitive record caching requires a separate approved threat model and device policy.
+
+* Paginate records and send compact summaries before large documents.
+* Compress appropriate assets and offer audio consultation.
+* Preserve unsent drafts safely with visible status and deliberate retry.
+* Use idempotent writes so retry cannot duplicate signing or dispensing.
+* Clearly distinguish live, cached, stale and unavailable data.
+* Avoid browser caching of sensitive API responses on shared devices.
+* Clear session-bound state on logout and require reauthentication for sensitive views.
+
+Offline model inference does not mean offline access to cloud records. Fully offline clinical writes need device encryption, local identity/session policy, synchronization, conflicting edits, revocation and reconciliation. Defer that mode until explicitly designed and tested. Do not silently sign prescriptions or resolve conflicting records offline.
+
+Provisional operational targets for the pilot, to be validated:
+* 99.5% monthly core-service availability target, with measured reporting.
+* Typical chart-summary server latency under two seconds at pilot load, measured separately from network delay.
+* Healthy partner event delivery usually within one minute; overdue delivery visible in operations.
+* Backup recovery point target <= 1 hour and recovery time target <= 4 hours, only after restore drills prove them.
+
+These are proposed service objectives, not guaranteed performance. Define expected pilot users/concurrency and benchmark realistic patient timelines, partner failures and queue backlogs.
+
+19. IMPLEMENTATION PHASES
+
+PHASE 0 — FOUNDATION AND RECONCILIATION
+Inspect existing repositories and approved design assets. Confirm first pilot, data geography, record ownership, access/consent policy and partner contracts. Create architecture/decision records, schemas, threat model and synthetic fixtures. Confirm clinician/privacy reviewers and professional onboarding rules.
+Exit: reviewed scope, permission matrix, deployment plan and first end-to-end scenario.
+
+PHASE 1 — IDENTITY, RECORDS AND GOVERNANCE
+Build auth, organizations, memberships, patient registry, verified links, consent/access controls, audit, basic chart, emergency summary and controlled health card. Add core provider encounter documentation and patient view.
+Exit: authorized provider can record/retrieve care; patient can view appropriate records; cross-scope access is denied; signed data is versioned. Enable emergency access only after policy review.
+
+PHASE 2 — PRESCRIPTIONS AND RXLEDGER
+Build structured prescriptions, signing/amendments, partner adapters, outbox/inbox, pharmacy receipt/review, partial fulfilment, pending medication and patient timeline. Add secure prescription-linked clarification.
+Exit: synthetic then controlled pilot prescription travels to RxLedger and actual fulfilment returns without duplicate supply or hidden version changes.
+
+PHASE 3 — SCHEDULING AND TELEMEDICINE
+Build slots, booking, reminders, waiting room, voice/video, chat/uploads and encounter linkage. Complete bandwidth, authorization and disconnect tests.
+Exit: patient books, joins, consults and receives reviewed outputs; failed calls preserve record state.
+
+PHASE 4 — REFERRALS AND RESULTS
+Build referrals, test orders, result import/review/release, critical-result tasks and external EMR adapters for specific partners.
+Exit: referral outcome and versioned result are returned to the originating care team with correct scope/provenance.
+
+PHASE 5 — HMO AND COMMERCIAL WORKFLOWS
+Implement contracted eligibility/authorization, tariff handling, claim evidence and reconciliation. Add approved billing model if needed.
+Exit: tested coverage/claim scenarios with actual partner rules and no overbroad record access.
+
+PHASE 6 — RAI AND SCALE
+Add evaluated BI, optional reviewed summaries and validated clinical support; expand partners, mobile clients and infrastructure after measured demand.
+Exit: evidence-based evaluation, no unauthorized AI actions, monitored performance/cost and reliable core workflows during AI outage.
+
+Build complete vertical slices rather than disconnected dashboards. Phase ordering can adapt to pilot priorities, but auth, scope, audit and identity precede real-patient integrations. Schedule estimates require repository inspection and team capacity; none are promised here.
+
+20. VERIFICATION AND ACCEPTANCE CRITERIA
+
+Functional scenario A — routine care:
+Patient registers -> identity established -> appointment booked -> clinician records encounter -> signs prescription -> RxLedger receives -> pharmacist partially dispenses -> pending medicine visible -> later authorized fulfilment completes -> patient timeline reflects actual events.
+
+Scenario B — cross-facility care:
+Patient at facility B is linked to the same identity -> approved sharing enables relevant records from A -> original provenance remains -> B creates its own encounter -> revocation removes future access without falsifying historical care records.
+
+Scenario C — emergency:
+Verified clinician identifies patient or temporary profile -> declares reason -> limited session granted -> critical summary accessed -> audit and review created -> session expires -> normal restrictions return.
+
+Scenario D — clarification:
+Pharmacist flags an issue -> prescriber receives secure request -> reviewed amendment is signed -> old/new versions remain -> RxLedger receives correct supersession -> dispensing uses the approved version.
+
+Required test families:
+* Permission matrix and cross-tenant/patient ID tampering across every API.
+* Shared-phone, missing-NIN, uncertain-DOB, duplicate and unmerge cases.
+* Consent expiration/revocation and real-time subscription invalidation.
+* Emergency limits, audit, expiry and inappropriate-use review.
+* Signed-record immutability and simultaneous draft edits.
+* Concurrent bookings and consultation-room authorization.
+* Duplicate/replayed/out-of-order webhooks and failed delivery/reconciliation.
+* Prescription cancellation/amendment after partial dispensing.
+* Drug/unit mapping ambiguity and unavailable clinical checks.
+* Upload quarantine, unauthorized attachment URLs and export scope.
+* Low bandwidth, disconnect, expired session and unsaved draft recovery.
+* Corrected results, clinician release and critical task escalation.
+* AI prompt injection, missing references, unsupported claims and AI outage.
+* Backup restoration, key/secret rotation and incident exercise.
+
+Release acceptance:
+No unresolved critical authorization flaw; no silent signed-record mutation; no duplicate event effect; accurate prescription item totals/units; visible stale/unknown state; tested core flow and rollback; reviewed professional/consent policies; documented data locations; verified restore; clinical reviewers approve the limited pilot workflow.
+
+Clinical alerts require reviewed positive, negative, missing-data and source-unavailable fixtures. An illustrative design alert is not a validated medical rule. Never copy unsafe example alert wording from a mockup into production.
+
+21. LAUNCH, OPERATIONS AND COMMERCIAL DECISIONS
+
+BUILD RECOMMENDATION: Start with a small participating primary-care facility and pharmacy pilot, with synthetic testing before real records. Select participating roles and a narrow set of workflows. Label unimplemented modules honestly.
+
+Operations console should show service health, integration delay/failure, unresolved access/identity requests, emergency-review queue, appointment/media issues and support tickets. Aggregate business metrics should not expose identifiable records by default.
+
+Runbooks needed:
+Database/attachment outage; partner outage; failed prescription dispatch; suspicious access; compromised professional account; mistaken identity merge; lost health card; critical-result escalation; backup restore; incorrect clinical rule; model outage.
+
+Assign ownership for clinical safety, privacy/security, partner integrations, infrastructure, support and release management even if Musa initially coordinates several roles. Support tools should use scoped, reviewed access rather than universal impersonation.
+
+Metrics:
+Duplicate-registration rate, record-link accuracy, authorized retrieval time, appointment completion, failed consultations, prescription receipt latency, partial/pending fulfilment, clarification turnaround, referral completion, result review delay, denied/suspicious access, emergency reviews and service cost.
+
+Business model remains OPEN. Facility subscription, paid consultation, integration fee or other models require a separate commercial decision. Avoid making patient data sale or targeted advertising part of the technical default. Keep financial decisions independent from clinical-record access permissions.
+
+22. INSTRUCTIONS FOR CODING AGENTS
+
+1. Read this specification and inspect the existing project before editing.
+2. Record deviations and unresolved choices; never claim a proposed feature is deployed.
+3. Reuse working RxLedger contracts/business rules instead of silently rebuilding them.
+4. Implement authorization and audit with each module, not after screens are complete.
+5. Use synthetic fixtures; no real patient data in source control or screenshots.
+6. Build one vertical slice, verify it, then expand.
+7. Keep secrets server-side, use migrations and commit reproducible configuration.
+8. Use actual official library/API documentation when selecting versions and implementing vendor-specific behaviour.
+9. Never invent partner endpoints, NIN verification, professional verification, HMO approval or clinical reference coverage.
+10. Do not allow a model to sign, prescribe, merge identities or override policy.
+11. Preserve record source/version and review workflows on every update.
+12. Implement all loading, error, conflict and permission-denied states.
+13. Test genuine failure modes and permissions, not only happy-path UI clicks.
+14. Provide implementation notes, environment-variable names without secrets, setup commands, tests and deployment/rollback instructions.
+15. Keep code modular; do not introduce independent services until justified by a concrete need.
+16. Present maroon/white UI consistently and use semantic alert colors.
+
+First implementation deliverable should contain a reviewed schema/migration, auth and scoped membership, patient registry, consent-aware chart access, basic encounter documentation, signed record/version behaviour, audit and synthetic fixtures. The next slice is the signed prescription -> RxLedger -> fulfilment loop.
+
+23. SOURCE REGISTER AND DECISION CHECKLIST
+
+Recovered conversation sources:
+* 3 June 2026: emergency continuity, persistent identity across facilities; proposed NIN/fallback identity, emergency summary, QR health card, consent and audit.
+* 7 July 2026: HealthPass telemedicine scope, patient booking/video/voice/chat/uploads/history/prescriptions/refills; secure pharmacist-prescriber communication and prescription audit context.
+* 10 July 2026: maroon/white ecosystem direction and shared design familiarity; maroon identity separate from semantic alerts.
+* 11 July 2026: patient-centred continuity/interoperability philosophy, recovered as earlier assistant framing.
+* 13–16 July 2026: secure web-based EHR/patient management for primary-care facilities and FHIR/interoperability direction.
+* 6 October 2026: reaffirmed chosen maroon-like HealthPass/RxLedger UI direction.
+* RxLedger/Rai ecosystem discussions: HMO fulfilment, pending medicines, read-only AI tools, clinical guardrails and Nigerian data-location preference.
+
+Current artifact inspected:
+* connection.md, created 7 October 2026: Rai/Ollama connection architecture, analytics permissions, RAG/reference licensing, clinical-check boundaries, remote deployment and Nigeria locality. Relevant contents read directly; its examples are not treated as existing HealthPass code.
+* Dashboard de prescripción digital.png, July 2026 concept: prescription timeline, item progress, audit, safety alert panels and patient communication. Parsed text inspected. It is illustrative UI evidence, not reliable clinical guidance, finalized field values or proven compliance.
+
+Technical reference checked for medication-resource distinctions:
+HL7 FHIR R4 MedicationRequest:
+https://hl7.org/fhir/R4/medicationrequest.html
+This separates an order from supply (MedicationDispense), administration and reported use (MedicationStatement). The selected implementation must use its agreed version's official definitions. Other resource mappings above are design candidates requiring implementation validation.
+
+Before code/production, resolve and record:
+[ ] Existing repository and what actually works.
+[ ] Pilot facility/pharmacy, patient cohort and clinical scope.
+[ ] Final hosting geography for every sensitive component.
+[ ] Access/consent, delegates and emergency policy review.
+[ ] Professional/facility verification process.
+[ ] Identity matching/merge policy and optional NIN arrangement.
+[ ] RxLedger prescription/item/unit/version contracts.
+[ ] FHIR version, profiles and real partner capabilities.
+[ ] Telemedicine vendor/architecture and recording policy.
+[ ] Clinical reference rights and checker evaluation plan.
+[ ] HMO contract/tariff/authorization scope.
+[ ] Retention, privacy, incident and recovery documentation.
+[ ] Final brand tokens and approved visual assets.
+[ ] Pricing/payment decision if commercial features are included.
+
+END OF SPECIFICATION

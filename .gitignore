@@ -31,3 +31,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Patient data and local environment
+.data/
+.env
+.env.*
+!.env.example
+
+# Neon workspace context and installed agent tooling
+.neon
+.agents/skills/
+.codex/skills/
+skills-lock.json
